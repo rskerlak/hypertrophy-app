@@ -97,10 +97,13 @@ export function nextPrescription(input: NextPrescriptionInput): Prescription {
     };
   }
 
+  // targetRir queda aplicado en los targets de la sesión; la progresión de
+  // carga/reps se rige por reps logradas y el rango, no por el RIR en sí.
+  void targetRir;
   if (model === "linear") {
-    return linearProgression(input, sessions, repRange, targetRir);
+    return linearProgression(input, sessions, repRange);
   }
-  return doubleProgression(input, sessions, repRange, targetRir);
+  return doubleProgression(input, sessions, repRange);
 }
 
 function blockPhaseForWeek(rules: Rules, weekIndex: number, totalWeeks: number) {
@@ -119,7 +122,6 @@ function linearProgression(
   input: NextPrescriptionInput,
   sessions: SetLog[][],
   repRange: RepRange,
-  _targetRir: number,
 ): Prescription {
   const cfg = input.rules.progressionModels.linear;
   const ctx = { type: input.equipmentType, equipment: input.equipment };
@@ -167,7 +169,6 @@ function doubleProgression(
   input: NextPrescriptionInput,
   sessions: SetLog[][],
   repRange: RepRange,
-  _targetRir: number,
 ): Prescription {
   const cfg = input.rules.progressionModels.double;
   const ctx = { type: input.equipmentType, equipment: input.equipment };

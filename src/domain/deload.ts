@@ -11,7 +11,6 @@ import type {
   SessionSummary,
   SetLog,
 } from "./types";
-import { groupBySession } from "./progression";
 
 /**
  * Construye el resumen de una sesión comparándola con la sesión previa

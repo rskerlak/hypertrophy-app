@@ -1,26 +1,59 @@
-# Paquete de contexto — App de hipertrofia (para Claude Code)
+# Hipertrofia — app personal de mesociclos basada en evidencia
 
-Cuatro archivos que alimentan al agente de Claude Code para construir la app. Van a la **raíz del repo nuevo**.
+PWA single-user, offline-first, sin backend ni login, para planificar y ejecutar
+mesociclos de hipertrofia. El motor de cálculo es determinista y transparente, y
+comunica la incertidumbre de sus heurísticas en lugar de fingir precisión.
 
-| Archivo | Rol | Quién lo lee |
-|---|---|---|
-| `CLAUDE.md` | Cómo trabajar en el repo (comandos, arquitectura, do/don't). Corto (73 líneas) a propósito. | Agente, cada sesión |
-| `CONTEXT.md` | Qué construir: PRD, modelo de datos, features, algoritmos, plan por fases. Fuente de verdad. | Agente (vía `@import`) + vos |
-| `SCIENCE.md` | Por qué de cada número/regla. Distingue lo sólido de lo heurístico. | Agente (vía `@import`) + vos |
-| `rules.config.json` | Datos científicos del motor (volumen, RIR, progresiones, deload, incrementos). Editable sin tocar código. | El código, en runtime |
+## Comandos
 
-## Cómo arrancar
+```bash
+npm run dev        # dev server (Serwist deshabilitado en dev a propósito)
+npm run build      # build estático (output: 'export') → carpeta out/
+npm run test       # vitest — 62 tests del motor de dominio
+npm run typecheck  # tsc --noEmit
+npm run lint       # eslint
+```
 
-1. Creá un repo/carpeta vacía y copiá estos 4 archivos a la raíz.
-2. Abrí Claude Code ahí. El `CLAUDE.md` importa `CONTEXT.md` y `SCIENCE.md` automáticamente con `@`.
-3. Primer prompt sugerido:
-   > Leé CLAUDE.md, CONTEXT.md y SCIENCE.md. No escribas código todavía. Entrá en plan mode y proponé el plan de la Fase 0 (andamiaje) y Fase 1 (motor puro + tests) de CONTEXT.md §8. Cuando lo apruebe, empezás.
-4. Trabajá fase por fase. Exigí tests verdes del motor (`src/domain/`) antes de pasar a la UI.
+Abrí http://localhost:3000. Los datos viven en IndexedDB del navegador.
 
-## Recalibrar después
+## Arquitectura
 
-Todo umbral científico vive en `rules.config.json`. Para ajustar (ej. bajar el RIR objetivo o cambiar landmarks tras varios ciclos), editás el JSON — no el código. El agente valida el schema con Zod al cargar.
+Dominio puro + adaptadores. Ver `CLAUDE.md` y `CONTEXT.md` para el detalle.
 
-## Nota honesta
+```
+src/
+  domain/     # funciones PURAS (sin React/Dexie/window): progresiones,
+              # redondeo de carga, generación de meso, deload, swap, stats, 1RM.
+              # Toda la ciencia sale de rules.config.json. CON tests.
+  db/         # esquema Dexie + repositories (única capa que toca IndexedDB) + seed
+  lib/        # composición no-pura (sessionPlan, postSession), wake lock, formato
+  components/ # UI (primitivas propias + gráficos Recharts)
+  app/        # rutas Next.js App Router (Hoy, Plan, Sesión, Calendario, Stats, Ajustes)
+rules.config.json  # datos científicos versionables (recalibrás sin tocar código)
+```
 
-El motor usa heurísticas (MEV/MAV/MRV, disparadores de deload) que no son cantidades medidas, solo andamiaje de programación. La app está diseñada para comunicar esa incertidumbre (deload "sugerido", stats con aviso de "n pequeño") en vez de fingir precisión. Ver `SCIENCE.md`.
+## Flujo de la app
+
+1. **Ajustes** → perfil de experiencia, peso, equipamiento (redondeo de carga),
+   músculos priorizados, sueño/proteína.
+2. **Plan** → definís tu semana base (días, ejercicios, series, rangos, pesos) y
+   ves el volumen semanal por músculo contra MEV/MAV/MRV. Generás el mesociclo
+   (modelo de progresión + semanas de acumulación + deload).
+3. **Hoy / Sesión** → ejecutás con targets autorregulados por rendimiento (reps al
+   RIR objetivo), registrás cada serie, timer de descanso y wake lock. Check-in
+   neutral opcional (no modifica la sesión).
+4. **Post-sesión** → sugerencia probabilística de deload y de cambio de ejercicio.
+5. **Calendario** → agenda impulsada por sesión (perder un día no rompe la progresión).
+6. **Stats** → progresión de carga, volumen completado, deriva de RIR, trayectoria
+   de fatiga y adherencia, con aviso de "n pequeño".
+
+## Recalibrar
+
+Todo umbral científico vive en `rules.config.json` (validado con Zod al cargar).
+Ajustás el JSON, no el código. Ver `SCIENCE.md` para el porqué de cada número.
+
+## Documentos de contexto
+
+- `CLAUDE.md` — cómo trabajar en el repo.
+- `CONTEXT.md` — qué construir (PRD, modelo de datos, features, algoritmos).
+- `SCIENCE.md` — fundamento de cada regla; distingue lo sólido de lo heurístico.
