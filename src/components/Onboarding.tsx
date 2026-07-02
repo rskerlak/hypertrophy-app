@@ -6,6 +6,7 @@ import { getRules } from "@/lib/rulesLoader";
 import { PROFILE_LABELS } from "@/lib/format";
 import { Button, Card, HonestNote, Label, Stepper } from "@/components/ui";
 import { fmtKg } from "@/lib/format";
+import { MeasurementForm } from "@/components/MeasurementForm";
 import type { ExperienceProfileId } from "@/domain/types";
 
 /** Alta guiada la primera vez: perfil + peso corporal. Marca onboarded al terminar. */
@@ -75,11 +76,27 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             <Button variant="secondary" className="flex-1" onClick={() => setStep(0)}>
               Atrás
             </Button>
-            <Button className="flex-1" onClick={finish}>
-              Empezar
+            <Button className="flex-1" onClick={() => setStep(2)}>
+              Continuar
             </Button>
           </div>
         </Card>
+      )}
+
+      {step === 2 && (
+        <>
+          <p className="mb-3 text-center text-sm text-[var(--muted)]">
+            Medidas iniciales (opcional): sirven para medir el efecto real de cada mesociclo.
+            Podés cargarlas después en Medidas.
+          </p>
+          <MeasurementForm
+            trigger="onboarding"
+            askHeight
+            initialWeight={bodyweight}
+            onSaved={finish}
+            onSkip={finish}
+          />
+        </>
       )}
 
       <div className="mt-4">

@@ -56,3 +56,28 @@ export const RESISTANCE_LABELS: Record<string, string> = {
   mid: "Media",
   short: "Acortada",
 };
+
+export const MEASUREMENT_LABELS: Record<string, string> = {
+  bodyweightKg: "Peso (kg)",
+  waistCm: "Cintura (cm)",
+  chestUnderShouldersCm: "Torso bajo hombros (cm)",
+  shoulderGirthCm: "Torso con hombros (cm)",
+  bicepCm: "Bíceps (cm)",
+  quadCm: "Cuádriceps (cm)",
+  calfCm: "Gemelo (cm)",
+};
+
+export const CORRELATION_LABELS: Record<string, string> = {
+  d1rmPct: "Δ 1RM %",
+  adherencePct: "Adherencia %",
+  sleepOkPct: "Sueño OK %",
+  proteinOkPct: "Proteína OK %",
+  energyBalanceAvg: "Balance energético",
+  d_bodyweightKg: "Δ Peso",
+  d_waistCm: "Δ Cintura",
+  d_chestUnderShouldersCm: "Δ Torso s/h",
+  d_shoulderGirthCm: "Δ Torso c/h",
+  d_bicepCm: "Δ Bíceps",
+  d_quadCm: "Δ Cuádriceps",
+  d_calfCm: "Δ Gemelo",
+};

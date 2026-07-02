@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { ensureSeeded } from "@/db/repositories";
+import { UpdateToast } from "@/components/UpdateToast";
 
 /**
  * Bootstrap del cliente: siembra la BD, pide persistencia de IndexedDB para
@@ -36,5 +37,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <UpdateToast />
+    </>
+  );
 }

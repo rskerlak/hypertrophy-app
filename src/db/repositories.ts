@@ -12,7 +12,7 @@ import type {
 import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
 import { generateMesocycle } from "@/domain/mesocycle";
-import { getDb, type BaseWeekRow, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
+import { getDb, type BaseWeekRow, type MeasurementRow, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
 import { SEED_VERSION, defaultSettings, seedExercises } from "./seed";
 
 // ---- Bootstrap ----
@@ -268,6 +268,48 @@ export const checkinRepo = {
   },
 };
 
+// ---- Medidas corporales ----
+
+export const measurementRepo = {
+  async all(): Promise<MeasurementRow[]> {
+    return getDb().measurements.orderBy("date").toArray();
+  },
+  async latest(): Promise<MeasurementRow | undefined> {
+    return getDb().measurements.orderBy("date").last();
+  },
+  async add(m: Omit<MeasurementRow, "id">): Promise<void> {
+    await getDb().measurements.put({ ...m, id: uuid() });
+  },
+  async remove(id: string): Promise<void> {
+    await getDb().measurements.delete(id);
+  },
+
+  /**
+   * ¿Corresponde sugerir re-registrar medidas? (fin de meso posterior a la
+   * última medición, o más de ~6 meses sin medir). Aviso neutral, no bloquea.
+   */
+  async pendingPrompt(): Promise<{ trigger: "meso_end" | "periodic" } | null> {
+    const db = getDb();
+    const settings = await db.settings.get("default");
+    if (!settings?.onboarded) return null;
+    const last = await db.measurements.orderBy("date").last();
+
+    const completedMesos = await db.mesocycles.where("status").equals("completed").toArray();
+    let lastMesoEnd: string | null = null;
+    for (const m of completedMesos) {
+      const sessions = await db.sessions.where("mesocycleId").equals(m.id).toArray();
+      const ends = sessions.map((s) => s.completedAt).filter((x): x is string => !!x);
+      const end = ends.sort().pop() ?? m.createdAt;
+      if (!lastMesoEnd || end > lastMesoEnd) lastMesoEnd = end;
+    }
+
+    if (lastMesoEnd && (!last || last.date < lastMesoEnd)) return { trigger: "meso_end" };
+    const SIX_MONTHS_MS = 183 * 24 * 60 * 60 * 1000;
+    if (last && Date.now() - Date.parse(last.date) > SIX_MONTHS_MS) return { trigger: "periodic" };
+    return null;
+  },
+};
+
 // ---- Backup / restore (respaldo completo en JSON) ----
 
 export interface BackupFile {
@@ -282,6 +324,7 @@ export interface BackupFile {
     sessions: SessionRow[];
     setLogs: SetLog[];
     checkins: Checkin[];
+    measurements?: MeasurementRow[];
   };
 }
 
@@ -289,7 +332,7 @@ export const backupRepo = {
   /** Serializa TODA la base local a un objeto de respaldo. */
   async export(): Promise<BackupFile> {
     const db = getDb();
-    const [settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins] =
+    const [settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements] =
       await Promise.all([
         db.settings.toArray(),
         db.baseWeek.toArray(),
@@ -298,12 +341,13 @@ export const backupRepo = {
         db.sessions.toArray(),
         db.setLogs.toArray(),
         db.checkins.toArray(),
+        db.measurements.toArray(),
       ]);
     return {
       app: "hypertrophy",
       backupVersion: 1,
       exportedAt: new Date().toISOString(),
-      data: { settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins },
+      data: { settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements },
     };
   },
 
@@ -324,11 +368,12 @@ export const backupRepo = {
     const db = getDb();
     await db.transaction(
       "rw",
-      [db.settings, db.baseWeek, db.exercises, db.mesocycles, db.sessions, db.setLogs, db.checkins],
+      [db.settings, db.baseWeek, db.exercises, db.mesocycles, db.sessions, db.setLogs, db.checkins, db.measurements],
       async () => {
         await Promise.all([
           db.settings.clear(), db.baseWeek.clear(), db.exercises.clear(),
           db.mesocycles.clear(), db.sessions.clear(), db.setLogs.clear(), db.checkins.clear(),
+          db.measurements.clear(),
         ]);
         await db.settings.bulkPut(d.settings);
         await db.baseWeek.bulkPut(d.baseWeek);
@@ -337,6 +382,7 @@ export const backupRepo = {
         await db.sessions.bulkPut(d.sessions);
         await db.setLogs.bulkPut(d.setLogs);
         await db.checkins.bulkPut(d.checkins);
+        if (Array.isArray(d.measurements)) await db.measurements.bulkPut(d.measurements);
       },
     );
   },

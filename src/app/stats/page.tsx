@@ -16,6 +16,17 @@ import { Badge, Button, Card, EmptyState, HonestNote, PageHeader } from "@/compo
 import { fmtKg, fmtSets, muscleLabel } from "@/lib/format";
 import { FatigueChart } from "@/components/FatigueChart";
 import { exportMesoToExcel, type ExportInput } from "@/lib/exportExcel";
+import { buildMesoObservations } from "@/lib/mesoObservations";
+import { correlationMatrix, summarizeByModel, type CorrelationResult, type MesoObservation } from "@/domain/correlations";
+import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
+import { CORRELATION_LABELS, PROGRESSION_LABELS } from "@/lib/format";
+import Link from "next/link";
+
+const CORRELATION_VARS = [
+  "d1rmPct", "adherencePct", "sleepOkPct", "proteinOkPct", "energyBalanceAvg",
+  "d_bodyweightKg", "d_waistCm", "d_chestUnderShouldersCm", "d_shoulderGirthCm",
+  "d_bicepCm", "d_quadCm", "d_calfCm",
+];
 
 export default function StatsPage() {
   const router = useRouter();
@@ -24,6 +35,17 @@ export default function StatsPage() {
     | null
     | undefined
   >(undefined);
+  const [correlations, setCorrelations] = useState<{
+    observations: MesoObservation[];
+    result: CorrelationResult;
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const observations = await buildMesoObservations();
+      setCorrelations({ observations, result: correlationMatrix(observations, CORRELATION_VARS) });
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -160,6 +182,60 @@ export default function StatsPage() {
               fallo.
             </p>
           </Card>
+        </>
+      )}
+
+      <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">
+        Comparativa entre mesociclos
+      </h2>
+      {!correlations || correlations.observations.length < 2 ? (
+        <Card className="mb-4">
+          <p className="text-sm leading-relaxed text-[var(--muted)]">
+            Acá se cruzan tus resultados (Δ1RM, medidas corporales) con sueño, proteína, balance
+            energético y el tipo de progresión de cada ciclo. Necesita al menos{" "}
+            <span className="text-[var(--foreground)]">2 mesociclos completados</span> y{" "}
+            <Link href="/measurements" className="text-[var(--primary)] underline">
+              medidas registradas
+            </Link>{" "}
+            al inicio y fin de cada uno.
+          </p>
+        </Card>
+      ) : (
+        <>
+          <Card className="mb-3">
+            <CorrelationHeatmap result={correlations.result} />
+          </Card>
+
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+            Promedios por tipo de progresión
+          </h3>
+          <Card className="mb-3 space-y-2">
+            {summarizeByModel(correlations.observations, CORRELATION_VARS).map((m) => (
+              <div key={m.model} className="border-b border-[var(--border)] pb-2 last:border-0 last:pb-0">
+                <p className="mb-1 text-sm font-semibold">
+                  {PROGRESSION_LABELS[m.model] ?? m.model}{" "}
+                  <span className="font-normal text-[var(--muted)]">({m.n} meso{m.n > 1 ? "s" : ""})</span>
+                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+                  {CORRELATION_VARS.filter((v) => m.means[v] !== null).map((v) => (
+                    <div key={v} className="flex justify-between">
+                      <span className="text-[var(--muted)]">{CORRELATION_LABELS[v]}</span>
+                      <span className="tabular-nums">{m.means[v]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </Card>
+
+          <div className="mb-4">
+            <HonestNote>
+              Correlaciones sobre n={correlations.observations.length} mesociclos: con menos de
+              ~4–6 ciclos esto es mayormente ruido y NO establece causalidad (un r alto puede ser
+              casualidad, o ambas variables moviéndose por un tercer factor). Usalo como pista para
+              hipótesis, no como veredicto.
+            </HonestNote>
+          </div>
         </>
       )}
     </>

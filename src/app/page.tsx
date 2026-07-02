@@ -7,6 +7,7 @@ import { mesocycleRepo, sessionRepo, settingsRepo } from "@/db/repositories";
 import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
 import { PROGRESSION_LABELS } from "@/lib/format";
 import { Onboarding } from "@/components/Onboarding";
+import { MeasurementPrompt } from "@/components/MeasurementPrompt";
 
 export default function HomePage() {
   const router = useRouter();
@@ -31,6 +32,7 @@ export default function HomePage() {
     return (
       <>
         <PageHeader title="Hipertrofia" subtitle="Tu mesociclo, basado en evidencia." />
+        <MeasurementPrompt />
         <EmptyState
           title="Todavía no hay un mesociclo activo"
           hint="Definí tu semana base y generá tu primer mesociclo con rampa de volumen y deload."
@@ -52,6 +54,8 @@ export default function HomePage() {
         subtitle={meso.name}
         action={<Badge tone="primary">{PROGRESSION_LABELS[meso.progressionModel]}</Badge>}
       />
+
+      <MeasurementPrompt />
 
       <Card className="mb-4">
         <div className="mb-3 flex items-center justify-between text-sm text-[var(--muted)]">

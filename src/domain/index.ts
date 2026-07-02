@@ -9,3 +9,4 @@ export * from "./deload";
 export * from "./swap";
 export * from "./stats";
 export * from "./calendar";
+export * from "./correlations";

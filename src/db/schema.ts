@@ -25,6 +25,26 @@ export interface SettingsRow {
   onboarded: boolean;
   /** Versión de la biblioteca de ejercicios sembrada; dispara re-seed al cambiar. */
   seedVersion?: number;
+  /** Altura en cm (se pide una vez en el onboarding; editable en Ajustes). */
+  heightCm?: number;
+}
+
+/** Registro de medidas corporales (circunferencias en cm, peso en kg). */
+export interface MeasurementRow {
+  id: string;
+  /** ISO date del registro. */
+  date: string;
+  trigger: "onboarding" | "meso_end" | "periodic" | "manual";
+  bodyweightKg?: number;
+  waistCm?: number;
+  /** Torso bajo los hombros (circunferencia de espalda/pecho por debajo del deltoides). */
+  chestUnderShouldersCm?: number;
+  /** Torso incluyendo hombros (circunferencia a la altura del deltoides). */
+  shoulderGirthCm?: number;
+  bicepCm?: number;
+  quadCm?: number;
+  calfCm?: number;
+  note?: string;
 }
 
 export interface BaseWeekRow extends BaseWeek {
@@ -62,6 +82,7 @@ export class HypertrophyDB extends Dexie {
   sessions!: EntityTable<SessionRow, "id">;
   setLogs!: EntityTable<SetLog, "id">;
   checkins!: EntityTable<Checkin, "id">;
+  measurements!: EntityTable<MeasurementRow, "id">;
 
   constructor() {
     super("hypertrophy");
@@ -73,6 +94,10 @@ export class HypertrophyDB extends Dexie {
       sessions: "id, mesocycleId, status, [mesocycleId+weekIndex]",
       setLogs: "id, sessionId, exerciseId",
       checkins: "id, sessionId",
+    });
+    // v2: medidas corporales (circunferencias) para calibración longitudinal.
+    this.version(2).stores({
+      measurements: "id, date",
     });
   }
 }

@@ -72,6 +72,17 @@ export default function SettingsPage() {
         </div>
 
         <div>
+          <Label>Altura (cm)</Label>
+          <Stepper
+            value={settings.heightCm ?? 175}
+            step={1}
+            min={100}
+            suffix="cm"
+            onChange={(v) => settingsRepo.update({ heightCm: v })}
+          />
+        </div>
+
+        <div>
           <Label>Objetivo de proteína (g/kg)</Label>
           <Stepper
             value={settings.proteinTargetGperKg}
@@ -105,6 +116,16 @@ export default function SettingsPage() {
           <div>
             <p className="font-medium">Biblioteca de ejercicios</p>
             <p className="text-xs text-[var(--muted)]">Ver, crear y editar ejercicios</p>
+          </div>
+          <span className="text-[var(--muted)]">→</span>
+        </Card>
+      </Link>
+
+      <Link href="/measurements">
+        <Card className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="font-medium">Medidas corporales</p>
+            <p className="text-xs text-[var(--muted)]">Circunferencias y peso a lo largo del tiempo</p>
           </div>
           <span className="text-[var(--muted)]">→</span>
         </Card>
