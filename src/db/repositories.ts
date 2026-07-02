@@ -13,17 +13,17 @@ import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
 import { generateMesocycle } from "@/domain/mesocycle";
 import { getDb, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
-import { defaultSettings, seedExercises } from "./seed";
+import { SEED_VERSION, defaultSettings, seedExercises } from "./seed";
 
 // ---- Bootstrap ----
 
-/** Siembra ejercicios y settings por defecto si la BD está vacía. Idempotente. */
+/**
+ * Siembra ejercicios y settings por defecto. Idempotente. Si la biblioteca de
+ * ejercicios cambió de versión (SEED_VERSION), la reemplaza por la nueva sin
+ * tocar el resto de los datos del usuario.
+ */
 export async function ensureSeeded(): Promise<void> {
   const db = getDb();
-  const count = await db.exercises.count();
-  if (count === 0) {
-    await db.exercises.bulkPut(seedExercises);
-  }
   const settings = await db.settings.get("default");
   if (!settings) {
     await db.settings.put(defaultSettings());
@@ -31,6 +31,16 @@ export async function ensureSeeded(): Promise<void> {
   const bw = await db.baseWeek.get("default");
   if (!bw) {
     await db.baseWeek.put({ id: "default", days: [] });
+  }
+
+  const count = await db.exercises.count();
+  const seededVersion = settings?.seedVersion ?? 0;
+  if (count === 0 || seededVersion < SEED_VERSION) {
+    await db.transaction("rw", db.exercises, db.settings, async () => {
+      await db.exercises.clear();
+      await db.exercises.bulkPut(seedExercises);
+      await db.settings.update("default", { seedVersion: SEED_VERSION });
+    });
   }
 }
 

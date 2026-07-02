@@ -23,6 +23,8 @@ export interface SettingsRow {
   equipment: Equipment;
   wakeLockEnabled: boolean;
   onboarded: boolean;
+  /** Versión de la biblioteca de ejercicios sembrada; dispara re-seed al cambiar. */
+  seedVersion?: number;
 }
 
 export interface BaseWeekRow extends BaseWeek {

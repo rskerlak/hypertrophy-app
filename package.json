@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "serve": "serve out -l 3000",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint",
@@ -34,6 +35,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.20",
     "@eslint/eslintrc": "^3",
+    "serve": "^14.2.4",
     "serwist": "^9.0.11",
     "vitest": "^3.0.9"
   }
