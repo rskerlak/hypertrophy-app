@@ -16,6 +16,15 @@ npm run lint       # eslint
 
 Abrí http://localhost:3000. Los datos viven en IndexedDB del navegador.
 
+## Uso rápido en Windows (un click)
+
+- **`Abrir Hipertrofia.bat`** — doble clic. La primera vez instala dependencias y
+  genera la app; después levanta el servidor y abre el navegador. Cerrás la ventana
+  para detenerla. Podés hacerle un acceso directo al escritorio.
+- **`Reconstruir Hipertrofia.bat`** — regenera la app tras editar `rules.config.json`.
+
+Requiere [Node.js](https://nodejs.org) instalado.
+
 ## Arquitectura
 
 Dominio puro + adaptadores. Ver `CLAUDE.md` y `CONTEXT.md` para el detalle.
@@ -26,6 +35,7 @@ src/
               # redondeo de carga, generación de meso, deload, swap, stats, 1RM.
               # Toda la ciencia sale de rules.config.json. CON tests.
   db/         # esquema Dexie + repositories (única capa que toca IndexedDB) + seed
+              # (biblioteca de ~99 ejercicios/máquinas, nombre EN + español entre paréntesis)
   lib/        # composición no-pura (sessionPlan, postSession), wake lock, formato
   components/ # UI (primitivas propias + gráficos Recharts)
   app/        # rutas Next.js App Router (Hoy, Plan, Sesión, Calendario, Stats, Ajustes)
