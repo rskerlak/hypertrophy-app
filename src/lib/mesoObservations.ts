@@ -3,8 +3,14 @@
 // corporales más cercanas al inicio/fin de cada ciclo.
 
 import { computeMesoStats } from "@/domain/stats";
-import { buildMesoObservation, type BodyMeasurement, type MesoObservation } from "@/domain/correlations";
 import {
+  activityAggregates,
+  buildMesoObservation,
+  type BodyMeasurement,
+  type MesoObservation,
+} from "@/domain/correlations";
+import {
+  activityRepo,
   checkinRepo,
   exerciseRepo,
   measurementRepo,
@@ -37,12 +43,17 @@ function nearestAfter(ms: MeasurementRow[], date: string): BodyMeasurement | und
 
 export async function buildMesoObservations(): Promise<MesoObservation[]> {
   const rules = getRules();
-  const [allMesos, measurements, exercises] = await Promise.all([
+  const [allMesos, measurements, exercises, allActivities] = await Promise.all([
     mesocycleRepo.all(),
     measurementRepo.all(),
     exerciseRepo.all(),
+    activityRepo.all(),
   ]);
   const completed = allMesos.filter((m) => m.status === "completed");
+  // Si el usuario nunca registró actividades, la variable no existe (null en
+  // todos los mesos) y el heatmap la filtra; si registró alguna vez, cero
+  // actividad en un meso cuenta como 0 (dato real).
+  const usesActivities = allActivities.length > 0;
 
   const out: MesoObservation[] = [];
   for (const meso of completed) {
@@ -70,6 +81,8 @@ export async function buildMesoObservations(): Promise<MesoObservation[]> {
     const endDate =
       sessions.map((s) => s.completedAt).filter((x): x is string => !!x).sort().pop() ?? meso.createdAt;
 
+    const acts = usesActivities ? activityAggregates(allActivities, startDate, endDate) : null;
+
     out.push(
       buildMesoObservation({
         mesoId: meso.id,
@@ -80,6 +93,8 @@ export async function buildMesoObservations(): Promise<MesoObservation[]> {
         checkins,
         startMeasurement: nearestBefore(measurements, startDate),
         endMeasurement: nearestAfter(measurements, endDate),
+        extraSessionsPerWeek: acts?.extraSessionsPerWeek ?? null,
+        extraMinutesPerWeek: acts?.extraMinutesPerWeek ?? null,
       }),
     );
   }

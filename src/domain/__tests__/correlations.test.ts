@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  activityAggregates,
   buildMesoObservation,
   checkinAggregates,
   correlationMatrix,
@@ -61,6 +62,35 @@ describe("checkinAggregates", () => {
     expect(agg.sleepOkPct).toBeNull();
     expect(agg.proteinOkPct).toBeNull();
     expect(agg.energyBalanceAvg).toBeNull();
+  });
+});
+
+describe("activityAggregates", () => {
+  it("normaliza por semana dentro de la ventana del meso", () => {
+    const acts = [
+      { date: "2026-01-02T10:00:00Z", durationMin: 30 }, // dentro
+      { date: "2026-01-10T10:00:00Z", durationMin: 45 }, // dentro
+      { date: "2026-02-20T10:00:00Z", durationMin: 60 }, // fuera
+    ];
+    // Ventana de 14 días = 2 semanas exactas.
+    const agg = activityAggregates(acts, "2026-01-01T00:00:00Z", "2026-01-15T00:00:00Z");
+    expect(agg.extraSessionsPerWeek).toBe(1); // 2 sesiones / 2 semanas
+    expect(agg.extraMinutesPerWeek).toBe(37.5); // 75 min / 2 semanas
+  });
+
+  it("cero actividades en la ventana = 0 (dato real, no falta de dato)", () => {
+    const agg = activityAggregates([], "2026-01-01", "2026-02-01");
+    expect(agg.extraSessionsPerWeek).toBe(0);
+    expect(agg.extraMinutesPerWeek).toBe(0);
+  });
+
+  it("ventanas menores a una semana no inflan el promedio (mínimo 1 semana)", () => {
+    const agg = activityAggregates(
+      [{ date: "2026-01-02T10:00:00Z", durationMin: 30 }],
+      "2026-01-01T00:00:00Z",
+      "2026-01-03T00:00:00Z",
+    );
+    expect(agg.extraSessionsPerWeek).toBe(1);
   });
 });
 

@@ -29,6 +29,18 @@ export interface SettingsRow {
   heightCm?: number;
 }
 
+/** Actividad extra fuera del plan (cardio, deporte): opcional, no toca el meso. */
+export interface ActivityRow {
+  id: string;
+  /** ISO date de la actividad. */
+  date: string;
+  type: "running" | "swimming" | "cycling" | "walking" | "sport" | "other";
+  durationMin?: number;
+  /** 1 = suave · 2 = moderada · 3 = intensa */
+  intensity?: 1 | 2 | 3;
+  note?: string;
+}
+
 /** Registro de medidas corporales (circunferencias en cm, peso en kg). */
 export interface MeasurementRow {
   id: string;
@@ -83,6 +95,7 @@ export class HypertrophyDB extends Dexie {
   setLogs!: EntityTable<SetLog, "id">;
   checkins!: EntityTable<Checkin, "id">;
   measurements!: EntityTable<MeasurementRow, "id">;
+  activities!: EntityTable<ActivityRow, "id">;
 
   constructor() {
     super("hypertrophy");
@@ -98,6 +111,10 @@ export class HypertrophyDB extends Dexie {
     // v2: medidas corporales (circunferencias) para calibración longitudinal.
     this.version(2).stores({
       measurements: "id, date",
+    });
+    // v3: actividades extra (cardio/deporte) opcionales, correlacionables.
+    this.version(3).stores({
+      activities: "id, date",
     });
   }
 }

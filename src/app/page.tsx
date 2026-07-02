@@ -117,6 +117,18 @@ export default function HomePage() {
             <p className="mt-1 font-medium">Calibración</p>
           </Card>
         </Link>
+        <Link href="/activities">
+          <Card className="h-full">
+            <p className="text-sm text-[var(--muted)]">Extra</p>
+            <p className="mt-1 font-medium">🏃 Actividades</p>
+          </Card>
+        </Link>
+        <Link href="/measurements">
+          <Card className="h-full">
+            <p className="text-sm text-[var(--muted)]">Cuerpo</p>
+            <p className="mt-1 font-medium">📏 Medidas</p>
+          </Card>
+        </Link>
       </div>
     </>
   );

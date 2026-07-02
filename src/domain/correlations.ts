@@ -72,6 +72,36 @@ export function checkinAggregates(checkins: Checkin[]): {
   };
 }
 
+/** Actividad extra (cardio/deporte) registrada fuera del plan. */
+export interface ExtraActivity {
+  date: string;
+  durationMin?: number;
+  intensity?: number;
+}
+
+/**
+ * Agregados de actividad extra dentro de la ventana del meso, normalizados
+ * por semana. Un meso sin actividades da 0 (cero cardio ES un dato).
+ */
+export function activityAggregates(
+  activities: ExtraActivity[],
+  startDate: string,
+  endDate: string,
+): { extraSessionsPerWeek: number; extraMinutesPerWeek: number } {
+  const start = Date.parse(startDate);
+  const end = Date.parse(endDate);
+  const weeks = Math.max(1, (end - start) / (7 * 24 * 60 * 60 * 1000));
+  const inRange = activities.filter((a) => {
+    const t = Date.parse(a.date);
+    return t >= start && t <= end;
+  });
+  const minutes = inRange.reduce((acc, a) => acc + (a.durationMin ?? 0), 0);
+  return {
+    extraSessionsPerWeek: +(inRange.length / weeks).toFixed(2),
+    extraMinutesPerWeek: +(minutes / weeks).toFixed(1),
+  };
+}
+
 export interface BuildObservationInput {
   mesoId: string;
   mesoName: string;
@@ -82,6 +112,9 @@ export interface BuildObservationInput {
   checkins: Checkin[];
   startMeasurement?: BodyMeasurement;
   endMeasurement?: BodyMeasurement;
+  /** Agregados de actividad extra del meso (null = el usuario no usa la función). */
+  extraSessionsPerWeek?: number | null;
+  extraMinutesPerWeek?: number | null;
 }
 
 export function buildMesoObservation(input: BuildObservationInput): MesoObservation {
@@ -96,6 +129,8 @@ export function buildMesoObservation(input: BuildObservationInput): MesoObservat
       sleepOkPct: agg.sleepOkPct,
       proteinOkPct: agg.proteinOkPct,
       energyBalanceAvg: agg.energyBalanceAvg,
+      extraSessionsPerWeek: input.extraSessionsPerWeek ?? null,
+      extraMinutesPerWeek: input.extraMinutesPerWeek ?? null,
       ...measurementDeltas(input.startMeasurement, input.endMeasurement),
     },
   };

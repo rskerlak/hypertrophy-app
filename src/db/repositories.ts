@@ -12,7 +12,7 @@ import type {
 import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
 import { generateMesocycle } from "@/domain/mesocycle";
-import { getDb, type BaseWeekRow, type MeasurementRow, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
+import { getDb, type ActivityRow, type BaseWeekRow, type MeasurementRow, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
 import { SEED_VERSION, defaultSettings, seedExercises } from "./seed";
 
 // ---- Bootstrap ----
@@ -268,6 +268,23 @@ export const checkinRepo = {
   },
 };
 
+// ---- Actividades extra (cardio/deporte, opcional) ----
+
+export const activityRepo = {
+  async all(): Promise<ActivityRow[]> {
+    return getDb().activities.orderBy("date").toArray();
+  },
+  async inRange(fromIso: string, toIso: string): Promise<ActivityRow[]> {
+    return getDb().activities.where("date").between(fromIso, toIso, true, true).toArray();
+  },
+  async add(a: Omit<ActivityRow, "id">): Promise<void> {
+    await getDb().activities.put({ ...a, id: uuid() });
+  },
+  async remove(id: string): Promise<void> {
+    await getDb().activities.delete(id);
+  },
+};
+
 // ---- Medidas corporales ----
 
 export const measurementRepo = {
@@ -325,6 +342,7 @@ export interface BackupFile {
     setLogs: SetLog[];
     checkins: Checkin[];
     measurements?: MeasurementRow[];
+    activities?: ActivityRow[];
   };
 }
 
@@ -332,7 +350,7 @@ export const backupRepo = {
   /** Serializa TODA la base local a un objeto de respaldo. */
   async export(): Promise<BackupFile> {
     const db = getDb();
-    const [settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements] =
+    const [settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements, activities] =
       await Promise.all([
         db.settings.toArray(),
         db.baseWeek.toArray(),
@@ -342,12 +360,13 @@ export const backupRepo = {
         db.setLogs.toArray(),
         db.checkins.toArray(),
         db.measurements.toArray(),
+        db.activities.toArray(),
       ]);
     return {
       app: "hypertrophy",
       backupVersion: 1,
       exportedAt: new Date().toISOString(),
-      data: { settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements },
+      data: { settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements, activities },
     };
   },
 
@@ -368,12 +387,12 @@ export const backupRepo = {
     const db = getDb();
     await db.transaction(
       "rw",
-      [db.settings, db.baseWeek, db.exercises, db.mesocycles, db.sessions, db.setLogs, db.checkins, db.measurements],
+      [db.settings, db.baseWeek, db.exercises, db.mesocycles, db.sessions, db.setLogs, db.checkins, db.measurements, db.activities],
       async () => {
         await Promise.all([
           db.settings.clear(), db.baseWeek.clear(), db.exercises.clear(),
           db.mesocycles.clear(), db.sessions.clear(), db.setLogs.clear(), db.checkins.clear(),
-          db.measurements.clear(),
+          db.measurements.clear(), db.activities.clear(),
         ]);
         await db.settings.bulkPut(d.settings);
         await db.baseWeek.bulkPut(d.baseWeek);
@@ -383,6 +402,7 @@ export const backupRepo = {
         await db.setLogs.bulkPut(d.setLogs);
         await db.checkins.bulkPut(d.checkins);
         if (Array.isArray(d.measurements)) await db.measurements.bulkPut(d.measurements);
+        if (Array.isArray(d.activities)) await db.activities.bulkPut(d.activities);
       },
     );
   },

@@ -67,12 +67,23 @@ export const MEASUREMENT_LABELS: Record<string, string> = {
   calfCm: "Gemelo (cm)",
 };
 
+export const ACTIVITY_LABELS: Record<string, string> = {
+  running: "Correr",
+  swimming: "Natación",
+  cycling: "Bici",
+  walking: "Caminata",
+  sport: "Deporte",
+  other: "Otra",
+};
+
 export const CORRELATION_LABELS: Record<string, string> = {
   d1rmPct: "Δ 1RM %",
   adherencePct: "Adherencia %",
   sleepOkPct: "Sueño OK %",
   proteinOkPct: "Proteína OK %",
   energyBalanceAvg: "Balance energético",
+  extraSessionsPerWeek: "Extra ses/sem",
+  extraMinutesPerWeek: "Extra min/sem",
   d_bodyweightKg: "Δ Peso",
   d_waistCm: "Δ Cintura",
   d_chestUnderShouldersCm: "Δ Torso s/h",

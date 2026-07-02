@@ -4,8 +4,8 @@
 
 import * as XLSX from "xlsx";
 import type { Checkin, Exercise, MesoStats, SetLog } from "@/domain/types";
-import type { MesocycleRow, SessionRow } from "@/db/schema";
-import { muscleLabel, PROGRESSION_LABELS } from "@/lib/format";
+import type { ActivityRow, MesocycleRow, SessionRow } from "@/db/schema";
+import { ACTIVITY_LABELS, muscleLabel, PROGRESSION_LABELS } from "@/lib/format";
 
 export interface ExportInput {
   meso: MesocycleRow;
@@ -14,6 +14,7 @@ export interface ExportInput {
   checkins: Checkin[];
   exercises: Exercise[];
   stats: MesoStats;
+  activities?: ActivityRow[];
 }
 
 const STATUS_ES: Record<string, string> = {
@@ -132,6 +133,26 @@ export function exportMesoToExcel(input: ExportInput): void {
   const wsVol = XLSX.utils.aoa_to_sheet(vol);
   wsVol["!cols"] = [{ wch: 22 }, ...meso.plan.weeks.map(() => ({ wch: 10 }))];
   XLSX.utils.book_append_sheet(wb, wsVol, "Volumen");
+
+  // ---------- Actividades extra (si hay) ----------
+  if (input.activities && input.activities.length > 0) {
+    const INTENSITY: Record<number, string> = { 1: "Suave", 2: "Moderada", 3: "Intensa" };
+    const acts: Array<Array<string | number>> = [
+      ["Fecha", "Actividad", "Duración (min)", "Intensidad", "Nota"],
+      ...[...input.activities]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((a) => [
+          a.date.slice(0, 10),
+          ACTIVITY_LABELS[a.type] ?? a.type,
+          a.durationMin ?? "",
+          a.intensity ? INTENSITY[a.intensity] : "",
+          a.note ?? "",
+        ]),
+    ];
+    const wsActs = XLSX.utils.aoa_to_sheet(acts);
+    wsActs["!cols"] = [{ wch: 11 }, { wch: 12 }, { wch: 14 }, { wch: 11 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, wsActs, "Actividades");
+  }
 
   const safeName = meso.name.replace(/[^\p{L}\p{N} _-]/gu, "").trim() || "mesociclo";
   XLSX.writeFile(wb, `${safeName}.xlsx`, { compression: true });

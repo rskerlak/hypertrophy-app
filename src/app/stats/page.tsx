@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { computeMesoStats } from "@/domain/stats";
 import { getRules } from "@/lib/rulesLoader";
 import {
+  activityRepo,
   checkinRepo,
   exerciseRepo,
   mesocycleRepo,
@@ -24,6 +25,7 @@ import Link from "next/link";
 
 const CORRELATION_VARS = [
   "d1rmPct", "adherencePct", "sleepOkPct", "proteinOkPct", "energyBalanceAvg",
+  "extraSessionsPerWeek", "extraMinutesPerWeek",
   "d_bodyweightKg", "d_waistCm", "d_chestUnderShouldersCm", "d_shoulderGirthCm",
   "d_bicepCm", "d_quadCm", "d_calfCm",
 ];
@@ -62,6 +64,7 @@ export default function StatsPage() {
         await Promise.all(sessions.map((s) => setLogRepo.forSession(s.id)))
       ).flat();
       const checkins = await checkinRepo.all();
+      const activities = await activityRepo.all();
       const stats = computeMesoStats({
         plan: meso.plan,
         sessions: sessions.map((s) => ({ id: s.id, weekIndex: s.weekIndex, status: s.status })),
@@ -74,7 +77,7 @@ export default function StatsPage() {
         stats,
         name: meso.name,
         exNames: new Map(exercises.map((e) => [e.id, e.name])),
-        exportData: { meso, sessions, setLogs, checkins, exercises, stats },
+        exportData: { meso, sessions, setLogs, checkins, exercises, stats, activities },
       });
     })();
   }, []);
