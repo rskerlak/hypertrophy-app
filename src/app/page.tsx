@@ -8,6 +8,7 @@ import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
 import { PROGRESSION_LABELS } from "@/lib/format";
 import { Onboarding } from "@/components/Onboarding";
 import { MeasurementPrompt } from "@/components/MeasurementPrompt";
+import { BackupPrompt } from "@/components/BackupPrompt";
 
 export default function HomePage() {
   const router = useRouter();
@@ -33,6 +34,7 @@ export default function HomePage() {
       <>
         <PageHeader title="Hipertrofia" subtitle="Tu mesociclo, basado en evidencia." />
         <MeasurementPrompt />
+        <BackupPrompt />
         <EmptyState
           title="Todavía no hay un mesociclo activo"
           hint="Definí tu semana base y generá tu primer mesociclo con rampa de volumen y deload."
@@ -56,6 +58,7 @@ export default function HomePage() {
       />
 
       <MeasurementPrompt />
+      <BackupPrompt />
 
       <Card className="mb-4">
         <div className="mb-3 flex items-center justify-between text-sm text-[var(--muted)]">

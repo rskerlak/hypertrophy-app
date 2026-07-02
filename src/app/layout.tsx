@@ -39,7 +39,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="es">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AppProviders>
-          <main className="mx-auto min-h-dvh w-full max-w-md px-4 pb-24 pt-6">{children}</main>
+          <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-28 pt-6">
+            <div className="flex-1">{children}</div>
+            <footer className="mt-10 pb-2 text-center text-[11px] tracking-wide text-[var(--muted)]/60">
+              Idea y desarrollo de Rodrigo Skerlak
+            </footer>
+          </main>
           <BottomNav />
         </AppProviders>
       </body>

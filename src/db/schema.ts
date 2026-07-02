@@ -27,6 +27,8 @@ export interface SettingsRow {
   seedVersion?: number;
   /** Altura en cm (se pide una vez en el onboarding; editable en Ajustes). */
   heightCm?: number;
+  /** ISO datetime del último respaldo exportado (para el recordatorio). */
+  lastBackupAt?: string;
 }
 
 /** Actividad extra fuera del plan (cardio, deporte): opcional, no toca el meso. */
