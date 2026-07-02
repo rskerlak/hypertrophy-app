@@ -1,0 +1,229 @@
+{
+  "schemaVersion": "1.0.0",
+  "_meta": {
+    "purpose": "Configuracion cientifica versionable del motor de calculo. Separa POLITICAS (estos datos) del MECANISMO (codigo en src/domain). Recalibrar aca NO requiere tocar la logica ni re-testear el motor mas alla de los tests de reglas.",
+    "epistemicWarning": "MEV/MAV/MRV y los conteos de 'sets efectivos' son HEURISTICAS no validadas directamente en la literatura, no cantidades medidas. Los rangos de reps (5-30) y la banda de RIR (0-3) SI tienen respaldo meta-analitico solido. Ver SCIENCE.md. Tratar todo valor de este archivo como punto de partida ajustable por historial intra-sujeto, no como verdad fisiologica.",
+    "units": "Volumen en 'sets fraccionados' por semana (set directo = 1.0, set de sinergista = 0.5). Carga en kg. RIR en reps."
+  },
+
+  "volumeCounting": {
+    "directSetWeight": 1.0,
+    "synergistSetWeight": 0.5,
+    "_note": "Metodo de conteo fraccionado de Pelland et al. 2026 (Sports Med). Mejor apoyo meta-analitico que conteo 'total' o 'directo'."
+  },
+
+  "muscles": [
+    "chest", "back", "quads", "hamstrings", "glutes", "side_delts",
+    "front_delts", "rear_delts", "biceps", "triceps", "calves",
+    "abs", "traps", "forearms"
+  ],
+
+  "volumeLandmarksBase": {
+    "_note": "Valores BASE para perfil 'intermediate', en sets fraccionados/semana. Se ajustan por perfil via experienceProfiles[x].volumeMultiplier. Derivados de guias publicas de RP; incertidumbre alta, sobre todo en MRV.",
+    "chest":       { "mv": 6, "mev": 10, "mav": 16, "mrv": 22 },
+    "back":        { "mv": 8, "mev": 10, "mav": 18, "mrv": 25 },
+    "quads":       { "mv": 6, "mev": 8,  "mav": 14, "mrv": 20 },
+    "hamstrings":  { "mv": 4, "mev": 6,  "mav": 12, "mrv": 18 },
+    "glutes":      { "mv": 0, "mev": 4,  "mav": 12, "mrv": 16 },
+    "side_delts":  { "mv": 6, "mev": 8,  "mav": 18, "mrv": 26 },
+    "front_delts": { "mv": 0, "mev": 6,  "mav": 12, "mrv": 16 },
+    "rear_delts":  { "mv": 0, "mev": 6,  "mav": 16, "mrv": 22 },
+    "biceps":      { "mv": 5, "mev": 8,  "mav": 16, "mrv": 24 },
+    "triceps":     { "mv": 4, "mev": 6,  "mav": 14, "mrv": 20 },
+    "calves":      { "mv": 6, "mev": 8,  "mav": 14, "mrv": 20 },
+    "abs":         { "mv": 0, "mev": 6,  "mav": 16, "mrv": 25 },
+    "traps":       { "mv": 0, "mev": 4,  "mav": 12, "mrv": 20 },
+    "forearms":    { "mv": 2, "mev": 4,  "mav": 10, "mrv": 16 }
+  },
+
+  "experienceProfiles": {
+    "novice": {
+      "label": "Novato",
+      "volumeMultiplier": 0.65,
+      "_volNote": "Los novatos crecen con menos volumen y tienen MRV mas bajo. Multiplicador direccional, no medido.",
+      "defaultProgressionModel": "linear",
+      "defaultAccumulationWeeks": 8,
+      "maxAccumulationWeeks": 12,
+      "startingWeeklyVolumeTarget": "mev",
+      "rampAggressiveness": 0.5,
+      "_rampNote": "Fraccion del gap MEV->MAV que se cubre por semana. 0.5 = rampa suave."
+    },
+    "intermediate": {
+      "label": "Medio",
+      "volumeMultiplier": 1.0,
+      "defaultProgressionModel": "double",
+      "defaultAccumulationWeeks": 5,
+      "maxAccumulationWeeks": 8,
+      "startingWeeklyVolumeTarget": "mev",
+      "rampAggressiveness": 0.75
+    },
+    "advanced": {
+      "label": "Avanzado",
+      "volumeMultiplier": 1.2,
+      "_volNote": "Se prioriza maxima hipertrofia. Se asume que el usuario conoce el costo de mayor fatiga.",
+      "defaultProgressionModel": "double",
+      "defaultAccumulationWeeks": 4,
+      "maxAccumulationWeeks": 6,
+      "startingWeeklyVolumeTarget": "mev",
+      "rampAggressiveness": 1.0,
+      "pushToMrv": true,
+      "_mrvNote": "En avanzado la rampa apunta hacia MRV (no solo MAV) en las ultimas semanas."
+    }
+  },
+
+  "rirSchedule": {
+    "_note": "RIR objetivo por semana de acumulacion. La ultima semana antes del deload llega a 0-1. Refalo 2024: parar 1-3 reps antes del fallo iguala la hipertrofia de ir al fallo en entrenados. La curva RIR->hipertrofia es positiva pero se aplana (Robinson 2024).",
+    "byAccumulationLength": {
+      "3": [2, 1, 0],
+      "4": [3, 2, 1, 0],
+      "5": [3, 2, 2, 1, 0],
+      "6": [4, 3, 2, 2, 1, 0],
+      "8": [4, 3, 3, 2, 2, 1, 1, 0]
+    },
+    "barbellRiskFloor": 1,
+    "_barbellNote": "En ejercicios con riesgo (barra libre sobre el cuerpo: sentadilla, press banca sin seguros) el RIR objetivo minimo es 1, no 0."
+  },
+
+  "repRanges": {
+    "_note": "Hipertrofia similar en ~5-30 reps con esfuerzo equiparado (Schoenfeld 2017/2021). La carga es variable secundaria para hipertrofia. Rangos por defecto por tipo de ejercicio; el usuario puede sobrescribir por ejercicio.",
+    "compound": { "min": 5, "max": 10 },
+    "accessory": { "min": 8, "max": 15 },
+    "isolation": { "min": 10, "max": 20 },
+    "globalValid": { "min": 5, "max": 30 }
+  },
+
+  "progressionModels": {
+    "linear": {
+      "label": "Progresion lineal",
+      "description": "Sube carga cada sesion por el incremento minimo disponible mientras se alcance el RIR objetivo con las reps objetivo. Se agota rapido en intermedios/avanzados.",
+      "loadIncrementPctPerSession": 2.5,
+      "failToProgressThreshold": 2,
+      "_failNote": "Si no se alcanzan reps objetivo al RIR objetivo en N sesiones consecutivas, dejar de subir carga."
+    },
+    "double": {
+      "label": "Doble progresion (anclada a RIR)",
+      "description": "Dentro del rango de reps, subir reps hasta el tope al RIR objetivo; al topar, subir carga al incremento minimo disponible y volver al piso del rango. Metodo core recomendado.",
+      "loadIncrementPctOnRepCeiling": 2.5,
+      "repStepWhenBelowCeiling": 1
+    },
+    "dup": {
+      "label": "Periodizacion ondulante diaria (DUP)",
+      "description": "Varia carga/reps por dia de la semana, igualando volumen semanal. Evidencia: equivalente a lineal para hipertrofia (Grgic 2017, d=-0.02).",
+      "dayTypes": {
+        "heavy":  { "repRange": { "min": 5,  "max": 8 },  "targetRirOffset": 0 },
+        "medium": { "repRange": { "min": 9,  "max": 15 }, "targetRirOffset": 0 },
+        "light":  { "repRange": { "min": 16, "max": 25 }, "targetRirOffset": 1 }
+      },
+      "_offsetNote": "targetRirOffset se suma al RIR de rirSchedule para ese dia."
+    },
+    "block": {
+      "label": "Periodizacion por bloques",
+      "description": "Fases secuenciales dentro del meso. Evidencia: sin ventaja clara sobre otros modelos para hipertrofia (Moesgaard 2022, ES 0.13).",
+      "phases": [
+        { "name": "accumulation", "fractionOfMeso": 0.6, "repRange": { "min": 8, "max": 15 }, "rirBias": 1 },
+        { "name": "intensification", "fractionOfMeso": 0.4, "repRange": { "min": 5, "max": 10 }, "rirBias": 0 }
+      ]
+    }
+  },
+
+  "deloadTriggers": {
+    "_note": "MULTI-SENAL y PROBABILISTICO. Nunca presentar como 'MRV alcanzado' medido. La caida de rendimiento es sobre todo fatiga aguda, no un umbral fisiologico. Se dispara sugerencia (no obligacion) si se cumplen >=minSignals de estas condiciones.",
+    "minSignalsToSuggest": 2,
+    "signals": {
+      "performanceDropSessions": {
+        "enabled": true,
+        "consecutiveSessions": 2,
+        "exercisesAffected": 2,
+        "_desc": "No igualar reps de la sesion previa a carga fija en >=2 ejercicios por >=2 sesiones."
+      },
+      "rirCreepAtFixedLoad": {
+        "enabled": true,
+        "reps": 2,
+        "_desc": "RIR reportado sube >=2 a carga fija (se pone mas facil = fatiga o mala calibracion)."
+      },
+      "reachedMrv": {
+        "enabled": true,
+        "_desc": "El volumen planificado de la semana alcanza MRV del perfil para algun musculo priorizado."
+      },
+      "chronicPoorReadiness": {
+        "enabled": true,
+        "windowSessions": 4,
+        "_desc": "Covariable: sueno bajo el minimo y baja disposicion sostenidos (del check-in). Senal debil, solo cuenta junto a otra."
+      }
+    },
+    "_scheduledFallback": "Si no se dispara por senales, forzar deload al terminar las semanas de acumulacion configuradas."
+  },
+
+  "deloadStructure": {
+    "_note": "El deload es gestion de fatiga/articulaciones/adherencia, NO un potenciador anabolico (Coleman 2024: el cese total no mejoro hipertrofia y perjudico algo la fuerza). Reducir volumen, mantener algo de carga.",
+    "durationDays": 7,
+    "volumeTarget": "mev",
+    "volumeFractionFallback": 0.5,
+    "loadFirstHalf": "week1_load",
+    "loadSecondHalf": 0.5,
+    "repsFraction": 0.5,
+    "targetRir": 3
+  },
+
+  "loadIncrements": {
+    "_note": "Redondeo a incrementos FISICAMENTE disponibles. El usuario configura su inventario en settings. Si el salto minimo excede el % objetivo, la progresion anade reps en lugar de carga (ver progressionModels).",
+    "defaultBarWeightKg": 20,
+    "commonPlatesKg": [1.25, 2.5, 5, 10, 15, 20, 25],
+    "commonDumbbellsKg": [2, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 30],
+    "machineStepKg": 5,
+    "_barbellNote": "Para barra, el paso minimo = 2x el disco mas chico disponible (un par). Redondear al alcanzable mas cercano por debajo del objetivo."
+  },
+
+  "oneRepMax": {
+    "_note": "Estimacion de 1RM desde carga+reps+RIR para sugerir peso inicial de un ejercicio. Epley ajustado por RIR: repsEfectivas = reps + rir. Es aproximacion; degrada a reps altas.",
+    "formula": "epley_rir_adjusted",
+    "epleyCoefficient": 0.0333
+  },
+
+  "exerciseRotation": {
+    "_note": "Kassiano 2022: variacion sistematica moderada puede ayudar adaptaciones regionales; variacion aleatoria frecuente compromete ganancias (U invertida). RP: mantener ejercicios todo el meso, cambiar solo por estancamiento/lesion/staleness. Sugerir cambio SOLO sobre ejercicios marcados isSwappable.",
+    "suggestSwapWhen": {
+      "stagnationSessions": 3,
+      "_stagNote": "3+ sesiones sin progreso (ni reps ni carga) al RIR objetivo en el mismo ejercicio.",
+      "endOfMesoOnly": false,
+      "preferStretchBiasedReplacement": true,
+      "_stretchNote": "Sesgar el reemplazo sugerido hacia ejercicios con resistanceProfile='stretch' (evidencia 2022-2024 de estimulo en estiramiento; efecto moderado, no revolucionario)."
+    }
+  },
+
+  "nutrition": {
+    "_note": "Autoreporte simple, NO contador de macros (evitar scope creep). Solo para analisis longitudinal, no modifica la sesion.",
+    "proteinFloorGperKg": 1.6,
+    "proteinUpperGperKg": 2.2,
+    "_proteinNote": "Morton 2018: meseta ~1.62 g/kg/dia (IC 1.03-2.20); 2.2 como techo defendible. Tratar 1.6 como piso, no techo.",
+    "energyBalanceOptions": ["surplus", "maintenance", "deficit"]
+  },
+
+  "sleep": {
+    "_note": "Una noche mala es predictor RUIDOSO y DEBIL del rendimiento de esa sesion. NO recortar el entrenamiento por ello. Solo registrar para tendencia y como covariable debil de deload.",
+    "defaultMinimumHours": 7,
+    "modifiesSession": false
+  },
+
+  "checkin": {
+    "_note": "Neutral y no culpabilizador para evitar efecto nocebo. Opcional. Nunca bloquea el inicio de la sesion.",
+    "optional": true,
+    "blocksSessionStart": false,
+    "tone": "neutral"
+  },
+
+  "statsPolicy": {
+    "_note": "Metricas de PROGRESO validas vs metricas de VANIDAD.",
+    "validProgressMetrics": [
+      "estimated_load_progression_per_exercise",
+      "estimated_load_progression_per_muscle",
+      "completed_vs_planned_volume",
+      "rir_accuracy_drift",
+      "fatigue_trajectory_reps_at_fixed_load",
+      "adherence"
+    ],
+    "excludedVanityMetrics": ["pump", "soreness"],
+    "_excludedNote": "Bombeo y dolor muscular son marcadores POBRES de estimulo/hipertrofia. No usarlos como senal de progreso.",
+    "smallSampleWarning": "Un solo ciclo tiene n pequeno. La calibracion intra-sujeto fiable requiere varios ciclos. No sobreajustar a ruido de un mesociclo."
+  }
+}
