@@ -41,3 +41,17 @@ export const PROFILE_LABELS: Record<string, string> = {
   intermediate: "Medio",
   advanced: "Avanzado",
 };
+
+export const EQUIPMENT_LABELS: Record<string, string> = {
+  barbell: "Barra",
+  dumbbell: "Mancuernas",
+  machine: "Máquina",
+  cable: "Polea",
+  bodyweight: "Peso corporal",
+};
+
+export const RESISTANCE_LABELS: Record<string, string> = {
+  stretch: "Estiramiento",
+  mid: "Media",
+  short: "Acortada",
+};

@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { mesocycleRepo, sessionRepo } from "@/db/repositories";
+import { mesocycleRepo, sessionRepo, settingsRepo } from "@/db/repositories";
 import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
 import { PROGRESSION_LABELS } from "@/lib/format";
+import { Onboarding } from "@/components/Onboarding";
 
 export default function HomePage() {
   const router = useRouter();
 
+  const settings = useLiveQuery(() => settingsRepo.get(), []);
   const data = useLiveQuery(async () => {
     const meso = await mesocycleRepo.active();
     if (!meso) return { meso: null };
@@ -19,7 +21,11 @@ export default function HomePage() {
     return { meso, sessions, next, completed };
   }, []);
 
-  if (!data) return null;
+  if (!settings || !data) return null;
+
+  if (!settings.onboarded) {
+    return <Onboarding onDone={() => { /* useLiveQuery re-renderiza solo */ }} />;
+  }
 
   if (!data.meso) {
     return (

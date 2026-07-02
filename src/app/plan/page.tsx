@@ -39,6 +39,22 @@ export default function PlanPage() {
   const removeDay = (i: number) =>
     save({ days: baseWeek.days.filter((_, idx) => idx !== i) });
 
+  const moveDay = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= baseWeek.days.length) return;
+    const days = [...baseWeek.days];
+    [days[i], days[j]] = [days[j], days[i]];
+    save({ days });
+  };
+
+  const moveSlot = (dayIdx: number, slotIdx: number, dir: -1 | 1) => {
+    const slots = [...baseWeek.days[dayIdx].slots];
+    const j = slotIdx + dir;
+    if (j < 0 || j >= slots.length) return;
+    [slots[slotIdx], slots[j]] = [slots[j], slots[slotIdx]];
+    save({ days: baseWeek.days.map((d, i) => (i === dayIdx ? { ...d, slots } : d)) });
+  };
+
   const addSlot = (dayIdx: number, exercise: Exercise) => {
     const range = exercise.defaultRepRange ?? defaultRange(exercise, rules);
     const days = baseWeek.days.map((d, i) =>
@@ -110,18 +126,22 @@ export default function PlanPage() {
       <div className="space-y-3">
         {baseWeek.days.map((day, dayIdx) => (
           <Card key={dayIdx}>
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex items-center gap-2">
               <Input
                 defaultValue={day.label}
                 onBlur={(e) => {
                   const days = baseWeek.days.map((d, i) => (i === dayIdx ? { ...d, label: e.target.value } : d));
                   save({ days });
                 }}
-                className="h-9 max-w-[60%] font-medium"
+                className="h-9 flex-1 font-medium"
               />
-              <Button variant="ghost" size="sm" onClick={() => removeDay(dayIdx)}>
-                Eliminar
-              </Button>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <ReorderBtn disabled={dayIdx === 0} onClick={() => moveDay(dayIdx, -1)}>↑</ReorderBtn>
+                <ReorderBtn disabled={dayIdx === baseWeek.days.length - 1} onClick={() => moveDay(dayIdx, 1)}>↓</ReorderBtn>
+              </div>
+              <button className="shrink-0 px-1 text-sm text-[var(--danger)]" onClick={() => removeDay(dayIdx)}>
+                ✕
+              </button>
             </div>
 
             <div className="space-y-2">
@@ -138,9 +158,13 @@ export default function PlanPage() {
                           {ex.resistanceProfile === "stretch" && " · estiramiento"}
                         </p>
                       </div>
-                      <button className="text-sm text-[var(--muted)]" onClick={() => removeSlot(dayIdx, slotIdx)}>
-                        ✕
-                      </button>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <ReorderBtn disabled={slotIdx === 0} onClick={() => moveSlot(dayIdx, slotIdx, -1)}>↑</ReorderBtn>
+                        <ReorderBtn disabled={slotIdx === day.slots.length - 1} onClick={() => moveSlot(dayIdx, slotIdx, 1)}>↓</ReorderBtn>
+                        <button className="px-1 text-sm text-[var(--danger)]" onClick={() => removeSlot(dayIdx, slotIdx)}>
+                          ✕
+                        </button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center text-xs text-[var(--muted)]">
                       <MiniStepper
@@ -344,6 +368,26 @@ function MiniStepper({
         </button>
       </div>
     </div>
+  );
+}
+
+function ReorderBtn({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-7 w-7 items-center justify-center rounded border border-[var(--border)] text-sm text-[var(--muted)] disabled:opacity-25"
+    >
+      {children}
+    </button>
   );
 }
 

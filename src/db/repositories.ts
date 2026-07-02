@@ -37,8 +37,11 @@ export async function ensureSeeded(): Promise<void> {
   const seededVersion = settings?.seedVersion ?? 0;
   if (count === 0 || seededVersion < SEED_VERSION) {
     await db.transaction("rw", db.exercises, db.settings, async () => {
+      // Preservar los ejercicios creados por el usuario al re-sembrar la biblioteca.
+      const custom = await db.exercises.filter((e) => e.custom === true).toArray();
       await db.exercises.clear();
       await db.exercises.bulkPut(seedExercises);
+      if (custom.length > 0) await db.exercises.bulkPut(custom);
       await db.settings.update("default", { seedVersion: SEED_VERSION });
     });
   }
@@ -76,6 +79,39 @@ export const exerciseRepo = {
   },
   async put(exercise: Exercise): Promise<void> {
     await getDb().exercises.put(exercise);
+  },
+  /** Crea un ejercicio personalizado del usuario. */
+  async createCustom(data: Omit<Exercise, "id" | "custom">): Promise<Exercise> {
+    const exercise: Exercise = { ...data, id: uuid(), custom: true };
+    await getDb().exercises.put(exercise);
+    return exercise;
+  },
+  async update(id: string, patch: Partial<Exercise>): Promise<void> {
+    await getDb().exercises.update(id, patch);
+  },
+  /**
+   * Elimina un ejercicio. Además lo quita de la semana base y de los
+   * swapCandidates de otros ejercicios para no dejar referencias colgadas.
+   */
+  async remove(id: string): Promise<void> {
+    const db = getDb();
+    await db.transaction("rw", db.exercises, db.baseWeek, async () => {
+      await db.exercises.delete(id);
+      const others = await db.exercises.filter((e) => e.swapCandidates.includes(id)).toArray();
+      for (const o of others) {
+        await db.exercises.update(o.id, {
+          swapCandidates: o.swapCandidates.filter((c) => c !== id),
+        });
+      }
+      const bw = await db.baseWeek.get("default");
+      if (bw) {
+        const days = bw.days.map((d) => ({
+          ...d,
+          slots: d.slots.filter((s) => s.exerciseId !== id),
+        }));
+        await db.baseWeek.put({ id: "default", days });
+      }
+    });
   },
 };
 

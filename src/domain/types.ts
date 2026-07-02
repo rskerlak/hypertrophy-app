@@ -27,6 +27,8 @@ export interface Exercise {
   isSwappable: boolean;
   swapCandidates: string[];
   defaultRepRange?: RepRange;
+  /** true si lo creó el usuario (se preserva en las migraciones de biblioteca). */
+  custom?: boolean;
 }
 
 export interface Equipment {

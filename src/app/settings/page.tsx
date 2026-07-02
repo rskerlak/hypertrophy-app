@@ -3,7 +3,9 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { settingsRepo } from "@/db/repositories";
 import { getRules } from "@/lib/rulesLoader";
+import Link from "next/link";
 import { Card, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
+import { InstallCard } from "@/components/InstallCard";
 import { PROFILE_LABELS, fmtKg, muscleLabel } from "@/lib/format";
 import type { ExperienceProfileId } from "@/domain/types";
 
@@ -32,6 +34,8 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title="Ajustes" subtitle="Perfil y equipamiento" />
+
+      <InstallCard />
 
       <Card className="mb-4 space-y-4">
         <div>
@@ -94,6 +98,16 @@ export default function SettingsPage() {
           />
         </div>
       </Card>
+
+      <Link href="/exercises">
+        <Card className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="font-medium">Biblioteca de ejercicios</p>
+            <p className="text-xs text-[var(--muted)]">Ver, crear y editar ejercicios</p>
+          </div>
+          <span className="text-[var(--muted)]">→</span>
+        </Card>
+      </Link>
 
       <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">Equipamiento (redondeo de carga)</h2>
       <Card className="mb-4 space-y-4">
