@@ -7,6 +7,10 @@ import { BottomNav } from "@/components/BottomNav";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+// Next aplica basePath a `manifest` automáticamente, pero NO a `icons`: los
+// prefijamos a mano para que resuelvan bien también en GitHub Pages (subruta).
+const bp = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 export const metadata: Metadata = {
   title: "Hipertrofia",
   description: "App personal de mesociclos de hipertrofia basada en evidencia.",
@@ -14,10 +18,10 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Hipertrofia" },
   icons: {
     icon: [
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: `${bp}/icon-192.png`, sizes: "192x192", type: "image/png" },
+      { url: `${bp}/icon-512.png`, sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: `${bp}/apple-icon.png`, sizes: "180x180", type: "image/png" }],
   },
 };
 

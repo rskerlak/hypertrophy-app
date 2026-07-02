@@ -10,8 +10,14 @@ const withSerwist = withSerwistInit({
   reloadOnOnline: false,
 });
 
+// basePath para hosting en subruta (GitHub Pages: /hypertrophy-app).
+// En Vercel/local queda vacío (raíz). Lo setea el workflow de Pages.
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 const nextConfig: NextConfig = {
   output: "export",
+  basePath: basePath || undefined,
+  assetPrefix: basePath || undefined,
   images: { unoptimized: true },
 };
 
