@@ -15,11 +15,14 @@ import type { MesoStats } from "@/domain/types";
 import { Badge, Button, Card, EmptyState, HonestNote, PageHeader } from "@/components/ui";
 import { fmtKg, fmtSets, muscleLabel } from "@/lib/format";
 import { FatigueChart } from "@/components/FatigueChart";
+import { exportMesoToExcel, type ExportInput } from "@/lib/exportExcel";
 
 export default function StatsPage() {
   const router = useRouter();
   const [state, setState] = useState<
-    { stats: MesoStats; name: string; exNames: Map<string, string> } | null | undefined
+    | { stats: MesoStats; name: string; exNames: Map<string, string>; exportData: ExportInput }
+    | null
+    | undefined
   >(undefined);
 
   useEffect(() => {
@@ -49,6 +52,7 @@ export default function StatsPage() {
         stats,
         name: meso.name,
         exNames: new Map(exercises.map((e) => [e.id, e.name])),
+        exportData: { meso, sessions, setLogs, checkins, exercises, stats },
       });
     })();
   }, []);
@@ -63,11 +67,19 @@ export default function StatsPage() {
     );
   }
 
-  const { stats, name, exNames } = state;
+  const { stats, name, exNames, exportData } = state;
 
   return (
     <>
-      <PageHeader title="Estadísticas" subtitle={name} />
+      <PageHeader
+        title="Estadísticas"
+        subtitle={name}
+        action={
+          <Button size="sm" variant="secondary" onClick={() => exportMesoToExcel(exportData)}>
+            ⇩ Excel
+          </Button>
+        }
+      />
 
       <div className="mb-4">
         <HonestNote>{stats.smallSampleWarning}</HonestNote>

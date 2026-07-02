@@ -6,16 +6,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,20 +27,11 @@ jobs:
           # Sirve en https://<user>.github.io/hypertrophy-app/
           NEXT_PUBLIC_BASE_PATH: /hypertrophy-app
         run: npm run build
-      - uses: actions/upload-pages-artifact@v3
+      # Deploy clásico por rama: más confiable que actions/deploy-pages
+      # (el backend de deployments quedaba encolado indefinidamente).
+      - name: Push out/ a la rama gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: out
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
-        with:
-          # El backend de Pages puede tardar en procesar la primera cola.
-          timeout: 900000
-          error_count: 20
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./out
+          force_orphan: true

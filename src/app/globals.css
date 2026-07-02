@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0b0c10;
-  --surface: #14161d;
-  --surface-2: #1c1f28;
-  --border: #2a2e3a;
-  --foreground: #e8eaf0;
-  --muted: #9096a6;
-  --primary: #6d7cff;
-  --primary-fg: #ffffff;
+  --background: #09090b;
+  --surface: #101014;
+  --surface-2: #18181d;
+  --border: rgba(255, 255, 255, 0.08);
+  --foreground: #f4f4f5;
+  --muted: #8e8e99;
+  --primary: #c5f74f; /* lima volt */
+  --primary-fg: #0a0a0a;
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #f87171;
-  --radius: 14px;
+  --radius: 18px;
 }
 
 @theme inline {
@@ -39,12 +39,25 @@ html,
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  /* --font-geist-sans la define next/font en <body>; el fallback DENTRO de var()
+     evita que la declaración quede inválida (y caiga en serif) si falta. */
+  font-family: var(--font-geist-sans, system-ui), -apple-system, sans-serif;
   overscroll-behavior-y: none;
 }
 
 body {
   min-height: 100dvh;
+  /* Glow sutil arriba: da profundidad sin ruido. */
+  background-image: radial-gradient(
+    70% 38% at 50% -8%,
+    rgba(197, 247, 79, 0.07),
+    transparent 70%
+  );
+  background-repeat: no-repeat;
+}
+
+::selection {
+  background: rgba(197, 247, 79, 0.3);
 }
 
 /* Ocultar spinners de inputs numéricos para la UI del gym (usamos +/-). */
@@ -55,4 +68,17 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* Scrollbars discretos en listas internas. */
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
 }

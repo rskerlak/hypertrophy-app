@@ -1,4 +1,4 @@
-// Primitivas de UI ligeras (Tailwind). Mobile-first, tema oscuro.
+// Primitivas de UI ligeras (Tailwind). Mobile-first, tema oscuro, acento volt.
 "use client";
 
 import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
@@ -21,7 +21,7 @@ export function Card({
       onClick={onClick}
       className={cn(
         "rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4",
-        onClick && "cursor-pointer active:opacity-80",
+        onClick && "cursor-pointer transition-transform duration-150 active:scale-[0.985] active:opacity-90",
         className,
       )}
     >
@@ -37,20 +37,22 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 export function Button({ variant = "primary", size = "md", className, ...props }: ButtonProps) {
   const variants: Record<string, string> = {
-    primary: "bg-[var(--primary)] text-[var(--primary-fg)] active:opacity-85",
-    secondary: "bg-[var(--surface-2)] text-[var(--foreground)] border border-[var(--border)] active:opacity-80",
+    primary:
+      "bg-[var(--primary)] text-[var(--primary-fg)] shadow-[0_0_28px_rgba(197,247,79,0.18)] active:shadow-none",
+    secondary:
+      "bg-[var(--surface-2)] text-[var(--foreground)] border border-[var(--border)] active:bg-[var(--surface)]",
     ghost: "text-[var(--muted)] active:text-[var(--foreground)]",
-    danger: "bg-[var(--danger)] text-white active:opacity-85",
+    danger: "bg-[var(--danger)]/15 text-[var(--danger)] border border-[var(--danger)]/25",
   };
   const sizes: Record<string, string> = {
-    sm: "h-9 px-3 text-sm",
-    md: "h-11 px-4 text-[15px]",
-    lg: "h-13 px-5 text-base",
+    sm: "h-9 px-4 text-sm",
+    md: "h-11 px-5 text-[15px]",
+    lg: "h-13 px-6 text-base",
   };
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition disabled:opacity-40",
+        "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-all duration-150 active:scale-[0.97] disabled:opacity-35 disabled:shadow-none",
         variants[variant],
         sizes[size],
         className,
@@ -64,7 +66,7 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
   return (
     <input
       className={cn(
-        "h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-[15px] text-[var(--foreground)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--primary)]",
+        "h-11 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-3.5 text-[15px] text-[var(--foreground)] outline-none transition-colors placeholder:text-[var(--muted)]/70 focus:border-[var(--primary)]/50 focus:ring-2 focus:ring-[var(--primary)]/15",
         className,
       )}
       {...props}
@@ -73,7 +75,16 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
 }
 
 export function Label({ children, className }: { children: ReactNode; className?: string }) {
-  return <label className={cn("mb-1.5 block text-sm font-medium text-[var(--muted)]", className)}>{children}</label>;
+  return (
+    <label
+      className={cn(
+        "mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]",
+        className,
+      )}
+    >
+      {children}
+    </label>
+  );
 }
 
 export function Select({
@@ -84,7 +95,7 @@ export function Select({
   return (
     <select
       className={cn(
-        "h-11 w-full rounded-xl border border-[var(--border)] bg-[var(--surface-2)] px-3 text-[15px] text-[var(--foreground)] outline-none focus:border-[var(--primary)]",
+        "h-11 w-full appearance-none rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-3.5 text-[15px] text-[var(--foreground)] outline-none transition-colors focus:border-[var(--primary)]/50 focus:ring-2 focus:ring-[var(--primary)]/15",
         className,
       )}
       {...props}
@@ -102,14 +113,19 @@ export function Badge({
   tone?: "neutral" | "primary" | "success" | "warning" | "danger";
 }) {
   const tones: Record<string, string> = {
-    neutral: "bg-[var(--surface-2)] text-[var(--muted)] border-[var(--border)]",
-    primary: "bg-[var(--primary)]/15 text-[var(--primary)] border-[var(--primary)]/30",
-    success: "bg-[var(--success)]/15 text-[var(--success)] border-[var(--success)]/30",
-    warning: "bg-[var(--warning)]/15 text-[var(--warning)] border-[var(--warning)]/30",
-    danger: "bg-[var(--danger)]/15 text-[var(--danger)] border-[var(--danger)]/30",
+    neutral: "bg-white/[0.04] text-[var(--muted)] border-[var(--border)]",
+    primary: "bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/25",
+    success: "bg-[var(--success)]/10 text-[var(--success)] border-[var(--success)]/25",
+    warning: "bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/25",
+    danger: "bg-[var(--danger)]/10 text-[var(--danger)] border-[var(--danger)]/25",
   };
   return (
-    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium", tones[tone])}>
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold tracking-wide",
+        tones[tone],
+      )}
+    >
       {children}
     </span>
   );
@@ -117,10 +133,14 @@ export function Badge({
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
-    <header className="mb-5 flex items-start justify-between gap-3">
+    <header className="mb-6 flex items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-[var(--muted)]">{subtitle}</p>}
+        {subtitle && (
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--primary)]/80">
+            {subtitle}
+          </p>
+        )}
+        <h1 className="text-[28px] font-bold leading-none tracking-tight">{title}</h1>
       </div>
       {action}
     </header>
@@ -129,9 +149,9 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
 
 export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
-    <Card className="flex flex-col items-center gap-3 py-10 text-center">
-      <p className="font-medium">{title}</p>
-      {hint && <p className="max-w-xs text-sm text-[var(--muted)]">{hint}</p>}
+    <Card className="flex flex-col items-center gap-3 border-dashed py-12 text-center">
+      <p className="font-semibold">{title}</p>
+      {hint && <p className="max-w-xs text-sm leading-relaxed text-[var(--muted)]">{hint}</p>}
       {action}
     </Card>
   );
@@ -140,8 +160,10 @@ export function EmptyState({ title, hint, action }: { title: string; hint?: stri
 /** Nota de honestidad epistémica: heurístico / n pequeño / etc. */
 export function HonestNote({ children }: { children: ReactNode }) {
   return (
-    <p className="flex gap-2 rounded-lg bg-[var(--surface-2)] p-3 text-xs leading-relaxed text-[var(--muted)]">
-      <span aria-hidden>ⓘ</span>
+    <p className="flex gap-2.5 rounded-2xl border border-[var(--border)] bg-transparent p-3.5 text-xs leading-relaxed text-[var(--muted)]">
+      <span aria-hidden className="text-[var(--primary)]/70">
+        ⓘ
+      </span>
       <span>{children}</span>
     </p>
   );
@@ -162,18 +184,20 @@ export function Stepper({
   suffix?: string;
   format?: (v: number) => string;
 }) {
+  const btn =
+    "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-xl font-medium transition-transform active:scale-90";
   return (
     <div className="flex items-center gap-2">
-      <Button variant="secondary" size="sm" onClick={() => onChange(Math.max(min, +(value - step).toFixed(3)))} className="w-11 shrink-0 text-lg">
+      <button type="button" className={btn} onClick={() => onChange(Math.max(min, +(value - step).toFixed(3)))}>
         −
-      </Button>
-      <div className="min-w-[72px] flex-1 text-center text-lg font-semibold tabular-nums">
+      </button>
+      <div className="min-w-[72px] flex-1 text-center text-xl font-bold tabular-nums tracking-tight">
         {format ? format(value) : value}
-        {suffix && <span className="ml-1 text-sm font-normal text-[var(--muted)]">{suffix}</span>}
+        {suffix && <span className="ml-1 text-sm font-medium text-[var(--muted)]">{suffix}</span>}
       </div>
-      <Button variant="secondary" size="sm" onClick={() => onChange(+(value + step).toFixed(3))} className="w-11 shrink-0 text-lg">
+      <button type="button" className={btn} onClick={() => onChange(+(value + step).toFixed(3))}>
         +
-      </Button>
+      </button>
     </div>
   );
 }
