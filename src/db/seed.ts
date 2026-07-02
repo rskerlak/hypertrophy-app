@@ -10,7 +10,7 @@ import { getRules } from "@/lib/rulesLoader";
 import type { SettingsRow } from "./schema";
 
 /** Bump para forzar re-seed de la biblioteca de ejercicios tras cambios aquí. */
-export const SEED_VERSION = 2;
+export const SEED_VERSION = 3;
 
 export function defaultSettings(): SettingsRow {
   const rules = getRules();
@@ -51,6 +51,7 @@ const RAW: Raw[] = [
   ["high-cable-fly", "High Cable Fly (Cruce de poleas alto)", "chest", [], "cable", "mid", true],
   ["low-cable-fly", "Low Cable Fly (Cruce de poleas bajo)", "chest", [], "cable", "stretch", true],
   ["db-fly", "Dumbbell Fly (Aperturas con mancuernas)", "chest", [], "dumbbell", "stretch", true],
+  ["incline-db-fly", "Incline Dumbbell Fly (Aperturas inclinadas con mancuernas)", "chest", [], "dumbbell", "stretch", true],
   ["chest-dip", "Chest Dip (Fondos en paralelas para pecho)", "chest", ["triceps", "front_delts"], "bodyweight", "stretch", true],
   ["push-up", "Push-Up (Flexiones)", "chest", ["triceps", "front_delts"], "bodyweight", "mid", true],
 
@@ -70,6 +71,7 @@ const RAW: Raw[] = [
   ["chin-up", "Chin-Up (Dominadas supinas)", "back", ["biceps"], "bodyweight", "stretch", true],
   ["straight-arm-pulldown", "Straight-Arm Pulldown (Jalón con brazos rectos)", "back", [], "cable", "stretch", true],
   ["machine-pullover", "Machine Pullover (Pullover en máquina)", "back", [], "machine", "stretch", true],
+  ["back-extension", "Back Extension (Espinales en banco)", "back", ["glutes", "hamstrings"], "machine", "stretch", true],
 
   // ---------------- TRAPS / Trapecios ----------------
   ["bb-shrug", "Barbell Shrug (Encogimientos con barra)", "traps", [], "barbell", "short", true],
@@ -104,6 +106,9 @@ const RAW: Raw[] = [
   ["glute-bridge", "Glute Bridge (Puente de glúteos)", "glutes", ["hamstrings"], "barbell", "short", true],
   ["cable-kickback", "Cable Glute Kickback (Patada de glúteo en polea)", "glutes", [], "cable", "short", true],
   ["hip-abduction", "Hip Abduction Machine (Máquina de abductores)", "glutes", [], "machine", "short", true],
+
+  // ---------------- ADDUCTORS / Aductores ----------------
+  ["hip-adduction", "Hip Adduction Machine (Máquina de aductores)", "adductors", [], "machine", "short", true],
   ["sumo-deadlift", "Sumo Deadlift (Peso muerto sumo)", "glutes", ["quads", "back", "hamstrings"], "barbell", "mid", true],
 
   // ---------------- SIDE DELTS / Deltoides laterales ----------------

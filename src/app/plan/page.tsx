@@ -11,6 +11,7 @@ import type { BaseWeek, Exercise, ProgressionModel } from "@/domain/types";
 import { Badge, Button, Card, EmptyState, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { VolumeBar } from "@/components/VolumeBar";
 import { PROGRESSION_LABELS, fmtKg, muscleLabel } from "@/lib/format";
+import { ROUTINE_TEMPLATES } from "@/lib/templates";
 
 export default function PlanPage() {
   const router = useRouter();
@@ -120,7 +121,32 @@ export default function PlanPage() {
       <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">Días de entrenamiento</h2>
 
       {baseWeek.days.length === 0 && (
-        <EmptyState title="Sin días todavía" hint="Agregá tu primer día de entrenamiento." />
+        <>
+          <EmptyState
+            title="Sin días todavía"
+            hint="Agregá tu primer día de entrenamiento, o arrancá desde una rutina precargada y editala a gusto."
+          />
+          <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">Rutinas precargadas</h2>
+          {ROUTINE_TEMPLATES.map((t) => (
+            <Card key={t.id} className="mb-3">
+              <p className="font-semibold">{t.name}</p>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">{t.description}</p>
+              <p className="mt-1.5 text-xs text-[var(--muted)]">
+                {t.days.length} días ·{" "}
+                {t.days.reduce((a, d) => a + d.slots.length, 0)} ejercicios
+              </p>
+              <Button
+                size="sm"
+                className="mt-3 w-full"
+                onClick={() =>
+                  save({ days: t.days.map((d) => ({ ...d, slots: d.slots.map((s) => ({ ...s })) })) })
+                }
+              >
+                Usar como base (editable)
+              </Button>
+            </Card>
+          ))}
+        </>
       )}
 
       <div className="space-y-3">

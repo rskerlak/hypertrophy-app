@@ -23,6 +23,7 @@ const MUSCLE_ES: Record<string, string> = {
   abs: "Abdomen",
   traps: "Trapecios",
   forearms: "Antebrazos",
+  adductors: "Aductores",
 };
 
 export function muscleLabel(m: string): string {

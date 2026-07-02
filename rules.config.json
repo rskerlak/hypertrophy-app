@@ -15,7 +15,7 @@
   "muscles": [
     "chest", "back", "quads", "hamstrings", "glutes", "side_delts",
     "front_delts", "rear_delts", "biceps", "triceps", "calves",
-    "abs", "traps", "forearms"
+    "abs", "traps", "forearms", "adductors"
   ],
 
   "volumeLandmarksBase": {
@@ -33,7 +33,8 @@
     "calves":      { "mv": 6, "mev": 8,  "mav": 14, "mrv": 20 },
     "abs":         { "mv": 0, "mev": 6,  "mav": 16, "mrv": 25 },
     "traps":       { "mv": 0, "mev": 4,  "mav": 12, "mrv": 20 },
-    "forearms":    { "mv": 2, "mev": 4,  "mav": 10, "mrv": 16 }
+    "forearms":    { "mv": 2, "mev": 4,  "mav": 10, "mrv": 16 },
+    "adductors":   { "mv": 0, "mev": 4,  "mav": 10, "mrv": 16 }
   },
 
   "experienceProfiles": {

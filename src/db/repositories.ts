@@ -12,7 +12,7 @@ import type {
 import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
 import { generateMesocycle } from "@/domain/mesocycle";
-import { getDb, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
+import { getDb, type BaseWeekRow, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
 import { SEED_VERSION, defaultSettings, seedExercises } from "./seed";
 
 // ---- Bootstrap ----
@@ -265,5 +265,79 @@ export const checkinRepo = {
   },
   async all(): Promise<Checkin[]> {
     return getDb().checkins.toArray();
+  },
+};
+
+// ---- Backup / restore (respaldo completo en JSON) ----
+
+export interface BackupFile {
+  app: "hypertrophy";
+  backupVersion: 1;
+  exportedAt: string;
+  data: {
+    settings: SettingsRow[];
+    baseWeek: BaseWeekRow[];
+    exercises: Exercise[];
+    mesocycles: MesocycleRow[];
+    sessions: SessionRow[];
+    setLogs: SetLog[];
+    checkins: Checkin[];
+  };
+}
+
+export const backupRepo = {
+  /** Serializa TODA la base local a un objeto de respaldo. */
+  async export(): Promise<BackupFile> {
+    const db = getDb();
+    const [settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins] =
+      await Promise.all([
+        db.settings.toArray(),
+        db.baseWeek.toArray(),
+        db.exercises.toArray(),
+        db.mesocycles.toArray(),
+        db.sessions.toArray(),
+        db.setLogs.toArray(),
+        db.checkins.toArray(),
+      ]);
+    return {
+      app: "hypertrophy",
+      backupVersion: 1,
+      exportedAt: new Date().toISOString(),
+      data: { settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins },
+    };
+  },
+
+  /**
+   * Reemplaza TODOS los datos locales con el contenido del respaldo.
+   * Valida el shape mínimo y falla ruidoso si no es un respaldo válido.
+   */
+  async import(raw: unknown): Promise<void> {
+    const b = raw as Partial<BackupFile>;
+    if (!b || b.app !== "hypertrophy" || b.backupVersion !== 1 || !b.data) {
+      throw new Error("El archivo no es un respaldo válido de esta app.");
+    }
+    const d = b.data;
+    const tables = ["settings", "baseWeek", "exercises", "mesocycles", "sessions", "setLogs", "checkins"] as const;
+    for (const t of tables) {
+      if (!Array.isArray(d[t])) throw new Error(`Respaldo corrupto: falta la tabla "${t}".`);
+    }
+    const db = getDb();
+    await db.transaction(
+      "rw",
+      [db.settings, db.baseWeek, db.exercises, db.mesocycles, db.sessions, db.setLogs, db.checkins],
+      async () => {
+        await Promise.all([
+          db.settings.clear(), db.baseWeek.clear(), db.exercises.clear(),
+          db.mesocycles.clear(), db.sessions.clear(), db.setLogs.clear(), db.checkins.clear(),
+        ]);
+        await db.settings.bulkPut(d.settings);
+        await db.baseWeek.bulkPut(d.baseWeek);
+        await db.exercises.bulkPut(d.exercises);
+        await db.mesocycles.bulkPut(d.mesocycles);
+        await db.sessions.bulkPut(d.sessions);
+        await db.setLogs.bulkPut(d.setLogs);
+        await db.checkins.bulkPut(d.checkins);
+      },
+    );
   },
 };

@@ -6,6 +6,7 @@ import { getRules } from "@/lib/rulesLoader";
 import Link from "next/link";
 import { Card, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { InstallCard } from "@/components/InstallCard";
+import { BackupCard } from "@/components/BackupCard";
 import { PROFILE_LABELS, fmtKg, muscleLabel } from "@/lib/format";
 import type { ExperienceProfileId } from "@/domain/types";
 
@@ -188,6 +189,10 @@ export default function SettingsPage() {
           onChange={(v) => settingsRepo.update({ wakeLockEnabled: v })}
         />
       </Card>
+
+      <div className="mb-4">
+        <BackupCard />
+      </div>
 
       <HonestNote>
         Los landmarks de volumen (MEV/MAV/MRV) y los disparadores de deload son heurísticas de
