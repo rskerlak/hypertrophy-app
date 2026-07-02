@@ -42,3 +42,7 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # El backend de Pages puede tardar en procesar la primera cola.
+          timeout: 900000
+          error_count: 20
