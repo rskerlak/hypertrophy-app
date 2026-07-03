@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateMesocycle } from "../mesocycle";
+import { deriveBaseWeekFromPlan, generateMesocycle } from "../mesocycle";
 import { effectiveLandmarks, rirScheduleForLength } from "../rules";
 import type { ProgressionModel } from "../types";
 import { baseWeek, exercises, exercisesById, rules } from "./fixtures";
@@ -129,6 +129,48 @@ describe("generateMesocycle — modelos igualan volumen", () => {
     const plan = gen("block", 5);
     expect(plan.weeks[0].days[0].slots[0].phase).toBe("accumulation");
     expect(plan.weeks[4].days[0].slots[0].phase).toBe("intensification");
+  });
+});
+
+describe("deriveBaseWeekFromPlan (continuación de meso)", () => {
+  it("reconstruye la semana base desde la semana 1 del plan", () => {
+    const plan = gen("double", 5);
+    const bw = deriveBaseWeekFromPlan(plan);
+    expect(bw.days).toHaveLength(baseWeek.days.length);
+    const w0 = plan.weeks[0];
+    bw.days.forEach((day, di) => {
+      day.slots.forEach((slot, si) => {
+        expect(slot.exerciseId).toBe(w0.days[di].slots[si].exerciseId);
+        expect(slot.targetSets).toBe(w0.days[di].slots[si].sets);
+        expect(slot.repRange).toEqual(w0.days[di].slots[si].repRange);
+      });
+    });
+  });
+
+  it("aplica cargas heredadas por ejercicio y conserva las demás", () => {
+    const plan = gen("double", 5);
+    const bw = deriveBaseWeekFromPlan(plan, new Map([["bench", 87.5]]));
+    const benchSlot = bw.days[0].slots.find((s) => s.exerciseId === "bench")!;
+    const rowSlot = bw.days[0].slots.find((s) => s.exerciseId === "row")!;
+    expect(benchSlot.startingLoadKg).toBe(87.5);
+    expect(rowSlot.startingLoadKg).toBe(70); // sin override: carga del plan
+  });
+
+  it("regenerar desde la semana base derivada produce un meso válido (roundtrip)", () => {
+    const plan = gen("double", 5);
+    const bw = deriveBaseWeekFromPlan(plan);
+    const next = generateMesocycle({
+      baseWeek: bw,
+      exercises,
+      profile: "intermediate",
+      progressionModel: "double",
+      numAccumulationWeeks: 5,
+      prioritizedMuscles: [],
+      rules,
+    });
+    expect(next.weeks).toHaveLength(6);
+    // la semana 1 del nuevo meso arranca con el volumen de la semana 1 del anterior
+    expect(next.weeks[0].targetVolumeByMuscle).toEqual(plan.weeks[0].targetVolumeByMuscle);
   });
 });
 

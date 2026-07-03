@@ -99,8 +99,9 @@ Tipar todo con TypeScript. IDs `string` (uuid). Índices donde se filtra.
 - `id`, `name`, `createdAt`
 - `numAccumulationWeeks`: number, `deloadWeeks`: number (default 1)
 - `progressionModel`: `"linear" | "double" | "dup" | "block"`
-- `status`: `"planned" | "active" | "completed"`
+- `status`: `"planned" | "active" | "paused" | "completed"` (paused = empezado y suspendido para intercalar otro meso; reanudable sin perder progreso)
 - `plan`: snapshot generado (el plan completo semana×día×slot con targets). Ver §6 `generateMesocycle`.
+- `continuedFromId`?: id del meso origen si este se generó como continuación (hereda cargas desde el rendimiento real del meso previo, excluyendo la semana de deload).
 
 **`sessions`**
 - `id`, `mesocycleId` (índice), `weekIndex`, `dayIndex`

@@ -72,8 +72,11 @@ export interface MesocycleRow {
   numAccumulationWeeks: number;
   deloadWeeks: number;
   progressionModel: ProgressionModel;
-  status: "planned" | "active" | "completed";
+  /** paused: empezado pero suspendido para intercalar otro meso; se puede reanudar. */
+  status: "planned" | "active" | "paused" | "completed";
   plan: MesocyclePlan;
+  /** id del meso del que este es continuación (progresión de cargas heredada). */
+  continuedFromId?: string;
 }
 
 export interface SessionRow {

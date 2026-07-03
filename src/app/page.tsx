@@ -15,12 +15,15 @@ export default function HomePage() {
 
   const settings = useLiveQuery(() => settingsRepo.get(), []);
   const data = useLiveQuery(async () => {
-    const meso = await mesocycleRepo.active();
-    if (!meso) return { meso: null };
+    const all = await mesocycleRepo.all();
+    const paused = all.filter((m) => m.status === "paused");
+    const lastCompleted = all.find((m) => m.status === "completed");
+    const meso = all.find((m) => m.status === "active") ?? null;
+    if (!meso) return { meso: null, paused, lastCompleted };
     const sessions = await sessionRepo.forMesocycle(meso.id);
     const next = sessions.find((s) => s.status === "pending");
     const completed = sessions.filter((s) => s.status === "completed").length;
-    return { meso, sessions, next, completed };
+    return { meso, sessions, next, completed, paused, lastCompleted };
   }, []);
 
   if (!settings || !data) return null;
@@ -35,10 +38,50 @@ export default function HomePage() {
         <PageHeader title="Hipertrofia" subtitle="Tu mesociclo, basado en evidencia." />
         <MeasurementPrompt />
         <BackupPrompt />
+
+        {data.paused.length > 0 && (
+          <div className="mb-4 space-y-2">
+            {data.paused.map((p) => (
+              <Card key={p.id} className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{p.name}</p>
+                  <p className="text-xs text-[var(--muted)]">En pausa · tocá para reanudar</p>
+                </div>
+                <Button size="sm" onClick={() => mesocycleRepo.activate(p.id)}>
+                  Reanudar
+                </Button>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {data.lastCompleted && (
+          <Card className="mb-4">
+            <p className="font-medium">Continuar «{data.lastCompleted.name}»</p>
+            <p className="mt-1 mb-3 text-xs text-[var(--muted)]">
+              Nuevo bloque con la misma estructura y cargas heredadas de tu rendimiento real.
+            </p>
+            <Button
+              size="sm"
+              className="w-full"
+              onClick={() => mesocycleRepo.createFollowUp(data.lastCompleted!.id)}
+            >
+              Continuar progresión →
+            </Button>
+          </Card>
+        )}
+
         <EmptyState
-          title="Todavía no hay un mesociclo activo"
-          hint="Definí tu semana base y generá tu primer mesociclo con rampa de volumen y deload."
-          action={<Button onClick={() => router.push("/plan")}>Crear mi plan</Button>}
+          title="Sin mesociclo activo"
+          hint="Definí tu semana base y generá un mesociclo nuevo, o reanudá uno existente."
+          action={
+            <div className="flex gap-2">
+              <Button onClick={() => router.push("/plan")}>Crear plan</Button>
+              <Button variant="secondary" onClick={() => router.push("/mesos")}>
+                Mis mesociclos
+              </Button>
+            </div>
+          }
         />
       </>
     );
@@ -94,10 +137,20 @@ export default function HomePage() {
         <Card className="mb-4">
           <p className="mb-3 font-medium">Mesociclo completado 🎉</p>
           <p className="mb-4 text-sm text-[var(--muted)]">
-            Revisá tus estadísticas de calibración o generá el siguiente bloque.
+            Podés continuar la progresión con un bloque nuevo (misma estructura, cargas heredadas
+            de tu rendimiento), revisar tus stats, o armar un meso distinto.
           </p>
+          <Button
+            className="mb-2 w-full"
+            onClick={async () => {
+              await mesocycleRepo.createFollowUp(meso.id);
+              router.refresh();
+            }}
+          >
+            Continuar progresión →
+          </Button>
           <div className="flex gap-2">
-            <Button className="flex-1" onClick={() => router.push(`/stats?meso=${meso.id}`)}>
+            <Button variant="secondary" className="flex-1" onClick={() => router.push(`/stats?meso=${meso.id}`)}>
               Ver stats
             </Button>
             <Button variant="secondary" className="flex-1" onClick={() => router.push("/plan")}>
@@ -130,6 +183,12 @@ export default function HomePage() {
           <Card className="h-full">
             <p className="text-sm text-[var(--muted)]">Cuerpo</p>
             <p className="mt-1 font-medium">📏 Medidas</p>
+          </Card>
+        </Link>
+        <Link href="/mesos" className="col-span-2">
+          <Card>
+            <p className="text-sm text-[var(--muted)]">Historial y pausados</p>
+            <p className="mt-1 font-medium">📚 Mis mesociclos</p>
           </Card>
         </Link>
       </div>

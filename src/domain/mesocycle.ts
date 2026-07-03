@@ -29,6 +29,30 @@ export interface GenerateMesocycleInput {
 
 const DUP_CYCLE: DupDayType[] = ["heavy", "medium", "light"];
 
+/**
+ * Reconstruye una semana base desde la semana 1 de un plan existente,
+ * opcionalmente reemplazando las cargas iniciales (continuación de meso:
+ * heredar cargas desde el rendimiento real del ciclo anterior).
+ */
+export function deriveBaseWeekFromPlan(
+  plan: MesocyclePlan,
+  loadOverridesByExercise?: Map<string, number>,
+): BaseWeek {
+  const week0 = plan.weeks.find((w) => !w.isDeload) ?? plan.weeks[0];
+  return {
+    days: week0.days.map((day) => ({
+      label: day.label,
+      slots: day.slots.map((slot) => ({
+        exerciseId: slot.exerciseId,
+        targetSets: slot.sets,
+        repRange: { ...slot.repRange },
+        startingLoadKg:
+          loadOverridesByExercise?.get(slot.exerciseId) ?? slot.targetLoadKg,
+      })),
+    })),
+  };
+}
+
 export function generateMesocycle(input: GenerateMesocycleInput): MesocyclePlan {
   const { baseWeek, exercises, profile, progressionModel, prioritizedMuscles, rules } = input;
   const profileCfg = rules.experienceProfiles[profile];

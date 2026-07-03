@@ -13,7 +13,7 @@ import {
   setLogRepo,
 } from "@/db/repositories";
 import type { MesoStats } from "@/domain/types";
-import { Badge, Button, Card, EmptyState, HonestNote, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, HonestNote, PageHeader, Select } from "@/components/ui";
 import { fmtKg, fmtSets, muscleLabel } from "@/lib/format";
 import { FatigueChart } from "@/components/FatigueChart";
 import { exportMesoToExcel, type ExportInput } from "@/lib/exportExcel";
@@ -32,11 +32,29 @@ const CORRELATION_VARS = [
 
 export default function StatsPage() {
   const router = useRouter();
+  const [mesos, setMesos] = useState<Array<{ id: string; name: string; status: string }>>([]);
+  const [mesoId, setMesoId] = useState<string | null>(null);
   const [state, setState] = useState<
     | { stats: MesoStats; name: string; exNames: Map<string, string>; exportData: ExportInput }
     | null
     | undefined
   >(undefined);
+
+  // Lista de mesos y selección inicial: ?meso= → activo → más reciente.
+  useEffect(() => {
+    (async () => {
+      const all = await mesocycleRepo.all();
+      setMesos(all.map((m) => ({ id: m.id, name: m.name, status: m.status })));
+      const fromQuery = new URLSearchParams(window.location.search).get("meso");
+      const initial =
+        (fromQuery && all.find((m) => m.id === fromQuery)?.id) ||
+        all.find((m) => m.status === "active")?.id ||
+        all[0]?.id ||
+        null;
+      if (!initial) setState(null);
+      setMesoId(initial);
+    })();
+  }, []);
   const [correlations, setCorrelations] = useState<{
     observations: MesoObservation[];
     result: CorrelationResult;
@@ -50,8 +68,9 @@ export default function StatsPage() {
   }, []);
 
   useEffect(() => {
+    if (!mesoId) return;
     (async () => {
-      const meso = (await mesocycleRepo.active()) ?? (await mesocycleRepo.all())[0];
+      const meso = await mesocycleRepo.get(mesoId);
       if (!meso) {
         setState(null);
         return;
@@ -80,7 +99,7 @@ export default function StatsPage() {
         exportData: { meso, sessions, setLogs, checkins, exercises, stats, activities },
       });
     })();
-  }, []);
+  }, [mesoId]);
 
   if (state === undefined) return null;
   if (state === null) {
@@ -105,6 +124,19 @@ export default function StatsPage() {
           </Button>
         }
       />
+
+      {mesos.length > 1 && (
+        <div className="mb-4">
+          <Select value={mesoId ?? ""} onChange={(e) => setMesoId(e.target.value)}>
+            {mesos.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+                {m.status === "active" ? " (activo)" : m.status === "paused" ? " (en pausa)" : ""}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
 
       <div className="mb-4">
         <HonestNote>{stats.smallSampleWarning}</HonestNote>

@@ -11,7 +11,8 @@ import type {
 } from "@/domain/types";
 import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
-import { generateMesocycle } from "@/domain/mesocycle";
+import { deriveBaseWeekFromPlan, generateMesocycle } from "@/domain/mesocycle";
+import { groupBySession, nextPrescription } from "@/domain/progression";
 import { getDb, type ActivityRow, type BaseWeekRow, type MeasurementRow, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
 import { SEED_VERSION, defaultSettings, seedExercises } from "./seed";
 
@@ -142,20 +143,24 @@ export const mesocycleRepo = {
 
   /**
    * Genera un mesociclo desde la semana base actual y crea sus sesiones.
-   * Marca cualquier meso activo previo como completado.
+   * El meso activo previo queda pausado (o completado si no le quedan sesiones).
    */
   async createFromBaseWeek(args: {
     name: string;
     progressionModel: ProgressionModel;
     numAccumulationWeeks: number;
+    /** Semana base explícita (continuación de meso); default: la semana base guardada. */
+    baseWeekOverride?: BaseWeek;
+    continuedFromId?: string;
   }): Promise<MesocycleRow> {
     const db = getDb();
     const rules = getRules();
-    const [baseWeek, exercises, settings] = await Promise.all([
+    const [savedBaseWeek, exercises, settings] = await Promise.all([
       baseWeekRepo.get(),
       exerciseRepo.all(),
       settingsRepo.get(),
     ]);
+    const baseWeek = args.baseWeekOverride ?? savedBaseWeek;
 
     const plan: MesocyclePlan = generateMesocycle({
       baseWeek,
@@ -176,6 +181,7 @@ export const mesocycleRepo = {
       progressionModel: args.progressionModel,
       status: "active",
       plan,
+      continuedFromId: args.continuedFromId,
     };
 
     const sessions: SessionRow[] = [];
@@ -196,7 +202,12 @@ export const mesocycleRepo = {
     await db.transaction("rw", db.mesocycles, db.sessions, async () => {
       const prevActive = await db.mesocycles.where("status").equals("active").toArray();
       for (const p of prevActive) {
-        await db.mesocycles.update(p.id, { status: "completed" });
+        const pending = await db.sessions
+          .where("mesocycleId").equals(p.id)
+          .filter((x) => x.status === "pending")
+          .count();
+        // Si ya no le quedan sesiones, estaba terminado; si le quedan, queda en pausa.
+        await db.mesocycles.update(p.id, { status: pending === 0 ? "completed" : "paused" });
       }
       await db.mesocycles.put(meso);
       await db.sessions.bulkPut(sessions);
@@ -207,6 +218,112 @@ export const mesocycleRepo = {
 
   async setStatus(id: string, status: MesocycleRow["status"]): Promise<void> {
     await getDb().mesocycles.update(id, { status });
+  },
+
+  /** Pausa un meso empezado para intercalar otro. Reanudable con activate(). */
+  async pause(id: string): Promise<void> {
+    await getDb().mesocycles.update(id, { status: "paused" });
+  },
+
+  /** Activa un meso (pausa al activo actual, o lo completa si no le quedan sesiones). */
+  async activate(id: string): Promise<void> {
+    const db = getDb();
+    await db.transaction("rw", db.mesocycles, db.sessions, async () => {
+      const actives = await db.mesocycles.where("status").equals("active").toArray();
+      for (const a of actives) {
+        if (a.id === id) continue;
+        const pending = await db.sessions
+          .where("mesocycleId").equals(a.id)
+          .filter((x) => x.status === "pending")
+          .count();
+        await db.mesocycles.update(a.id, { status: pending === 0 ? "completed" : "paused" });
+      }
+      await db.mesocycles.update(id, { status: "active" });
+    });
+  },
+
+  /** Elimina un meso con todo lo suyo (sesiones, series, check-ins). Irreversible. */
+  async remove(id: string): Promise<void> {
+    const db = getDb();
+    await db.transaction("rw", db.mesocycles, db.sessions, db.setLogs, db.checkins, async () => {
+      const sessionIds = (await db.sessions.where("mesocycleId").equals(id).toArray()).map((x) => x.id);
+      await db.setLogs.where("sessionId").anyOf(sessionIds).delete();
+      await db.checkins.where("sessionId").anyOf(sessionIds).delete();
+      await db.sessions.where("mesocycleId").equals(id).delete();
+      await db.mesocycles.delete(id);
+    });
+  },
+
+  /**
+   * Genera la CONTINUACIÓN de un meso terminado: misma estructura (semana 1 del
+   * plan original) pero con cargas heredadas del rendimiento REAL, calculadas
+   * por el motor de progresión sobre el historial sin la semana de deload
+   * (las cargas del deload son artificialmente bajas y no reflejan capacidad).
+   * El RIR y la rampa de volumen arrancan de nuevo: así se encadenan bloques
+   * según el modelo acumulación + deload + acumulación.
+   */
+  async createFollowUp(sourceId: string): Promise<MesocycleRow> {
+    const db = getDb();
+    const rules = getRules();
+    const source = await db.mesocycles.get(sourceId);
+    if (!source) throw new Error("Mesociclo origen no encontrado.");
+    const settings = await settingsRepo.get();
+
+    // Historial por ejercicio SIN deload (sesiones completadas).
+    const sessions = await db.sessions.where("mesocycleId").equals(sourceId).toArray();
+    const eligible = [
+      ...sessions.filter((x) => x.status === "completed" && !x.isDeload).map((x) => x.id),
+    ];
+    const logs = await db.setLogs.where("sessionId").anyOf(eligible).toArray();
+    const logsByExercise = new Map<string, SetLog[]>();
+    for (const l of logs) {
+      const arr = logsByExercise.get(l.exerciseId) ?? [];
+      arr.push(l);
+      logsByExercise.set(l.exerciseId, arr);
+    }
+
+    // Carga heredada por ejercicio: prescripción siguiente según el motor.
+    const exercises = await exerciseRepo.byId();
+    const overrides = new Map<string, number>();
+    const week0 = source.plan.weeks.find((w) => !w.isDeload) ?? source.plan.weeks[0];
+    for (const day of week0.days) {
+      for (const slot of day.slots) {
+        if (overrides.has(slot.exerciseId)) continue;
+        const history = logsByExercise.get(slot.exerciseId) ?? [];
+        if (history.length === 0) continue; // sin datos: conserva la carga del plan
+        const bySession = groupBySession(history);
+        const lastSession = bySession[bySession.length - 1];
+        const lastLoad = Math.max(...lastSession.map((l) => l.actualLoadKg));
+        const ex = exercises.get(slot.exerciseId);
+        if (!ex) continue;
+        const p = nextPrescription({
+          exerciseHistory: history,
+          model: source.progressionModel,
+          targetRir: slot.targetRir,
+          repRange: slot.repRange,
+          currentLoadKg: lastLoad,
+          equipmentType: ex.equipmentType,
+          equipment: settings.equipment,
+          dayType: slot.dayType,
+          weekIndex: 0,
+          numAccumulationWeeks: source.plan.numAccumulationWeeks,
+          rules,
+        });
+        overrides.set(slot.exerciseId, p.nextLoadKg);
+      }
+    }
+
+    const baseWeek = deriveBaseWeekFromPlan(source.plan, overrides);
+    const match = source.name.match(/^(.*) · (\d+)$/);
+    const name = match ? match[1] + " · " + (Number(match[2]) + 1) : source.name + " · 2";
+
+    return mesocycleRepo.createFromBaseWeek({
+      name,
+      progressionModel: source.progressionModel,
+      numAccumulationWeeks: source.plan.numAccumulationWeeks,
+      baseWeekOverride: baseWeek,
+      continuedFromId: sourceId,
+    });
   },
 };
 
@@ -230,11 +347,27 @@ export const sessionRepo = {
       status: "completed",
       completedAt: new Date().toISOString(),
     });
+    await finalizeMesoIfDone(id);
   },
   async skip(id: string): Promise<void> {
     await getDb().sessions.update(id, { status: "skipped" });
+    await finalizeMesoIfDone(id);
   },
 };
+
+/** Si no quedan sesiones pendientes en el meso de esta sesión, lo marca completado. */
+async function finalizeMesoIfDone(sessionId: string): Promise<void> {
+  const db = getDb();
+  const session = await db.sessions.get(sessionId);
+  if (!session) return;
+  const pending = await db.sessions
+    .where("mesocycleId").equals(session.mesocycleId)
+    .filter((x) => x.status === "pending")
+    .count();
+  if (pending === 0) {
+    await db.mesocycles.update(session.mesocycleId, { status: "completed" });
+  }
+}
 
 // ---- Set logs ----
 
