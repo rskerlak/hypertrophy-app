@@ -4,6 +4,7 @@ import { useState } from "react";
 import { measurementRepo, settingsRepo } from "@/db/repositories";
 import { MEASUREMENT_LABELS } from "@/lib/format";
 import { Button, Card, Input, Label } from "@/components/ui";
+import { MeasurementGuide } from "@/components/MeasurementGuide";
 import type { MeasurementRow } from "@/db/schema";
 
 const FIELDS = Object.keys(MEASUREMENT_LABELS) as Array<keyof typeof MEASUREMENT_LABELS>;
@@ -27,6 +28,9 @@ export function MeasurementForm({
   const [vals, setVals] = useState<Record<string, string>>(
     initialWeight ? { bodyweightKg: String(initialWeight) } : {},
   );
+  // Campo activo: mueve la banda de la guía visual. Se conserva al salir del
+  // input para poder leer el tip mientras se anota la medida.
+  const [focused, setFocused] = useState<string | null>(null);
 
   const parse = (s: string): number | undefined => {
     const n = parseFloat(s.replace(",", "."));
@@ -53,6 +57,7 @@ export function MeasurementForm({
 
   return (
     <Card className="space-y-3.5">
+      <MeasurementGuide active={focused} />
       {askHeight && (
         <div>
           <Label>Altura (cm)</Label>
@@ -61,6 +66,7 @@ export function MeasurementForm({
             placeholder="ej: 178"
             value={height}
             onChange={(e) => setHeight(e.target.value)}
+            onFocus={() => setFocused("heightCm")}
           />
         </div>
       )}
@@ -72,13 +78,10 @@ export function MeasurementForm({
             placeholder="—"
             value={vals[f] ?? ""}
             onChange={(e) => setVals((p) => ({ ...p, [f]: e.target.value }))}
+            onFocus={() => setFocused(f)}
           />
         </div>
       ))}
-      <p className="text-xs leading-relaxed text-[var(--muted)]">
-        Medí siempre en las mismas condiciones (misma hora, sin bombeo) para que las comparaciones
-        entre ciclos tengan sentido.
-      </p>
       <div className="flex gap-2">
         {onSkip && (
           <Button variant="secondary" className="flex-1" onClick={onSkip}>
