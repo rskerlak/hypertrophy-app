@@ -29,6 +29,8 @@ export interface SettingsRow {
   heightCm?: number;
   /** ISO datetime del último respaldo exportado (para el recordatorio). */
   lastBackupAt?: string;
+  /** Tema de la UI. Default: claro. */
+  theme?: "light" | "dark";
 }
 
 /** Actividad extra fuera del plan (cardio, deporte): opcional, no toca el meso. */

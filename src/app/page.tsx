@@ -35,7 +35,7 @@ export default function HomePage() {
   if (!data.meso) {
     return (
       <>
-        <PageHeader title="Hipertrofia" subtitle="Tu mesociclo, basado en evidencia." />
+        <PageHeader title="MyoNoesis" subtitle="Tu mesociclo, basado en evidencia." />
         <MeasurementPrompt />
         <BackupPrompt />
 

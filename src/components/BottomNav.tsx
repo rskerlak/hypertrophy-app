@@ -43,7 +43,7 @@ export function BottomNav() {
   const pathname = usePathname();
   return (
     <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-50 pb-[max(env(safe-area-inset-bottom),12px)]">
-      <div className="pointer-events-auto mx-auto flex w-[calc(100%-32px)] max-w-[420px] items-stretch justify-around rounded-3xl border border-[var(--border)] bg-[#101014]/85 px-1.5 py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+      <div className="pointer-events-auto mx-auto flex w-[calc(100%-32px)] max-w-[420px] items-stretch justify-around rounded-3xl border border-[var(--border)] bg-[var(--glass)] px-1.5 py-1.5 shadow-[var(--pop-shadow)] backdrop-blur-xl">
         {items.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (

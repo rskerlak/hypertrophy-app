@@ -7,7 +7,8 @@ import { CORRELATION_LABELS } from "@/lib/format";
 function cellColor(r: number | null): string {
   if (r === null) return "transparent";
   const a = Math.min(1, Math.abs(r)) * 0.75;
-  return r >= 0 ? `rgba(197, 247, 79, ${a})` : `rgba(248, 113, 113, ${a})`;
+  const base = r >= 0 ? "var(--primary)" : "var(--danger)";
+  return `color-mix(in srgb, ${base} ${Math.round(a * 100)}%, transparent)`;
 }
 
 function cellText(r: number | null): string {
@@ -50,7 +51,7 @@ export function CorrelationHeatmap({ result }: { result: CorrelationResult }) {
                     className="h-[30px] min-w-[30px] rounded-md text-center text-[9px] tabular-nums"
                     style={{
                       background: cellColor(r),
-                      color: r !== null && Math.abs(r) > 0.5 ? "#0a0a0a" : "var(--muted)",
+                      color: r !== null && Math.abs(r) > 0.5 ? "var(--primary-fg)" : "var(--muted)",
                       border: r === null ? "1px dashed var(--border)" : "none",
                     }}
                   >
@@ -64,11 +65,11 @@ export function CorrelationHeatmap({ result }: { result: CorrelationResult }) {
       </table>
       <div className="mt-2 flex items-center gap-3 text-[10px] text-[var(--muted)]">
         <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded-sm" style={{ background: "rgba(197,247,79,0.75)" }} />
+          <span className="inline-block h-3 w-3 rounded-sm" style={{ background: "color-mix(in srgb, var(--primary) 75%, transparent)" }} />
           correlación +
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded-sm" style={{ background: "rgba(248,113,113,0.75)" }} />
+          <span className="inline-block h-3 w-3 rounded-sm" style={{ background: "color-mix(in srgb, var(--danger) 75%, transparent)" }} />
           correlación −
         </span>
         <span className="flex items-center gap-1">

@@ -3,7 +3,7 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { MesoStats } from "@/domain/types";
 
-const COLORS = ["#6d7cff", "#34d399", "#fbbf24", "#f87171", "#22d3ee", "#c084fc"];
+const COLORS = ["#84cc16", "#0ea5e9", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6"];
 
 /** Reps a carga fija por semana, una línea por ejercicio. */
 export function FatigueChart({
@@ -31,12 +31,12 @@ export function FatigueChart({
     <div className="h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
-          <CartesianGrid stroke="#2a2e3a" strokeDasharray="3 3" />
-          <XAxis dataKey="week" stroke="#9096a6" fontSize={11} tickLine={false} />
-          <YAxis stroke="#9096a6" fontSize={11} tickLine={false} allowDecimals={false} />
+          <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+          <XAxis dataKey="week" stroke="var(--muted)" fontSize={11} tickLine={false} />
+          <YAxis stroke="var(--muted)" fontSize={11} tickLine={false} allowDecimals={false} />
           <Tooltip
-            contentStyle={{ background: "#14161d", border: "1px solid #2a2e3a", borderRadius: 12, fontSize: 12 }}
-            labelStyle={{ color: "#9096a6" }}
+            contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }}
+            labelStyle={{ color: "var(--muted)" }}
             formatter={(v, key) => [`${v} reps`, exNames.get(String(key)) ?? String(key)]}
             labelFormatter={(l) => `Semana ${l}`}
           />

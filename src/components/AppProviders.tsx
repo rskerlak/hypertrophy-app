@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { ensureSeeded } from "@/db/repositories";
+import { ensureSeeded, settingsRepo } from "@/db/repositories";
 import { UpdateToast } from "@/components/UpdateToast";
+import { applyTheme } from "@/lib/theme";
 
 /**
  * Bootstrap del cliente: siembra la BD, pide persistencia de IndexedDB para
@@ -19,6 +20,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
           await navigator.storage.persist();
         }
         await ensureSeeded();
+        // Sincronizar el tema persistido (Dexie) con el aplicado pre-pintado.
+        const settings = await settingsRepo.get();
+        applyTheme(settings.theme ?? "light");
       } catch (e) {
         console.error("Bootstrap error", e);
       } finally {

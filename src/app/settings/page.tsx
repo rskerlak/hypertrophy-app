@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Card, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { InstallCard } from "@/components/InstallCard";
 import { BackupCard } from "@/components/BackupCard";
+import { applyTheme, type Theme } from "@/lib/theme";
 import { PROFILE_LABELS, fmtKg, muscleLabel } from "@/lib/format";
 import type { ExperienceProfileId } from "@/domain/types";
 
@@ -209,6 +210,32 @@ export default function SettingsPage() {
           on={settings.wakeLockEnabled}
           onChange={(v) => settingsRepo.update({ wakeLockEnabled: v })}
         />
+      </Card>
+
+      <Card className="mb-4">
+        <p className="mb-2 font-medium">Tema</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(["light", "dark"] as Theme[]).map((t) => {
+            const on = (settings.theme ?? "light") === t;
+            return (
+              <button
+                key={t}
+                onClick={() => {
+                  applyTheme(t);
+                  settingsRepo.update({ theme: t });
+                }}
+                className={
+                  "rounded-2xl border py-2.5 text-sm font-medium transition " +
+                  (on
+                    ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
+                    : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]")
+                }
+              >
+                {t === "light" ? "☀️ Claro" : "🌙 Oscuro"}
+              </button>
+            );
+          })}
+        </div>
       </Card>
 
       <div className="mb-4">

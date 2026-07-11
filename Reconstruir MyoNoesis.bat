@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title Reconstruir Hipertrofia
+title Reconstruir MyoNoesis
 cd /d "%~dp0"
 
 echo Reconstruyendo la app.
@@ -15,5 +15,5 @@ if errorlevel 1 (
 )
 
 echo.
-echo Listo. Ya podes abrir la app con "Abrir Hipertrofia.bat".
+echo Listo. Ya podes abrir la app con "Abrir MyoNoesis.bat".
 pause

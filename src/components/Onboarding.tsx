@@ -28,7 +28,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   return (
     <div className="flex min-h-[70dvh] flex-col justify-center">
       <div className="mb-6 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight">Hipertrofia</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">MyoNoesis</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
           Mesociclos autorregulados, sin humo. Configuremos lo básico.
         </p>

@@ -30,6 +30,7 @@ export function defaultSettings(): SettingsRow {
     wakeLockEnabled: true,
     onboarded: false,
     seedVersion: SEED_VERSION,
+    theme: "light",
   };
 }
 

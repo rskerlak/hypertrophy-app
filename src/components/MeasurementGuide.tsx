@@ -21,7 +21,7 @@ interface BandDef {
 }
 
 const BAND_STYLE = {
-  fill: "rgba(197,247,79,0.10)",
+  fill: "var(--primary-glow)",
   stroke: "var(--primary)",
   strokeOpacity: 1,
   strokeWidth: 2.5,
@@ -91,7 +91,7 @@ export function MeasurementGuide({ active }: { active: string | null }) {
   const guide = active ? GUIDES[active] : undefined;
 
   return (
-    <div className="sticky top-2 z-10 mb-1 flex items-center gap-4 rounded-2xl border border-[var(--border)] bg-[#101014]/95 p-3 backdrop-blur">
+    <div className="sticky top-2 z-10 mb-1 flex items-center gap-4 rounded-2xl border border-[var(--border)] bg-[var(--glass)] p-3 backdrop-blur">
       <svg
         viewBox="0 0 200 372"
         className="h-40 w-auto shrink-0"

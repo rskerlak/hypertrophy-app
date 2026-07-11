@@ -1,4 +1,4 @@
-// Primitivas de UI ligeras (Tailwind). Mobile-first, tema oscuro, acento volt.
+// Primitivas de UI ligeras (Tailwind). Mobile-first, tema claro/oscuro, acento lima.
 "use client";
 
 import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
@@ -38,7 +38,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 export function Button({ variant = "primary", size = "md", className, ...props }: ButtonProps) {
   const variants: Record<string, string> = {
     primary:
-      "bg-[var(--primary)] text-[var(--primary-fg)] shadow-[0_0_28px_rgba(197,247,79,0.18)] active:shadow-none",
+      "bg-[var(--primary)] text-[var(--primary-fg)] shadow-[0_0_28px_var(--primary-glow)] active:shadow-none",
     secondary:
       "bg-[var(--surface-2)] text-[var(--foreground)] border border-[var(--border)] active:bg-[var(--surface)]",
     ghost: "text-[var(--muted)] active:text-[var(--foreground)]",
@@ -113,7 +113,7 @@ export function Badge({
   tone?: "neutral" | "primary" | "success" | "warning" | "danger";
 }) {
   const tones: Record<string, string> = {
-    neutral: "bg-white/[0.04] text-[var(--muted)] border-[var(--border)]",
+    neutral: "bg-[var(--surface-2)] text-[var(--muted)] border-[var(--border)]",
     primary: "bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/25",
     success: "bg-[var(--success)]/10 text-[var(--success)] border-[var(--success)]/25",
     warning: "bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/25",

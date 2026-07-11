@@ -12,10 +12,10 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 const bp = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 export const metadata: Metadata = {
-  title: "Hipertrofia",
-  description: "App personal de mesociclos de hipertrofia basada en evidencia.",
+  title: "MyoNoesis",
+  description: "Mesociclos de hipertrofia basados en evidencia. Motor determinista y transparente.",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Hipertrofia" },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "MyoNoesis" },
   icons: {
     icon: [
       { url: `${bp}/icon-192.png`, sizes: "192x192", type: "image/png" },
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#09090b",
+  themeColor: "#f6f6f3",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -34,9 +34,16 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// Aplica el tema guardado ANTES del primer pintado para evitar el flash.
+// localStorage es solo caché de UI; la fuente de verdad vive en settings (Dexie).
+const themeInit = `(function(){try{var t=localStorage.getItem("mn-theme");if(t==="dark"||t==="light"){document.documentElement.dataset.theme=t;}}catch(e){}})();`;
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es">
+    <html lang="es" data-theme="light" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AppProviders>
           <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-28 pt-6">

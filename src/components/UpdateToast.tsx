@@ -41,7 +41,7 @@ export function UpdateToast() {
     <div className="fixed inset-x-0 bottom-24 z-[60] flex justify-center px-6">
       <button
         onClick={() => location.reload()}
-        className="flex items-center gap-2 rounded-full border border-[var(--primary)]/40 bg-[#101014] px-4 py-2.5 text-sm font-semibold text-[var(--primary)] shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur"
+        className="flex items-center gap-2 rounded-full border border-[var(--primary)]/40 bg-[var(--surface)] px-4 py-2.5 text-sm font-semibold text-[var(--primary)] shadow-[var(--pop-shadow)] backdrop-blur"
       >
         ✦ Nueva versión lista — tocá para actualizar
       </button>

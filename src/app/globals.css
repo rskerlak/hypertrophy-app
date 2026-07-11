@@ -1,6 +1,30 @@
 @import "tailwindcss";
 
+/* Tema CLARO (default). El oscuro se activa con data-theme="dark" en <html>. */
 :root {
+  --background: #f6f6f3;
+  --surface: #ffffff;
+  --surface-2: #efefea;
+  --border: rgba(17, 17, 20, 0.1);
+  --foreground: #1a1a1e;
+  --muted: #63636c;
+  --primary: #65a30d; /* lima legible sobre fondo claro */
+  --primary-fg: #101010;
+  --success: #047857;
+  --warning: #b45309;
+  --danger: #dc2626;
+  --radius: 18px;
+  /* superficies translúcidas (nav flotante, guías sticky) */
+  --glass: rgba(255, 255, 255, 0.85);
+  --pop-shadow: 0 12px 32px rgba(20, 20, 24, 0.14);
+  --primary-glow: rgba(101, 163, 13, 0.22);
+  --bg-glow: rgba(101, 163, 13, 0.05);
+  --selection: rgba(101, 163, 13, 0.22);
+  --scroll-thumb: rgba(0, 0, 0, 0.16);
+}
+
+/* :root[data-theme] > :root en especificidad: el orden tras minificar no importa. */
+:root[data-theme="dark"] {
   --background: #09090b;
   --surface: #101014;
   --surface-2: #18181d;
@@ -12,7 +36,12 @@
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #f87171;
-  --radius: 18px;
+  --glass: rgba(16, 16, 20, 0.85);
+  --pop-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --primary-glow: rgba(197, 247, 79, 0.18);
+  --bg-glow: rgba(197, 247, 79, 0.07);
+  --selection: rgba(197, 247, 79, 0.3);
+  --scroll-thumb: rgba(255, 255, 255, 0.12);
 }
 
 @theme inline {
@@ -35,14 +64,24 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+:root {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 html,
 body {
-  background: var(--background);
+  /* longhand a propósito: el shorthand `background` con var() se re-resuelve
+     mal en algunos Chromium al cambiar data-theme */
+  background-color: var(--background);
   color: var(--foreground);
   /* --font-geist-sans la define next/font en <body>; el fallback DENTRO de var()
      evita que la declaración quede inválida (y caiga en serif) si falta. */
   font-family: var(--font-geist-sans, system-ui), -apple-system, sans-serif;
   overscroll-behavior-y: none;
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
 body {
@@ -50,14 +89,14 @@ body {
   /* Glow sutil arriba: da profundidad sin ruido. */
   background-image: radial-gradient(
     70% 38% at 50% -8%,
-    rgba(197, 247, 79, 0.07),
+    var(--bg-glow),
     transparent 70%
   );
   background-repeat: no-repeat;
 }
 
 ::selection {
-  background: rgba(197, 247, 79, 0.3);
+  background: var(--selection);
 }
 
 /* Ocultar spinners de inputs numéricos para la UI del gym (usamos +/-). */
@@ -76,7 +115,7 @@ input[type="number"] {
   height: 4px;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--scroll-thumb);
   border-radius: 999px;
 }
 *::-webkit-scrollbar-track {

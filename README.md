@@ -1,4 +1,4 @@
-# Hipertrofia — app personal de mesociclos basada en evidencia
+# MyoNoesis — mesociclos de hipertrofia basados en evidencia
 
 PWA single-user, offline-first, sin backend ni login, para planificar y ejecutar
 mesociclos de hipertrofia. El motor de cálculo es determinista y transparente, y
@@ -18,10 +18,10 @@ Abrí http://localhost:3000. Los datos viven en IndexedDB del navegador.
 
 ## Uso rápido en Windows (un click)
 
-- **`Abrir Hipertrofia.bat`** — doble clic. La primera vez instala dependencias y
+- **`Abrir MyoNoesis.bat`** — doble clic. La primera vez instala dependencias y
   genera la app; después levanta el servidor y abre el navegador. Cerrás la ventana
   para detenerla. Podés hacerle un acceso directo al escritorio.
-- **`Reconstruir Hipertrofia.bat`** — regenera la app tras editar `rules.config.json`.
+- **`Reconstruir MyoNoesis.bat`** — regenera la app tras editar `rules.config.json`.
 
 Requiere [Node.js](https://nodejs.org) instalado.
 

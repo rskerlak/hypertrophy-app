@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title Hipertrofia
+title MyoNoesis
 cd /d "%~dp0"
 
 where npm >nul 2>nul
@@ -33,7 +33,7 @@ if not exist "out\index.html" (
 
 echo.
 echo ==============================================
-echo   Hipertrofia abierta en http://localhost:3000
+echo   MyoNoesis abierta en http://localhost:3000
 echo   Cerra esta ventana para detener la app.
 echo ==============================================
 echo.
