@@ -22,10 +22,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Build (static export con basePath del repo)
-        env:
-          # Sirve en https://<user>.github.io/hypertrophy-app/
-          NEXT_PUBLIC_BASE_PATH: /hypertrophy-app
+      - name: Build (static export en raíz — dominio propio myo.noesisargentina.com)
         run: npm run build
       # Deploy clásico por rama: más confiable que actions/deploy-pages
       # (el backend de deployments quedaba encolado indefinidamente).
