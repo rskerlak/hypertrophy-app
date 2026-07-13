@@ -29,6 +29,51 @@ export interface GenerateMesocycleInput {
 
 const DUP_CYCLE: DupDayType[] = ["heavy", "medium", "light"];
 
+/** Similitud de Jaccard entre dos conjuntos (1 si ambos vacíos). */
+function jaccard(a: Set<string>, b: Set<string>): number {
+  const union = new Set([...a, ...b]);
+  if (union.size === 0) return 1;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  return inter / union.size;
+}
+
+/**
+ * Asigna el tipo de día DUP ONDULANDO POR GRUPO MUSCULAR, no por posición:
+ * los días que comparten la mayoría de sus músculos primarios (Jaccard ≥ 0.5)
+ * forman un "cluster" (ej. tus dos días de empuje, aunque varíen ejercicios)
+ * y ciclan pesado→medio→liviano entre sí. El punto de partida rota con la
+ * semana, así cada grupo muscular cubre las tres zonas a lo largo del meso
+ * aunque entrene 1–2 veces por semana. El offset por cluster mantiene
+ * variedad dentro de la misma semana.
+ */
+export function dupDayTypesForWeek(
+  baseWeek: BaseWeek,
+  exercisesById: Map<string, Exercise>,
+  weekIndex: number,
+): DupDayType[] {
+  const signatures = baseWeek.days.map(
+    (day) =>
+      new Set(
+        day.slots
+          .map((s) => exercisesById.get(s.exerciseId)?.primaryMuscle)
+          .filter((m): m is string => !!m),
+      ),
+  );
+  const clusters: Array<{ signature: Set<string>; occurrences: number; index: number }> = [];
+  return signatures.map((sig) => {
+    let cluster = clusters.find((c) => jaccard(c.signature, sig) >= 0.5);
+    if (!cluster) {
+      cluster = { signature: sig, occurrences: 0, index: clusters.length };
+      clusters.push(cluster);
+    }
+    const type =
+      DUP_CYCLE[(cluster.occurrences + cluster.index + weekIndex) % DUP_CYCLE.length];
+    cluster.occurrences++;
+    return type;
+  });
+}
+
 /**
  * Reconstruye una semana base desde la semana 1 de un plan existente,
  * opcionalmente reemplazando las cargas iniciales (continuación de meso:
@@ -159,8 +204,9 @@ function buildAccumulationWeek(args: {
   });
 
   // 3. Construir los días con targets según el modelo.
+  const dupTypes = dupDayTypesForWeek(baseWeek, exercisesById, weekIndex);
   const days: PlannedDay[] = baseWeek.days.map((day, dayIndex) => {
-    const dayType = DUP_CYCLE[dayIndex % DUP_CYCLE.length];
+    const dayType = dupTypes[dayIndex];
     const slots: PlannedSlot[] = day.slots.map((slot, slotIndex) => {
       const ex = exercisesById.get(slot.exerciseId);
       const extra = extraSetsBySlot.get(`${dayIndex}:${slotIndex}`) ?? 0;

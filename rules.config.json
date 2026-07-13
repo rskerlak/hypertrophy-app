@@ -109,7 +109,7 @@
     },
     "dup": {
       "label": "Periodizacion ondulante diaria (DUP)",
-      "description": "Varia carga/reps por dia de la semana, igualando volumen semanal. Evidencia: equivalente a lineal para hipertrofia (Grgic 2017, d=-0.02).",
+      "description": "Varia carga/reps ondulando POR GRUPO MUSCULAR: dias que comparten musculos primarios ciclan pesado/medio/liviano entre si (rotando por semana para cubrir las 3 zonas), igualando volumen semanal. Evidencia: equivalente a lineal para hipertrofia (Grgic 2017, d=-0.02).",
       "dayTypes": {
         "heavy":  { "repRange": { "min": 5,  "max": 8 },  "targetRirOffset": 0 },
         "medium": { "repRange": { "min": 9,  "max": 15 }, "targetRirOffset": 0 },

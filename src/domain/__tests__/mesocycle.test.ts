@@ -125,6 +125,56 @@ describe("generateMesocycle — modelos igualan volumen", () => {
     expect(day0.repRange).toEqual(rules.progressionModels.dup.dayTypes.heavy.repRange);
   });
 
+  it("DUP ondula por grupo muscular aunque los ejercicios difieran entre días", () => {
+    // Dos días de pecho con ejercicios DISTINTOS (bench vs db-press): misma
+    // firma muscular → mismo cluster → zonas distintas en la misma semana.
+    const twoChestDays = {
+      days: [
+        { label: "Pecho 1", slots: [{ exerciseId: "bench", targetSets: 3, repRange: { min: 8, max: 12 }, startingLoadKg: 80 }] },
+        { label: "Pecho 2", slots: [{ exerciseId: "db-press", targetSets: 3, repRange: { min: 8, max: 12 }, startingLoadKg: 26 }] },
+      ],
+    };
+    const plan = generateMesocycle({
+      baseWeek: twoChestDays,
+      exercises,
+      profile: "intermediate",
+      progressionModel: "dup",
+      numAccumulationWeeks: 5,
+      prioritizedMuscles: [],
+      rules,
+    });
+    const w0 = plan.weeks[0];
+    expect(w0.days[0].slots[0].dayType).toBe("heavy");
+    expect(w0.days[1].slots[0].dayType).toBe("medium"); // ondula pese al ejercicio distinto
+  });
+
+  it("DUP rota el punto de partida por semana: cada grupo cubre las 3 zonas", () => {
+    const twoChestDays = {
+      days: [
+        { label: "Pecho 1", slots: [{ exerciseId: "bench", targetSets: 3, repRange: { min: 8, max: 12 }, startingLoadKg: 80 }] },
+        { label: "Pecho 2", slots: [{ exerciseId: "db-press", targetSets: 3, repRange: { min: 8, max: 12 }, startingLoadKg: 26 }] },
+      ],
+    };
+    const plan = generateMesocycle({
+      baseWeek: twoChestDays,
+      exercises,
+      profile: "intermediate",
+      progressionModel: "dup",
+      numAccumulationWeeks: 5,
+      prioritizedMuscles: [],
+      rules,
+    });
+    // Zonas del primer día de pecho a lo largo de las semanas 1–3.
+    const zones = [0, 1, 2].map((w) => plan.weeks[w].days[0].slots[0].dayType);
+    expect(new Set(zones)).toEqual(new Set(["heavy", "medium", "light"]));
+    // Dentro de cada semana, los dos días de pecho nunca comparten zona.
+    for (let w = 0; w < 5; w++) {
+      expect(plan.weeks[w].days[0].slots[0].dayType).not.toBe(
+        plan.weeks[w].days[1].slots[0].dayType,
+      );
+    }
+  });
+
   it("block cambia de fase según la fracción del meso", () => {
     const plan = gen("block", 5);
     expect(plan.weeks[0].days[0].slots[0].phase).toBe("accumulation");

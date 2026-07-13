@@ -46,7 +46,15 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
     if (!exercise) continue;
 
     // Historial del ejercicio dentro de este meso, ANTERIOR a la sesión actual.
-    const history = await exerciseHistoryBefore(planned.exerciseId, meso.id, session.weekIndex, session.dayIndex);
+    // En DUP el mismo ejercicio rota de zona (pesado/medio/liviano): la doble
+    // progresión debe comparar solo contra sesiones de la MISMA zona.
+    const history = await exerciseHistoryBefore(
+      planned.exerciseId,
+      meso,
+      session.weekIndex,
+      session.dayIndex,
+      meso.progressionModel === "dup" ? planned.dayType : undefined,
+    );
 
     const p = nextPrescription({
       exerciseHistory: history,
@@ -76,22 +84,37 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
   return { session, isDeload: week.isDeload, slots, equipment: settings.equipment };
 }
 
-/** SetLogs de un ejercicio en sesiones completadas del meso previas a (week, day). */
+/**
+ * SetLogs de un ejercicio en sesiones completadas del meso previas a (week, day).
+ * Si se pasa `dayType` (DUP), solo cuenta sesiones donde el slot planificado de
+ * ese ejercicio estaba en la misma zona.
+ */
 async function exerciseHistoryBefore(
   exerciseId: string,
-  mesocycleId: string,
+  meso: NonNullable<Awaited<ReturnType<typeof mesocycleRepo.get>>>,
   weekIndex: number,
   dayIndex: number,
+  dayType?: SessionView["slots"][number]["planned"]["dayType"],
 ): Promise<SetLog[]> {
   const [allLogs, sessions] = await Promise.all([
     setLogRepo.forExercise(exerciseId),
-    sessionRepo.forMesocycle(mesocycleId),
+    sessionRepo.forMesocycle(meso.id),
   ]);
   const order = (w: number, d: number) => w * 1000 + d;
   const cutoff = order(weekIndex, dayIndex);
+  const sameZone = (s: { weekIndex: number; dayIndex: number }) => {
+    if (!dayType) return true;
+    const slot = meso.plan.weeks[s.weekIndex]?.days[s.dayIndex]?.slots.find(
+      (x) => x.exerciseId === exerciseId,
+    );
+    return slot?.dayType === dayType;
+  };
   const eligible = new Set(
     sessions
-      .filter((s) => s.status === "completed" && order(s.weekIndex, s.dayIndex) < cutoff)
+      .filter(
+        (s) =>
+          s.status === "completed" && order(s.weekIndex, s.dayIndex) < cutoff && sameZone(s),
+      )
       .map((s) => s.id),
   );
   return allLogs.filter((l) => eligible.has(l.sessionId));
