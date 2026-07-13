@@ -1,7 +1,7 @@
 // Primitivas de UI ligeras (Tailwind). Mobile-first, tema claro/oscuro, acento lima.
 "use client";
 
-import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 
 export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -166,6 +166,59 @@ export function HonestNote({ children }: { children: ReactNode }) {
       </span>
       <span>{children}</span>
     </p>
+  );
+}
+
+/**
+ * Número editable a mano (además de los botones +/- que lo rodean).
+ * Acepta coma o punto decimal; confirma al salir del campo o con Enter.
+ */
+export function EditableNumber({
+  value,
+  onChange,
+  min = 0,
+  format,
+  className,
+  disabled,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  format?: (v: number) => string;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const commit = () => {
+    if (draft !== null) {
+      const n = parseFloat(draft.replace(",", "."));
+      if (Number.isFinite(n)) onChange(Math.max(min, n));
+    }
+    setDraft(null);
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      disabled={disabled}
+      value={draft ?? (format ? format(value) : String(value))}
+      onFocus={(e) => {
+        setDraft(String(value));
+        // seleccionar todo para reemplazar de un tipeo
+        requestAnimationFrame(() => e.target.select());
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      className={cn(
+        "rounded-lg bg-transparent text-center tabular-nums outline-none focus:bg-[var(--surface-2)] focus:ring-2 focus:ring-[var(--primary)]/25 disabled:opacity-40",
+        className,
+      )}
+    />
   );
 }
 

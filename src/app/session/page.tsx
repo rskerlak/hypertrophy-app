@@ -8,7 +8,7 @@ import { checkinRepo, sessionRepo, setLogRepo, settingsRepo } from "@/db/reposit
 import { useWakeLock } from "@/lib/useWakeLock";
 import { uuid } from "@/lib/id";
 import { fmtKg } from "@/lib/format";
-import { Badge, Button, Card, HonestNote, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, EditableNumber, HonestNote, PageHeader } from "@/components/ui";
 import { RestTimer } from "@/components/RestTimer";
 import { CheckinSheet } from "@/components/CheckinSheet";
 import type { SetLog } from "@/domain/types";
@@ -289,7 +289,14 @@ function Field({
         >
           −
         </button>
-        <span className="min-w-[30px] text-center text-sm tabular-nums">{format ? format(value) : value}</span>
+        <EditableNumber
+          value={value}
+          onChange={(v) => onChange(+v.toFixed(2))}
+          min={min}
+          format={format}
+          disabled={disabled}
+          className="h-8 w-full min-w-[34px] text-sm"
+        />
         <button
           disabled={disabled}
           className="h-8 w-7 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"

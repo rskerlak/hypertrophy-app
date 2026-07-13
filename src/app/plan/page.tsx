@@ -8,7 +8,7 @@ import { getRules } from "@/lib/rulesLoader";
 import { effectiveLandmarks } from "@/domain/rules";
 import { weeklyVolumeByMuscle } from "@/domain/volume";
 import type { BaseWeek, Exercise, ProgressionModel } from "@/domain/types";
-import { Badge, Button, Card, EmptyState, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
+import { Badge, Button, Card, EditableNumber, EmptyState, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { VolumeBar } from "@/components/VolumeBar";
 import { PROGRESSION_LABELS, fmtKg, muscleLabel } from "@/lib/format";
 import { ROUTINE_TEMPLATES } from "@/lib/templates";
@@ -388,7 +388,13 @@ function MiniStepper({
         <button className="h-6 w-6 rounded bg-[var(--surface)] text-sm" onClick={() => onChange(Math.max(min, +(value - step).toFixed(2)))}>
           −
         </button>
-        <span className="min-w-[32px] tabular-nums">{format ? format(value) : value}</span>
+        <EditableNumber
+          value={value}
+          onChange={(v) => onChange(+v.toFixed(2))}
+          min={min}
+          format={format}
+          className="h-6 w-full min-w-[36px] text-sm text-[var(--foreground)]"
+        />
         <button className="h-6 w-6 rounded bg-[var(--surface)] text-sm" onClick={() => onChange(+(value + step).toFixed(2))}>
           +
         </button>
