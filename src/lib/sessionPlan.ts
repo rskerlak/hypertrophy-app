@@ -62,7 +62,8 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
       targetRir: planned.targetRir,
       repRange: planned.repRange,
       currentLoadKg: planned.targetLoadKg,
-      equipmentType: exercise.equipmentType,
+      // Carga 0 = modo peso corporal: el motor no sube carga, progresa por reps.
+      equipmentType: planned.targetLoadKg === 0 ? "bodyweight" : exercise.equipmentType,
       equipment: settings.equipment,
       dayType: planned.dayType,
       weekIndex: session.weekIndex,

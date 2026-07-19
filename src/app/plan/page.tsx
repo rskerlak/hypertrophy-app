@@ -64,7 +64,13 @@ export default function PlanPage() {
             ...d,
             slots: [
               ...d.slots,
-              { exerciseId: exercise.id, targetSets: 3, repRange: range, startingLoadKg: 20 },
+              {
+                exerciseId: exercise.id,
+                targetSets: 3,
+                repRange: range,
+                // Ejercicios de peso corporal arrancan en modo "Corporal" (carga 0).
+                startingLoadKg: exercise.equipmentType === "bodyweight" ? 0 : 20,
+              },
             ],
           }
         : d,
@@ -215,11 +221,11 @@ export default function PlanPage() {
                         </div>
                       </div>
                       <MiniStepper
-                        label="Carga"
+                        label={slot.startingLoadKg === 0 ? "Carga · BW" : "Carga"}
                         value={slot.startingLoadKg}
                         min={0}
                         step={2.5}
-                        format={fmtKg}
+                        format={(v) => (v === 0 ? "Corp." : fmtKg(v))}
                         onChange={(v) => updateSlot(dayIdx, slotIdx, { startingLoadKg: v })}
                       />
                     </div>

@@ -67,6 +67,12 @@ function SessionRunner() {
 
   const { session, slots, isDeload } = view;
   const done = session.status === "completed";
+  const totalSets = slots.reduce((n, s) => n + s.planned.sets, 0);
+  const loggedSets = logs.length;
+
+  const unlogSet = async (logId: string) => {
+    await setLogRepo.remove(logId);
+  };
 
   const logSet = async (args: {
     exerciseId: string;
@@ -96,12 +102,15 @@ function SessionRunner() {
   };
 
   const completeSession = async () => {
+    const remaining = totalSets - loggedSets;
+    const msg =
+      remaining > 0
+        ? `Registraste ${loggedSets} de ${totalSets} series (faltan ${remaining}). ¿Finalizar la sesión igual?`
+        : "¿Finalizar la sesión? El motor usará estos registros para calcular la próxima.";
+    if (!confirm(msg)) return;
     await sessionRepo.complete(id);
     router.push(`/session/done?id=${id}`);
   };
-
-  const totalSets = slots.reduce((n, s) => n + s.planned.sets, 0);
-  const loggedSets = logs.length;
 
   return (
     <>
@@ -135,7 +144,9 @@ function SessionRunner() {
             slot={slot}
             logs={logsBySlot.get(slot.exercise.id) ?? []}
             disabled={done}
+            bodyweightKg={settings?.bodyweightKg ?? 0}
             onLog={logSet}
+            onUnlog={unlogSet}
           />
         ))}
       </div>
@@ -154,11 +165,14 @@ function ExerciseBlock({
   slot,
   logs,
   disabled,
+  bodyweightKg,
   onLog,
+  onUnlog,
 }: {
   slot: SessionView["slots"][number];
   logs: SetLog[];
   disabled: boolean;
+  bodyweightKg: number;
   onLog: (args: {
     exerciseId: string;
     setIndex: number;
@@ -169,9 +183,13 @@ function ExerciseBlock({
     targetRir: number;
     existingId?: string;
   }) => void;
+  onUnlog: (logId: string) => void;
 }) {
   const { exercise, planned, suggestedLoadKg, suggestedReps, targetRir, rationale } = slot;
   const logsByIndex = new Map(logs.map((l) => [l.setIndex, l]));
+  // Convención: carga planificada 0 = ejercicio a PESO CORPORAL. La carga no
+  // progresa (el volumen/reps sí) y se registra tu peso corporal como carga real.
+  const isBodyweight = planned.targetLoadKg === 0;
 
   return (
     <Card>
@@ -180,7 +198,7 @@ function ExerciseBlock({
         <Badge tone="primary">RIR {targetRir}</Badge>
       </div>
       <p className="mb-3 text-xs text-[var(--muted)]">
-        Objetivo: {fmtKg(suggestedLoadKg)} kg × {suggestedReps} reps ({planned.repRange.min}–
+        Objetivo: {isBodyweight ? "corporal" : `${fmtKg(suggestedLoadKg)} kg`} × {suggestedReps} reps ({planned.repRange.min}–
         {planned.repRange.max}) · {planned.sets} series
       </p>
 
@@ -190,10 +208,11 @@ function ExerciseBlock({
             key={i}
             index={i}
             existing={logsByIndex.get(i)}
-            defaultLoad={suggestedLoadKg}
+            defaultLoad={isBodyweight ? bodyweightKg : suggestedLoadKg}
             defaultReps={suggestedReps}
             defaultRir={targetRir}
             disabled={disabled}
+            bodyweight={isBodyweight}
             onLog={(loadKg, reps, rir, existingId) =>
               onLog({
                 exerciseId: exercise.id,
@@ -206,6 +225,7 @@ function ExerciseBlock({
                 existingId,
               })
             }
+            onUnlog={onUnlog}
           />
         ))}
       </div>
@@ -222,7 +242,9 @@ function SetRow({
   defaultReps,
   defaultRir,
   disabled,
+  bodyweight,
   onLog,
+  onUnlog,
 }: {
   index: number;
   existing?: SetLog;
@@ -230,12 +252,17 @@ function SetRow({
   defaultReps: number;
   defaultRir: number;
   disabled: boolean;
+  bodyweight: boolean;
   onLog: (loadKg: number, reps: number, rir: number, existingId?: string) => void;
+  onUnlog: (logId: string) => void;
 }) {
   const [load, setLoad] = useState(existing?.actualLoadKg ?? defaultLoad);
   const [reps, setReps] = useState(existing?.actualReps ?? defaultReps);
   const [rir, setRir] = useState(existing?.actualRir ?? defaultRir);
   const logged = !!existing;
+  // Serie logueada = BLOQUEADA (gris) para no tocarla sin querer.
+  // Para editar: ✓ des-loguea, corregís y volvés a dar Log.
+  const locked = disabled || logged;
 
   return (
     <div
@@ -245,15 +272,23 @@ function SetRow({
       }
     >
       <span className="w-4 shrink-0 text-center text-xs text-[var(--muted)]">{index + 1}</span>
-      <Field label="kg" value={load} step={1.25} min={0} onChange={setLoad} format={fmtKg} disabled={disabled} />
-      <Field label="reps" value={reps} step={1} min={0} onChange={setReps} disabled={disabled} />
-      <Field label="RIR" value={rir} step={1} min={0} onChange={setRir} disabled={disabled} />
+      {bodyweight ? (
+        <div className="min-w-0 flex-1">
+          <p className="mb-0.5 text-center text-[10px] uppercase text-[var(--muted)]">kg</p>
+          <p className={"text-center text-sm font-medium " + (locked ? "opacity-50" : "")}>BW</p>
+        </div>
+      ) : (
+        <Field label="kg" value={load} step={1.25} min={0} onChange={setLoad} format={fmtKg} disabled={locked} />
+      )}
+      <Field label="reps" value={reps} step={1} min={0} onChange={setReps} disabled={locked} />
+      <Field label="RIR" value={rir} step={1} min={0} onChange={setRir} disabled={locked} />
       <Button
         size="sm"
         variant={logged ? "secondary" : "primary"}
         disabled={disabled}
         className="w-11 shrink-0 px-0"
-        onClick={() => onLog(load, reps, rir, existing?.id)}
+        title={logged ? "Des-loguear para editar" : "Registrar serie"}
+        onClick={() => (logged ? onUnlog(existing.id) : onLog(load, reps, rir))}
       >
         {logged ? "✓" : "Log"}
       </Button>
