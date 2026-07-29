@@ -9,15 +9,29 @@ export function VolumeBar({ muscle, sets, lm }: { muscle: string; sets: number; 
   const pct = (v: number) => `${(v / scaleMax) * 100}%`;
 
   let tone = "var(--muted)";
-  if (sets >= lm.mrv) tone = "var(--danger)";
-  else if (sets >= lm.mev) tone = "var(--success)";
-  else if (sets > 0) tone = "var(--warning)";
+  let status: string | null = null;
+  if (sets > lm.mrv) {
+    tone = "var(--danger)";
+    status = "exceso";
+  } else if (sets > lm.mav) {
+    tone = "var(--warning)";
+    status = "alto";
+  } else if (sets >= lm.mev) {
+    tone = "var(--success)";
+  }
 
   return (
     <div className="py-1.5">
       <div className="mb-1 flex items-center justify-between text-sm">
         <span>{muscleLabel(muscle)}</span>
-        <span className="tabular-nums text-[var(--muted)]">{fmtSets(sets)} series</span>
+        <span className="tabular-nums text-[var(--muted)]">
+          {fmtSets(sets)} series
+          {status && (
+            <span className="ml-1.5 font-semibold" style={{ color: tone }}>
+              · {status}
+            </span>
+          )}
+        </span>
       </div>
       <div className="relative h-2.5 overflow-hidden rounded-full bg-[var(--surface-2)]">
         <div className="h-full rounded-full transition-all" style={{ width: pct(sets), background: tone }} />

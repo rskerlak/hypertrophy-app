@@ -98,6 +98,18 @@ export default function PlanPage() {
   const trainedMuscles = Object.keys(volume).filter((m) => volume[m] > 0);
   const hasSlots = baseWeek.days.some((d) => d.slots.length > 0);
 
+  // Nivel de exceso del músculo respecto de sus landmarks heurísticos,
+  // contando TODA la semana base (fraccionado: directas 1.0, sinergistas 0.5).
+  const overage = (m: string): "mrv" | "mav" | null => {
+    const lm = safeLandmarks(rules, settings.experienceProfile, m);
+    if (lm.mrv <= 1) return null; // músculo sin landmarks conocidos
+    const v = volume[m] ?? 0;
+    if (v > lm.mrv) return "mrv";
+    if (v > lm.mav) return "mav";
+    return null;
+  };
+  const anyOverage = trainedMuscles.some((m) => overage(m) !== null);
+
   return (
     <>
       <PageHeader title="Plan" subtitle="Semana base y mesociclo" />
@@ -125,6 +137,17 @@ export default function PlanPage() {
       )}
 
       <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">Días de entrenamiento</h2>
+
+      {anyOverage && (
+        <div className="mb-3">
+          <HonestNote>
+            Los ejercicios en ámbar pertenecen a músculos cuyo volumen semanal (contando toda tu
+            semana base, con sinergistas a 0·5) supera el MAV heurístico — zona de rendimientos
+            decrecientes; los rojos superan el MRV. No es un error: es una señal para decidir
+            vos. Los landmarks son heurísticos por músculo, no umbrales medidos.
+          </HonestNote>
+        </div>
+      )}
 
       {baseWeek.days.length === 0 && (
         <>
@@ -180,14 +203,27 @@ export default function PlanPage() {
               {day.slots.map((slot, slotIdx) => {
                 const ex = exById.get(slot.exerciseId);
                 if (!ex) return null;
+                const ov = overage(ex.primaryMuscle);
                 return (
-                  <div key={slotIdx} className="rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                  <div
+                    key={slotIdx}
+                    className={
+                      "rounded-xl border p-3 " +
+                      (ov === "mrv"
+                        ? "border-[var(--danger)]/50 bg-[var(--danger)]/[0.06]"
+                        : ov === "mav"
+                          ? "border-[var(--warning)]/50 bg-[var(--warning)]/[0.06]"
+                          : "border-[var(--border)] bg-[var(--surface-2)]")
+                    }
+                  >
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate font-medium">{ex.name}</p>
-                        <p className="text-xs text-[var(--muted)]">
+                        <p className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
                           {muscleLabel(ex.primaryMuscle)}
                           {ex.resistanceProfile === "stretch" && " · estiramiento"}
+                          {ov === "mrv" && <Badge tone="danger">exceso: supera MRV</Badge>}
+                          {ov === "mav" && <Badge tone="warning">alto: supera MAV</Badge>}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-0.5">
