@@ -105,6 +105,44 @@ describe("nextPrescription — doble progresión", () => {
   });
 });
 
+describe("nextPrescription — doble progresión ajustada por RIR", () => {
+  it("si te sobró RIR, las reps ajustadas cuentan de más y sube la carga antes", () => {
+    // 12 reps @ RIR 4 con objetivo 2 → ajustadas 14 (excedente 2) → crédito
+    // 7.5% ≥ salto mínimo 3.125% (discos de 1.25) → sube carga.
+    const history = sessionLogs({
+      sessionId: "s1", exerciseId: "bench", sets: 3, loadKg: 80,
+      reps: 12, rir: 4, targetReps: 12, targetRir: 2, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const p = nextPrescription({ ...base, exerciseHistory: history });
+    expect(p.nextLoadKg).toBe(82.5);
+    expect(p.nextReps).toBe(8);
+  });
+
+  it("si llegaste al tope moliéndote (RIR < objetivo), prescribe consolidar, no subir", () => {
+    // 12 reps @ RIR 0 con objetivo 2 → ajustadas 10 → repetir 12, misma carga.
+    const history = sessionLogs({
+      sessionId: "s1", exerciseId: "bench", sets: 3, loadKg: 80,
+      reps: 12, rir: 0, targetReps: 12, targetRir: 2, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const p = nextPrescription({ ...base, exerciseHistory: history });
+    expect(p.nextLoadKg).toBe(80);
+    expect(p.nextReps).toBe(12); // consolidar el tope, no 13
+  });
+
+  it("el ajuste por RIR está topeado (RIR ruidoso): +8 de RIR no cuenta más que el cap", () => {
+    // 10 reps @ RIR 8 objetivo 0 → ajuste +8 → cap 2 → ajustadas 12 (= tope):
+    // crédito de 1 rep equivalente, no de 8.
+    const history = sessionLogs({
+      sessionId: "s1", exerciseId: "bench", sets: 3, loadKg: 80,
+      reps: 10, rir: 8, targetReps: 10, targetRir: 0, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const p = nextPrescription({ ...base, exerciseHistory: history });
+    // ajustadas 12 = tope, surplus 0 → crédito 2.5% < 3.125% → añade rep, no salta
+    expect(p.nextLoadKg).toBe(80);
+    expect(p.nextReps).toBe(13);
+  });
+});
+
 describe("nextPrescription — lineal", () => {
   it("objetivo cumplido: sube carga al incremento disponible", () => {
     const history = sessionLogs({

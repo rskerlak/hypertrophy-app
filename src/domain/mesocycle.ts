@@ -129,10 +129,13 @@ export function generateMesocycle(input: GenerateMesocycleInput): MesocyclePlan 
 }
 
 /**
- * Volumen objetivo del músculo para la semana w: rampa lineal desde el volumen
- * de partida hacia el techo del perfil (MAV, o MRV si pushToMrv), cubriendo la
- * fracción `rampAggressiveness` del gap a lo largo del meso. Si el músculo no
- * está priorizado (y hay priorizados), no rampa: se queda en su volumen base.
+ * Volumen objetivo del músculo para la semana w según volumeRamp.mode:
+ * - "finalWeeksBump" (default): el volumen se queda en el de la semana base;
+ *   solo las últimas bumpWeeks semanas agregan un empujón acotado de sets.
+ *   La progresión primaria es reps/carga, no series (Barsuhn 2025).
+ * - "linear" (legado): rampa hacia MAV (o MRV si pushToMrv) con rampAggressiveness.
+ * - "none": volumen constante siempre.
+ * Si el músculo no está priorizado (habiendo priorizados), nunca rampa.
  */
 export function weeklyVolumeTarget(args: {
   muscle: string;
@@ -146,10 +149,20 @@ export function weeklyVolumeTarget(args: {
   const { muscle, baseVolume, weekIndex, numAccumulationWeeks, profile, prioritized, rules } = args;
   const lm = effectiveLandmarks(rules, profile, muscle);
   const profileCfg = rules.experienceProfiles[profile];
+  const ramp = rules.volumeRamp;
   const start = Math.max(baseVolume, 0);
   if (start === 0) return 0; // músculo no entrenado en la semana base: no inventar volumen
-  if (!prioritized) return start;
+  if (!prioritized || ramp.mode === "none") return start;
 
+  if (ramp.mode === "finalWeeksBump") {
+    const bumpStart = numAccumulationWeeks - ramp.bumpWeeks;
+    if (weekIndex < bumpStart) return start;
+    const bumps = weekIndex - bumpStart + 1;
+    const ceiling = Math.min(lm.mav, lm.mrv);
+    return Math.min(start + ramp.maxExtraSetsPerMusclePerWeek * bumps, Math.max(ceiling, start));
+  }
+
+  // "linear" (legado)
   const ceiling = profileCfg.pushToMrv ? lm.mrv : lm.mav;
   if (start >= ceiling) return Math.min(start, lm.mrv);
   const progress =
@@ -298,6 +311,9 @@ function distributeExtraSets(args: {
     ...prioritizedFirst,
     ...Object.keys(targets).filter((m) => !prioritizedFirst.includes(m)),
   ];
+  // Nunca apilar más de este extra en un mismo slot/sesión: aunque el objetivo
+  // semanal pida más, una sesión con 9+ series del mismo ejercicio es basura.
+  const maxPerSlot = rules.volumeRamp.maxExtraSetsPerSlotPerWeek;
 
   for (const muscle of muscleOrder) {
     const slots = slotsByMuscle.get(muscle);
@@ -309,6 +325,11 @@ function distributeExtraSets(args: {
       guard++;
       const { key, exercise } = slots[rr % slots.length];
       rr++;
+      if ((extra.get(key) ?? 0) >= maxPerSlot) {
+        // slot lleno: si ya dimos la vuelta completa, no hay dónde poner más
+        if (slots.every((s) => (extra.get(s.key) ?? 0) >= maxPerSlot)) break;
+        continue;
+      }
       // Comprobar que añadir 1 set no lleva a NINGÚN músculo afectado por encima de su MRV.
       const affected = [exercise.primaryMuscle, ...exercise.secondaryMuscles];
       const violates = affected.some((m) => {

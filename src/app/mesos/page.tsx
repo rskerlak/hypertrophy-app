@@ -106,6 +106,24 @@ export default function MesosPage() {
                   <Button size="sm" variant="secondary" onClick={() => router.push(`/stats?meso=${m.id}`)}>
                     Stats
                   </Button>
+                  {(m.status === "active" || m.status === "paused") && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={async () => {
+                        if (
+                          confirm(
+                            "Recalcula los targets de series/reps/RIR de las semanas con el motor actual, manteniendo tus días, ejercicios y cargas. Lo ya registrado no se toca. ¿Continuar?",
+                          )
+                        ) {
+                          await mesocycleRepo.regeneratePlan(m.id);
+                          alert("Plan recalculado con el motor actual.");
+                        }
+                      }}
+                    >
+                      ⟳ Recalcular
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="danger"

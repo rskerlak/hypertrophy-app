@@ -60,6 +60,22 @@ function achievedReps(sessionLogs: SetLog[]): number {
   return Math.min(...sessionLogs.map((l) => l.actualReps));
 }
 
+/**
+ * Reps logradas AJUSTADAS POR RIR (mínimo entre series): a las reps reales se
+ * les suma (RIR real − RIR objetivo de esa serie), con tope ±cap. Si te sobró
+ * RIR la carga quedó liviana y contás reps virtuales de más; si llegaste al
+ * fallo antes del objetivo, contás menos. El tope es chico porque el RIR
+ * reportado es ruidoso (Zourdos 2019/2021).
+ */
+function rirAdjustedReps(sessionLogs: SetLog[], capReps: number): number {
+  return Math.min(
+    ...sessionLogs.map((l) => {
+      const adj = Math.max(-capReps, Math.min(capReps, l.actualRir - l.targetRir));
+      return l.actualReps + adj;
+    }),
+  );
+}
+
 /** ¿La sesión cumplió las reps objetivo al RIR objetivo (o más cerca del fallo)? */
 function hitTarget(sessionLogs: SetLog[]): boolean {
   return sessionLogs.every(
@@ -173,14 +189,24 @@ function doubleProgression(
   const cfg = input.rules.progressionModels.double;
   const ctx = { type: input.equipmentType, equipment: input.equipment };
   const last = sessions[sessions.length - 1];
-  const reps = achievedReps(last);
+  const reps = rirAdjustedReps(last, cfg.rirAdjustmentCapReps);
 
   if (reps < repRange.max) {
-    // Debajo del tope: subir reps, misma carga.
+    // Debajo del tope (en reps ajustadas por RIR): subir reps a misma carga.
+    // El próximo objetivo nunca supera el tope acá: si llegaste a las reps
+    // moliéndote (RIR real < objetivo), esto prescribe REPETIR, no subir.
+    const rawReps = achievedReps(last);
+    const next = Math.min(
+      repRange.max,
+      Math.max(reps, rawReps) + cfg.repStepWhenBelowCeiling,
+    );
     return {
       nextLoadKg: input.currentLoadKg,
-      nextReps: Math.max(repRange.min, reps + cfg.repStepWhenBelowCeiling),
-      rationale: "Debajo del tope del rango: subir reps a misma carga.",
+      nextReps: Math.max(repRange.min, next),
+      rationale:
+        reps < rawReps
+          ? "Llegaste a las reps pero más cerca del fallo que el objetivo: consolidar antes de subir."
+          : "Debajo del tope del rango: subir reps a misma carga.",
     };
   }
 

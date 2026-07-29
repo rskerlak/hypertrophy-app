@@ -33,7 +33,75 @@ describe("generateMesocycle — estructura", () => {
   });
 });
 
-describe("generateMesocycle — rampa de volumen", () => {
+describe("generateMesocycle — rampa de volumen (finalWeeksBump)", () => {
+  it("las semanas intermedias mantienen EXACTAMENTE el volumen de la semana base", () => {
+    const plan = gen("double", 5);
+    const bumpStart = 5 - rules.volumeRamp.bumpWeeks;
+    for (let w = 1; w < bumpStart; w++) {
+      expect(plan.weeks[w].targetVolumeByMuscle).toEqual(plan.weeks[0].targetVolumeByMuscle);
+    }
+  });
+
+  it("REGRESIÓN laterales: músculo priorizado con un solo ejercicio nunca apila series", () => {
+    // Réplica del bug real: perfil avanzado (pushToMrv), músculo priorizado con
+    // UN solo slot directo por sesión. El motor viejo apilaba 15 series/sesión.
+    const twoDays = {
+      days: [
+        { label: "D1", slots: [{ exerciseId: "curl", targetSets: 3, repRange: { min: 8, max: 12 }, startingLoadKg: 14 }] },
+        { label: "D2", slots: [{ exerciseId: "curl", targetSets: 3, repRange: { min: 8, max: 12 }, startingLoadKg: 14 }] },
+      ],
+    };
+    const plan = generateMesocycle({
+      baseWeek: twoDays,
+      exercises,
+      profile: "advanced",
+      progressionModel: "double",
+      numAccumulationWeeks: 5,
+      prioritizedMuscles: ["biceps"],
+      rules,
+    });
+    for (const week of plan.weeks) {
+      if (week.isDeload) continue;
+      for (const day of week.days) {
+        for (const slot of day.slots) {
+          // base 3 + a lo sumo maxExtraSetsPerSlotPerWeek
+          expect(slot.sets).toBeLessThanOrEqual(3 + rules.volumeRamp.maxExtraSetsPerSlotPerWeek);
+        }
+      }
+    }
+    // y el bump total del músculo en la última semana respeta el cap por músculo
+    const first = plan.weeks[0].targetVolumeByMuscle.biceps;
+    const last = plan.weeks[4].targetVolumeByMuscle.biceps;
+    expect(last - first).toBeLessThanOrEqual(rules.volumeRamp.maxExtraSetsPerMusclePerWeek + 1e-9);
+  });
+
+  it("modo linear (legado) rampa en semanas intermedias, respetando el cap por slot", () => {
+    const linearRules = { ...rules, volumeRamp: { ...rules.volumeRamp, mode: "linear" as const } };
+    const plan = generateMesocycle({
+      baseWeek,
+      exercises,
+      profile: "intermediate",
+      progressionModel: "double",
+      numAccumulationWeeks: 5,
+      prioritizedMuscles: [],
+      rules: linearRules,
+    });
+    // a mitad del meso ya hay más volumen que la semana 1 (a diferencia del default)
+    const first = plan.weeks[0].targetVolumeByMuscle.chest;
+    const mid = plan.weeks[2].targetVolumeByMuscle.chest;
+    expect(mid).toBeGreaterThan(first);
+    // pero ningún slot apila más que el cap
+    for (const week of plan.weeks) {
+      if (week.isDeload) continue;
+      week.days.forEach((day, di) => {
+        day.slots.forEach((slot, si) => {
+          const base = baseWeek.days[di].slots[si].targetSets;
+          expect(slot.sets).toBeLessThanOrEqual(base + linearRules.volumeRamp.maxExtraSetsPerSlotPerWeek);
+        });
+      });
+    }
+  });
+
   it("el volumen por músculo no decrece entre semanas de acumulación", () => {
     const plan = gen();
     for (const muscle of Object.keys(plan.weeks[0].targetVolumeByMuscle)) {

@@ -105,7 +105,9 @@
       "label": "Doble progresion (anclada a RIR)",
       "description": "Dentro del rango de reps, subir reps hasta el tope al RIR objetivo; al topar, subir carga al incremento minimo disponible y volver al piso del rango. Metodo core recomendado.",
       "loadIncrementPctOnRepCeiling": 2.5,
-      "repStepWhenBelowCeiling": 1
+      "repStepWhenBelowCeiling": 1,
+      "rirAdjustmentCapReps": 2,
+      "_rirNote": "Las reps logradas se ajustan por RIR: reps + (RIR real - RIR objetivo), con tope +-cap. Si te sobro RIR, contas reps 'virtuales' de mas (la carga quedo liviana); si te fuiste al fallo antes del objetivo, contas menos. Tope chico porque el RIR es ruidoso (Zourdos 2019/2021)."
     },
     "dup": {
       "label": "Periodizacion ondulante diaria (DUP)",
@@ -125,6 +127,14 @@
         { "name": "intensification", "fractionOfMeso": 0.4, "repRange": { "min": 5, "max": 10 }, "rirBias": 0 }
       ]
     }
+  },
+
+  "volumeRamp": {
+    "_note": "La progresion PRIMARIA es reps y carga (doble progresion); los sets casi no suben. Barsuhn 2025 y Enes 2024: en entrenados, mantener el volumen habitual iguala o supera a ramparlo. Modo 'finalWeeksBump' (default): el volumen semanal se queda en el de la semana base y solo en las ultimas bumpWeeks semanas de acumulacion agrega un empujon acotado de sets a los musculos priorizados. Modo 'linear': rampa legada via rampAggressiveness del perfil (con los mismos caps por slot). Modo 'none': volumen constante siempre.",
+    "mode": "finalWeeksBump",
+    "bumpWeeks": 1,
+    "maxExtraSetsPerMusclePerWeek": 2,
+    "maxExtraSetsPerSlotPerWeek": 1
   },
 
   "deloadTriggers": {

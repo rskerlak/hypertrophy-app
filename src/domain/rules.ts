@@ -69,6 +69,7 @@ export const rulesSchema = z
           .object({
             loadIncrementPctOnRepCeiling: z.number(),
             repStepWhenBelowCeiling: z.number().int(),
+            rirAdjustmentCapReps: z.number().int().min(0).default(2),
           })
           .passthrough(),
         dup: z
@@ -102,6 +103,20 @@ export const rulesSchema = z
           .passthrough(),
       })
       .passthrough(),
+    volumeRamp: z
+      .object({
+        mode: z.enum(["none", "finalWeeksBump", "linear"]),
+        bumpWeeks: z.number().int().min(1),
+        maxExtraSetsPerMusclePerWeek: z.number().int().min(0),
+        maxExtraSetsPerSlotPerWeek: z.number().int().min(0),
+      })
+      .passthrough()
+      .default({
+        mode: "finalWeeksBump",
+        bumpWeeks: 1,
+        maxExtraSetsPerMusclePerWeek: 2,
+        maxExtraSetsPerSlotPerWeek: 1,
+      }),
     deloadTriggers: z
       .object({
         minSignalsToSuggest: z.number().int(),

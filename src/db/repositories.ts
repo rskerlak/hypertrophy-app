@@ -225,6 +225,30 @@ export const mesocycleRepo = {
     await getDb().mesocycles.update(id, { status: "paused" });
   },
 
+  /**
+   * Regenera el plan del meso con el motor/config ACTUAL, conservando la
+   * estructura original (semana 1 del plan viejo: mismos días, slots y cargas
+   * iniciales). Las sesiones y series ya registradas no se tocan: solo cambian
+   * los targets de lo que falta. Útil tras una mejora del motor.
+   */
+  async regeneratePlan(id: string): Promise<void> {
+    const db = getDb();
+    const rules = getRules();
+    const meso = await db.mesocycles.get(id);
+    if (!meso) throw new Error("Mesociclo no encontrado.");
+    const [settings, exercises] = await Promise.all([settingsRepo.get(), exerciseRepo.all()]);
+    const plan = generateMesocycle({
+      baseWeek: deriveBaseWeekFromPlan(meso.plan),
+      exercises,
+      profile: settings.experienceProfile,
+      progressionModel: meso.progressionModel,
+      numAccumulationWeeks: meso.numAccumulationWeeks,
+      prioritizedMuscles: settings.prioritizedMuscles,
+      rules,
+    });
+    await db.mesocycles.update(id, { plan });
+  },
+
   /** Activa un meso (pausa al activo actual, o lo completa si no le quedan sesiones). */
   async activate(id: string): Promise<void> {
     const db = getDb();
