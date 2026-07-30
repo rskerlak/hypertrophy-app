@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextPrescription } from "../progression";
+import { nextPrescription, rirCapForRepRange } from "../progression";
 import { equipment, equipmentNoSmallPlates, rules, sessionLogs } from "./fixtures";
 
 const base = {
@@ -127,6 +127,15 @@ describe("nextPrescription — doble progresión ajustada por RIR", () => {
     const p = nextPrescription({ ...base, exerciseHistory: history });
     expect(p.nextLoadKg).toBe(80);
     expect(p.nextReps).toBe(12); // consolidar el tope, no 13
+  });
+
+  it("en rangos de reps ALTAS el tope del ajuste baja (RIR más ruidoso a reps altas)", () => {
+    // Rango 16–25 (≥ umbral 15) → tope 1 en vez de 2. Con 25 reps @ RIR 4
+    // objetivo 2, el ajuste se topea en +1 → ajustadas 26 (excedente 1),
+    // crédito 5%; en un rango bajo el mismo caso daría excedente 2.
+    const cfg = rules.progressionModels.double;
+    expect(rirCapForRepRange({ min: 16, max: 25 }, cfg)).toBe(cfg.rirAdjustmentCapRepsHighRep);
+    expect(rirCapForRepRange({ min: 8, max: 12 }, cfg)).toBe(cfg.rirAdjustmentCapReps);
   });
 
   it("el ajuste por RIR está topeado (RIR ruidoso): +8 de RIR no cuenta más que el cap", () => {

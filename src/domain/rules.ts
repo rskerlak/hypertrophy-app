@@ -70,6 +70,8 @@ export const rulesSchema = z
             loadIncrementPctOnRepCeiling: z.number(),
             repStepWhenBelowCeiling: z.number().int(),
             rirAdjustmentCapReps: z.number().int().min(0).default(2),
+            rirAdjustmentCapRepsHighRep: z.number().int().min(0).default(1),
+            rirAdjustmentHighRepThreshold: z.number().int().min(1).default(15),
           })
           .passthrough(),
         dup: z

@@ -61,11 +61,30 @@ function achievedReps(sessionLogs: SetLog[]): number {
 }
 
 /**
+ * Tope del ajuste por RIR para este rango de reps. El error de estimación de
+ * RIR crece con las reps del set (deriva ≈ −0.4 reps por rep adicional), así
+ * que en rangos altos confiamos menos en el RIR reportado.
+ */
+export function rirCapForRepRange(
+  repRange: RepRange,
+  cfg: {
+    rirAdjustmentCapReps: number;
+    rirAdjustmentCapRepsHighRep: number;
+    rirAdjustmentHighRepThreshold: number;
+  },
+): number {
+  return repRange.max >= cfg.rirAdjustmentHighRepThreshold
+    ? cfg.rirAdjustmentCapRepsHighRep
+    : cfg.rirAdjustmentCapReps;
+}
+
+/**
  * Reps logradas AJUSTADAS POR RIR (mínimo entre series): a las reps reales se
  * les suma (RIR real − RIR objetivo de esa serie), con tope ±cap. Si te sobró
  * RIR la carga quedó liviana y contás reps virtuales de más; si llegaste al
  * fallo antes del objetivo, contás menos. El tope es chico porque el RIR
- * reportado es ruidoso (Zourdos 2019/2021).
+ * reportado es ruidoso (Refalo 2024: error <1 rep pero SD que se duplica al
+ * alejarse del fallo) y no mejora con la práctica dentro del bloque.
  */
 function rirAdjustedReps(sessionLogs: SetLog[], capReps: number): number {
   return Math.min(
@@ -189,7 +208,7 @@ function doubleProgression(
   const cfg = input.rules.progressionModels.double;
   const ctx = { type: input.equipmentType, equipment: input.equipment };
   const last = sessions[sessions.length - 1];
-  const reps = rirAdjustedReps(last, cfg.rirAdjustmentCapReps);
+  const reps = rirAdjustedReps(last, rirCapForRepRange(repRange, cfg));
 
   if (reps < repRange.max) {
     // Debajo del tope (en reps ajustadas por RIR): subir reps a misma carga.

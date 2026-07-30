@@ -107,7 +107,10 @@
       "loadIncrementPctOnRepCeiling": 2.5,
       "repStepWhenBelowCeiling": 1,
       "rirAdjustmentCapReps": 2,
-      "_rirNote": "Las reps logradas se ajustan por RIR: reps + (RIR real - RIR objetivo), con tope +-cap. Si te sobro RIR, contas reps 'virtuales' de mas (la carga quedo liviana); si te fuiste al fallo antes del objetivo, contas menos. Tope chico porque el RIR es ruidoso (Zourdos 2019/2021)."
+      "rirAdjustmentCapRepsHighRep": 1,
+      "rirAdjustmentHighRepThreshold": 15,
+      "_rirNote": "Las reps logradas se ajustan por RIR: reps + (RIR real - RIR objetivo), con tope +-cap. Si te sobro RIR, contas reps 'virtuales' de mas (la carga quedo liviana); si te fuiste al fallo antes del objetivo, contas menos.",
+      "_rirCapNote": "El tope base es 2 reps: Refalo 2024 midio error absoluto <1 rep a 1-RIR y 3-RIR en entrenados, con SD que casi se duplica al alejarse del fallo (~2 SD del peor caso = 2 reps). En sets de reps ALTAS el error crece (Halperin/Zourdos 2023: -0.404 reps de deriva por cada rep adicional del set), asi que a partir de rirAdjustmentHighRepThreshold reps el tope baja a rirAdjustmentCapRepsHighRep. Ademas la precision NO mejora con la practica dentro de un bloque (18 sesiones sin efecto) y hay deriva sistematica de ~-0.08 reps/sesion: por eso el tope es fijo y no se afloja con el tiempo."
     },
     "dup": {
       "label": "Periodizacion ondulante diaria (DUP)",
@@ -134,7 +137,9 @@
     "mode": "finalWeeksBump",
     "bumpWeeks": 1,
     "maxExtraSetsPerMusclePerWeek": 2,
-    "maxExtraSetsPerSlotPerWeek": 1
+    "maxExtraSetsPerSlotPerWeek": 1,
+    "_slotCapNote": "HEURISTICA PRACTICA, no cientifica: no hay evidencia de un techo de series por sesion (Pelland 2026 no halla efecto fiable de la frecuencia sobre hipertrofia, o sea que fraccionar en mas dias no esta demostrado superior a apilar). El tope existe por razones de utilidad: 12-15 series del mismo ejercicio en una sesion es tiempo, fatiga local y adherencia, no mas estimulo medible.",
+    "_evidenceNote": "Evidencia MIXTA sobre rampar series intra-meso. A favor de volumen constante: Barsuhn 2025 (mantener el volumen habitual igualo o supero a +30%/+60%) y Enes 2024 (rampa sin diferencias de hipertrofia, P=0.067-0.076; la ventaja fue en FUERZA). A favor de rampar: RCT 2025 en mujeres entrenadas donde solo la rampa MAS agresiva (+4 series/2 semanas) supero al volumen constante en CSA del vasto lateral, sin replicar en grosor muscular sumado. Conclusion honesta: el default conservador es defendible pero NO 'lo optimo demostrado'; el modo linear queda disponible para quien quiera rampar."
   },
 
   "deloadTriggers": {
