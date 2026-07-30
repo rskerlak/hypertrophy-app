@@ -10,3 +10,5 @@ export * from "./swap";
 export * from "./stats";
 export * from "./calendar";
 export * from "./correlations";
+export * from "./volumeTrim";
+export * from "./rirCalibration";

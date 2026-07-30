@@ -138,16 +138,27 @@ describe("nextPrescription — doble progresión ajustada por RIR", () => {
     expect(rirCapForRepRange({ min: 8, max: 12 }, cfg)).toBe(cfg.rirAdjustmentCapReps);
   });
 
-  it("el ajuste por RIR está topeado (RIR ruidoso): +8 de RIR no cuenta más que el cap", () => {
-    // 10 reps @ RIR 8 objetivo 0 → ajuste +8 → cap 2 → ajustadas 12 (= tope):
-    // crédito de 1 rep equivalente, no de 8.
+  it("un RIR reportado lejísimo del fallo se topea Y se atenúa (reporte de baja información)", () => {
+    // 10 reps @ RIR 8 objetivo 0: el ajuste crudo sería +8 → el tope lo baja a
+    // +2 → y como 8 ≥ highRirDampenFrom, se atenúa a la mitad (+1). Ajustadas
+    // 11 < tope 12 → prescribe llegar al tope, sin saltar carga.
     const history = sessionLogs({
       sessionId: "s1", exerciseId: "bench", sets: 3, loadKg: 80,
       reps: 10, rir: 8, targetReps: 10, targetRir: 0, timestamp: "2026-01-05T10:00:00Z",
     });
     const p = nextPrescription({ ...base, exerciseHistory: history });
-    // ajustadas 12 = tope, surplus 0 → crédito 2.5% < 3.125% → añade rep, no salta
     expect(p.nextLoadKg).toBe(80);
+    expect(p.nextReps).toBe(12);
+  });
+
+  it("con el mismo excedente pero cerca del fallo, el ajuste NO se atenúa", () => {
+    // 10 reps @ RIR 3 objetivo 1 → excedente +2, por debajo del umbral de
+    // atenuación: ajustadas 12 = tope → añade rep (crédito insuficiente aún).
+    const history = sessionLogs({
+      sessionId: "s1", exerciseId: "bench", sets: 3, loadKg: 80,
+      reps: 10, rir: 3, targetReps: 10, targetRir: 1, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const p = nextPrescription({ ...base, exerciseHistory: history });
     expect(p.nextReps).toBe(13);
   });
 });

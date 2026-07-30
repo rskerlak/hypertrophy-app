@@ -27,6 +27,11 @@ export interface NextPrescriptionInput {
   /** Solo block: índice de semana y total de acumulación para determinar la fase. */
   weekIndex?: number;
   numAccumulationWeeks?: number;
+  /**
+   * Tope del ajuste por RIR ya corregido por la calibración medida del usuario
+   * (ver rirCalibration). Si se omite, se usa el del config por rango de reps.
+   */
+  rirCapOverride?: number;
   rules: Rules;
 }
 
@@ -86,10 +91,16 @@ export function rirCapForRepRange(
  * reportado es ruidoso (Refalo 2024: error <1 rep pero SD que se duplica al
  * alejarse del fallo) y no mejora con la práctica dentro del bloque.
  */
-function rirAdjustedReps(sessionLogs: SetLog[], capReps: number): number {
+function rirAdjustedReps(
+  sessionLogs: SetLog[],
+  capReps: number,
+  dampenFrom: number,
+): number {
   return Math.min(
     ...sessionLogs.map((l) => {
-      const adj = Math.max(-capReps, Math.min(capReps, l.actualRir - l.targetRir));
+      let adj = Math.max(-capReps, Math.min(capReps, l.actualRir - l.targetRir));
+      // Un RIR reportado lejos del fallo es de baja información: se atenúa.
+      if (l.actualRir >= dampenFrom) adj = Math.trunc(adj / 2);
       return l.actualReps + adj;
     }),
   );
@@ -208,7 +219,12 @@ function doubleProgression(
   const cfg = input.rules.progressionModels.double;
   const ctx = { type: input.equipmentType, equipment: input.equipment };
   const last = sessions[sessions.length - 1];
-  const reps = rirAdjustedReps(last, rirCapForRepRange(repRange, cfg));
+  const rangeCap = rirCapForRepRange(repRange, cfg);
+  const reps = rirAdjustedReps(
+    last,
+    input.rirCapOverride !== undefined ? Math.min(rangeCap, input.rirCapOverride) : rangeCap,
+    input.rules.rirCalibration.highRirDampenFrom,
+  );
 
   if (reps < repRange.max) {
     // Debajo del tope (en reps ajustadas por RIR): subir reps a misma carga.

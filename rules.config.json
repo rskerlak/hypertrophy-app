@@ -132,6 +132,19 @@
     }
   },
 
+  "rirCalibration": {
+    "_note": "Criterio de PUERTA para confiar en el RIR reportado, medido con los datos del propio usuario: se agrupan series del mismo ejercicio a la misma carga y se mide la dispersion de la capacidad implicita (reps + RIR). Se calibra POR INDIVIDUO y no por nivel de experiencia, porque la experiencia NO predice la precision (Sagepub 2023: p=0.462).",
+    "_methodCaveat": "PROXY, no el protocolo validado. El protocolo publicado (Larsen 2025) mide precision con tests periodicos al 80% 1RM donde el usuario canta 3-RIR y 1-RIR y despues sigue HASTA EL FALLO: requiere al menos una serie llevada mas alla del punto estimado. La dispersion a carga fija es una cota superior del ruido (incluye fluctuacion real de rendimiento): sirve para decidir cuanta confianza dar al RIR, no para afirmar el error verdadero.",
+    "minSamplesToAssess": 6,
+    "wellCalibratedMadReps": 1.5,
+    "_thresholdNote": "1.5 reps: en entrenados el error basal de RIR ronda 1-1.5 reps y los autores lo consideran aceptable (Larsen 2025: sentadilla -1.5+-1.7, banca -1.1+-1.8 reps a 3-RIR), con sesgo sistematico a SUBESTIMAR la reserva. Un umbral de 1.0 seria mas estricto que el estado del arte.",
+    "highRirDampenFrom": 4,
+    "_dampNote": "El RIR reportado LEJOS del fallo es de baja informacion (revision de 26 estudios 2025: la precision cae al alejarse del fallo, con mas reps y con menos carga relativa). A partir de highRirDampenFrom el ajuste se reduce a la mitad.",
+    "capWhenUncalibrated": 1,
+    "raiseFloorWhenUncalibrated": true,
+    "rirFloorWhenUncalibrated": 1
+  },
+
   "volumeRamp": {
     "_note": "La progresion PRIMARIA es reps y carga (doble progresion); los sets casi no suben. Barsuhn 2025 y Enes 2024: en entrenados, mantener el volumen habitual iguala o supera a ramparlo. Modo 'finalWeeksBump' (default): el volumen semanal se queda en el de la semana base y solo en las ultimas bumpWeeks semanas de acumulacion agrega un empujon acotado de sets a los musculos priorizados. Modo 'linear': rampa legada via rampAggressiveness del perfil (con los mismos caps por slot). Modo 'none': volumen constante siempre.",
     "mode": "finalWeeksBump",

@@ -128,6 +128,16 @@ function SessionRunner() {
         </div>
       )}
 
+      {!done && !view.rirCalibration.wellCalibrated && !view.rirCalibration.insufficientData && (
+        <div className="mt-4">
+          <HonestNote>
+            Tu RIR reportado viene variando ±{view.rirCalibration.meanAbsDeviationReps} reps a carga
+            fija, así que el motor mantiene un piso de 1 RIR y ajusta con más cautela. Se recalibra
+            solo a medida que registrás.
+          </HonestNote>
+        </div>
+      )}
+
       {isDeload && (
         <div className="mt-4">
           <HonestNote>

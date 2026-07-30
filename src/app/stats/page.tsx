@@ -18,6 +18,7 @@ import { fmtKg, fmtSets, muscleLabel } from "@/lib/format";
 import { FatigueChart } from "@/components/FatigueChart";
 import { exportMesoToExcel, type ExportInput } from "@/lib/exportExcel";
 import { buildMesoObservations } from "@/lib/mesoObservations";
+import { assessRirCalibration, type RirCalibration } from "@/domain/rirCalibration";
 import { correlationMatrix, summarizeByModel, type CorrelationResult, type MesoObservation } from "@/domain/correlations";
 import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
 import { CORRELATION_LABELS, PROGRESSION_LABELS } from "@/lib/format";
@@ -35,7 +36,13 @@ export default function StatsPage() {
   const [mesos, setMesos] = useState<Array<{ id: string; name: string; status: string }>>([]);
   const [mesoId, setMesoId] = useState<string | null>(null);
   const [state, setState] = useState<
-    | { stats: MesoStats; name: string; exNames: Map<string, string>; exportData: ExportInput }
+    | {
+        stats: MesoStats;
+        name: string;
+        exNames: Map<string, string>;
+        exportData: ExportInput;
+        rirCal: RirCalibration;
+      }
     | null
     | undefined
   >(undefined);
@@ -97,6 +104,7 @@ export default function StatsPage() {
         name: meso.name,
         exNames: new Map(exercises.map((e) => [e.id, e.name])),
         exportData: { meso, sessions, setLogs, checkins, exercises, stats, activities },
+        rirCal: assessRirCalibration(setLogs, getRules()),
       });
     })();
   }, [mesoId]);
@@ -111,7 +119,7 @@ export default function StatsPage() {
     );
   }
 
-  const { stats, name, exNames, exportData } = state;
+  const { stats, name, exNames, exportData, rirCal } = state;
 
   return (
     <>
@@ -219,6 +227,47 @@ export default function StatsPage() {
           </Card>
         </>
       )}
+
+      <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">
+        Calibración de tu RIR
+      </h2>
+      <Card className="mb-4">
+        {rirCal.insufficientData ? (
+          <p className="text-sm leading-relaxed text-[var(--muted)]">
+            Todavía no hay suficientes series repetidas a la misma carga para estimar tu precisión.
+            Mientras tanto el motor es conservador: usa medio tope de ajuste por RIR y no prescribe
+            0 RIR.
+          </p>
+        ) : (
+          <>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm">Dispersión de tu reporte</span>
+              <span className="flex items-center gap-2">
+                <span className="tabular-nums text-[var(--muted)]">
+                  ±{rirCal.meanAbsDeviationReps} reps
+                </span>
+                <Badge tone={rirCal.wellCalibrated ? "success" : "warning"}>
+                  {rirCal.wellCalibrated ? "calibrado" : "ruidoso"}
+                </Badge>
+              </span>
+            </div>
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span>Sesgo vs objetivo</span>
+              <span className="tabular-nums text-[var(--muted)]">
+                {rirCal.meanSignedBiasReps !== null && rirCal.meanSignedBiasReps > 0 ? "+" : ""}
+                {rirCal.meanSignedBiasReps} reps
+              </span>
+            </div>
+            <p className="text-xs leading-relaxed text-[var(--muted)]">
+              {rirCal.wellCalibrated
+                ? "Tu capacidad implícita (reps + RIR) es consistente a carga fija, así que el motor confía en tu RIR con el tope completo y permite acercarse a 0 RIR al final del meso."
+                : "Tu capacidad implícita (reps + RIR) varía bastante a carga fija, así que el motor recorta el ajuste por RIR y mantiene un piso de 1 RIR: sin precisión, prescribir el fallo es adivinar."}{" "}
+              Medido sobre {rirCal.samples} comparaciones. Es una cota superior del ruido: también
+              incluye variación real de rendimiento.
+            </p>
+          </>
+        )}
+      </Card>
 
       <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">
         Comparativa entre mesociclos

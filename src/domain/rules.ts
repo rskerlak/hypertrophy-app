@@ -105,6 +105,24 @@ export const rulesSchema = z
           .passthrough(),
       })
       .passthrough(),
+    rirCalibration: z
+      .object({
+        minSamplesToAssess: z.number().int().min(1),
+        wellCalibratedMadReps: z.number().min(0),
+        capWhenUncalibrated: z.number().int().min(0),
+        raiseFloorWhenUncalibrated: z.boolean(),
+        rirFloorWhenUncalibrated: z.number().int().min(0),
+        highRirDampenFrom: z.number().int().min(1).default(4),
+      })
+      .passthrough()
+      .default({
+        minSamplesToAssess: 6,
+        wellCalibratedMadReps: 1.5,
+        highRirDampenFrom: 4,
+        capWhenUncalibrated: 1,
+        raiseFloorWhenUncalibrated: true,
+        rirFloorWhenUncalibrated: 1,
+      }),
     volumeRamp: z
       .object({
         mode: z.enum(["none", "finalWeeksBump", "linear"]),

@@ -7,10 +7,11 @@ import { baseWeekRepo, exerciseRepo, mesocycleRepo, settingsRepo } from "@/db/re
 import { getRules } from "@/lib/rulesLoader";
 import { effectiveLandmarks } from "@/domain/rules";
 import { weeklyVolumeByMuscle } from "@/domain/volume";
+import { suggestVolumeTrim, trimRoleBySlot } from "@/domain/volumeTrim";
 import type { BaseWeek, Exercise, ProgressionModel } from "@/domain/types";
 import { Badge, Button, Card, EditableNumber, EmptyState, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { VolumeBar } from "@/components/VolumeBar";
-import { PROGRESSION_LABELS, fmtKg, muscleLabel } from "@/lib/format";
+import { PROGRESSION_LABELS, fmtKg, fmtSets, muscleLabel } from "@/lib/format";
 import { ROUTINE_TEMPLATES } from "@/lib/templates";
 
 export default function PlanPage() {
@@ -98,17 +99,18 @@ export default function PlanPage() {
   const trainedMuscles = Object.keys(volume).filter((m) => volume[m] > 0);
   const hasSlots = baseWeek.days.some((d) => d.slots.length > 0);
 
-  // Nivel de exceso del músculo respecto de sus landmarks heurísticos,
-  // contando TODA la semana base (fraccionado: directas 1.0, sinergistas 0.5).
-  const overage = (m: string): "mrv" | "mav" | null => {
-    const lm = safeLandmarks(rules, settings.experienceProfile, m);
-    if (lm.mrv <= 1) return null; // músculo sin landmarks conocidos
-    const v = volume[m] ?? 0;
-    if (v > lm.mrv) return "mrv";
-    if (v > lm.mav) return "mav";
-    return null;
-  };
-  const anyOverage = trainedMuscles.some((m) => overage(m) !== null);
+  // Qué conservar y qué es prescindible cuando un músculo pasa lo aconsejable.
+  // El motor decide anclas vs recortables (perfil de resistencia, aporte
+  // directo, orden); la app solo lo señala, nunca borra nada sola.
+  const trim = suggestVolumeTrim({
+    baseWeek,
+    exercisesById: exById,
+    volumeByMuscle: volume,
+    profile: settings.experienceProfile,
+    rules,
+  });
+  const trimBySlot = trimRoleBySlot(trim);
+  const trimmable = [...trimBySlot.values()].filter((v) => v.role === "trim").length;
 
   return (
     <>
@@ -138,13 +140,31 @@ export default function PlanPage() {
 
       <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">Días de entrenamiento</h2>
 
-      {anyOverage && (
+      {trim.muscles.length > 0 && (
         <div className="mb-3">
           <HonestNote>
-            Los ejercicios en ámbar pertenecen a músculos cuyo volumen semanal (contando toda tu
-            semana base, con sinergistas a 0·5) supera el MAV heurístico — zona de rendimientos
-            decrecientes; los rojos superan el MRV. No es un error: es una señal para decidir
-            vos. Los landmarks son heurísticos por músculo, no umbrales medidos.
+            {trim.muscles
+              .map(
+                (m) =>
+                  `${muscleLabel(m.muscle)} ${fmtSets(m.current)} (aconsejable ~${fmtSets(m.target)})`,
+              )
+              .join(" · ")}
+            {trimmable > 0 ? (
+              <>
+                {" "}— marqué{" "}
+                <span className="text-[var(--warning)]">
+                  {trimmable} ejercicio{trimmable > 1 ? "s" : ""} prescindible
+                  {trimmable > 1 ? "s" : ""}
+                </span>{" "}
+                (repiten un perfil de resistencia ya cubierto). Las anclas cubren el aporte directo y
+                la posición estirada, que es la que más respaldo tiene. Solo señalo ejercicios cuyo
+                músculo PRINCIPAL está excedido: si el exceso viene del aporte sinergista, sacar el
+                ejercicio te costaría su trabajo directo — ahí conviene bajar series. Vos decidís:
+                los landmarks son heurísticos, no umbrales medidos.
+              </>
+            ) : (
+              " — pero no hay ejercicio claramente prescindible: el exceso viene del aporte sinergista de otros patrones o de las series por ejercicio, no de la selección. Para bajarlo, recortá series antes que ejercicios."
+            )}
           </HonestNote>
         </div>
       )}
@@ -203,17 +223,16 @@ export default function PlanPage() {
               {day.slots.map((slot, slotIdx) => {
                 const ex = exById.get(slot.exerciseId);
                 if (!ex) return null;
-                const ov = overage(ex.primaryMuscle);
+                const tr = trimBySlot.get(`${dayIdx}:${slotIdx}`);
                 return (
                   <div
                     key={slotIdx}
+                    title={tr?.reason}
                     className={
                       "rounded-xl border p-3 " +
-                      (ov === "mrv"
-                        ? "border-[var(--danger)]/50 bg-[var(--danger)]/[0.06]"
-                        : ov === "mav"
-                          ? "border-[var(--warning)]/50 bg-[var(--warning)]/[0.06]"
-                          : "border-[var(--border)] bg-[var(--surface-2)]")
+                      (tr?.role === "trim"
+                        ? "border-[var(--warning)]/60 border-dashed bg-[var(--warning)]/[0.07]"
+                        : "border-[var(--border)] bg-[var(--surface-2)]")
                     }
                   >
                     <div className="mb-2 flex items-center justify-between gap-2">
@@ -222,8 +241,8 @@ export default function PlanPage() {
                         <p className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
                           {muscleLabel(ex.primaryMuscle)}
                           {ex.resistanceProfile === "stretch" && " · estiramiento"}
-                          {ov === "mrv" && <Badge tone="danger">exceso: supera MRV</Badge>}
-                          {ov === "mav" && <Badge tone="warning">alto: supera MAV</Badge>}
+                          {tr?.role === "trim" && <Badge tone="warning">prescindible</Badge>}
+                          {tr?.role === "anchor" && <Badge tone="success">ancla</Badge>}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-0.5">

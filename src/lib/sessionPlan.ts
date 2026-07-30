@@ -2,6 +2,12 @@
 // (lee repos), pero delega todo el cálculo a src/domain.
 
 import { nextPrescription } from "@/domain/progression";
+import {
+  assessRirCalibration,
+  calibratedRirCap,
+  calibratedRirFloor,
+  type RirCalibration,
+} from "@/domain/rirCalibration";
 import { getRules } from "@/lib/rulesLoader";
 import type { Equipment, Exercise, PlannedSlot, SetLog } from "@/domain/types";
 import { mesocycleRepo, sessionRepo, setLogRepo, exerciseRepo, settingsRepo } from "@/db/repositories";
@@ -22,6 +28,8 @@ export interface SessionView {
   isDeload: boolean;
   slots: SlotPrescription[];
   equipment: Equipment;
+  /** Calibración medida del RIR del usuario (para mostrar y para el motor). */
+  rirCalibration: RirCalibration;
 }
 
 export async function buildSessionView(sessionId: string): Promise<SessionView | null> {
@@ -38,6 +46,17 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
   const week = meso.plan.weeks[session.weekIndex];
   const day = week?.days[session.dayIndex];
   if (!day) return null;
+
+  // Calibración del RIR con TODO el historial del meso: decide cuánto confía el
+  // motor en el RIR reportado y si conviene no bajar de cierto piso.
+  const mesoSessions = await sessionRepo.forMesocycle(meso.id);
+  const mesoLogs = (
+    await Promise.all(
+      mesoSessions.filter((s) => s.status === "completed").map((s) => setLogRepo.forSession(s.id)),
+    )
+  ).flat();
+  const rirCalibration = assessRirCalibration(mesoLogs, rules);
+  const rirFloor = calibratedRirFloor(rirCalibration, rules);
 
   const slots: SlotPrescription[] = [];
   for (let i = 0; i < day.slots.length; i++) {
@@ -68,21 +87,35 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
       dayType: planned.dayType,
       weekIndex: session.weekIndex,
       numAccumulationWeeks: meso.numAccumulationWeeks,
+      rirCapOverride: calibratedRirCap(
+        rules.progressionModels.double.rirAdjustmentCapReps,
+        rirCalibration,
+        rules,
+      ),
       rules,
     });
 
+    // Piso de RIR si el reporte no está calibrado: no prescribir 0 RIR cuando
+    // no sabemos dónde está realmente el fallo para este usuario.
+    const targetRir = rirFloor !== null ? Math.max(planned.targetRir, rirFloor) : planned.targetRir;
     slots.push({
       slotIndex: i,
       exercise,
       planned,
       suggestedLoadKg: p.nextLoadKg,
       suggestedReps: p.nextReps,
-      targetRir: planned.targetRir,
+      targetRir,
       rationale: p.rationale,
     });
   }
 
-  return { session, isDeload: week.isDeload, slots, equipment: settings.equipment };
+  return {
+    session,
+    isDeload: week.isDeload,
+    slots,
+    equipment: settings.equipment,
+    rirCalibration,
+  };
 }
 
 /**
