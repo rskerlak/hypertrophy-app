@@ -163,6 +163,33 @@ describe("nextPrescription — doble progresión ajustada por RIR", () => {
   });
 });
 
+describe("nextPrescription — la carga base es la REAL registrada", () => {
+  // Regresión: la app pasaba la carga del snapshot del plan en vez de la última
+  // carga registrada, así que subir carga a mano no se heredaba a la sesión
+  // siguiente (se detectó verificando el flujo real end-to-end).
+  it("el % de salto se calcula sobre la carga real, no sobre la del plan", () => {
+    // Registré 85 kg (el plan decía 80) y toqué el tope del rango: el salto
+    // mínimo debe calcularse desde 85 → 87.5, no desde 80 → 82.5.
+    const history = sessionLogs({
+      sessionId: "s1", exerciseId: "bench", sets: 3, loadKg: 85,
+      reps: 14, rir: 2, targetReps: 12, targetRir: 2, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const p = nextPrescription({ ...base, currentLoadKg: 85, exerciseHistory: history });
+    expect(p.nextLoadKg).toBe(87.5);
+    expect(p.nextReps).toBe(8);
+  });
+
+  it("si bajé la carga, la progresión sigue desde ahí (no vuelve al plan)", () => {
+    const history = sessionLogs({
+      sessionId: "s1", exerciseId: "bench", sets: 3, loadKg: 70,
+      reps: 10, rir: 2, targetReps: 10, targetRir: 2, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const p = nextPrescription({ ...base, currentLoadKg: 70, exerciseHistory: history });
+    expect(p.nextLoadKg).toBe(70);
+    expect(p.nextReps).toBe(11);
+  });
+});
+
 describe("nextPrescription — lineal", () => {
   it("objetivo cumplido: sube carga al incremento disponible", () => {
     const history = sessionLogs({

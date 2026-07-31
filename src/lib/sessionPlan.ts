@@ -1,7 +1,7 @@
 // Compone el plan del día con la autorregulación (F6). No es dominio puro
 // (lee repos), pero delega todo el cálculo a src/domain.
 
-import { nextPrescription } from "@/domain/progression";
+import { groupBySession, nextPrescription } from "@/domain/progression";
 import {
   assessRirCalibration,
   calibratedRirCap,
@@ -75,12 +75,23 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
       meso.progressionModel === "dup" ? planned.dayType : undefined,
     );
 
+    // Carga base = la ÚLTIMA carga realmente registrada de este ejercicio, no
+    // la del snapshot del plan: si subiste (o bajaste) la carga a mano, la
+    // sesión siguiente parte de ahí. Excepciones:
+    //  - modo peso corporal (plan en 0): se mantiene 0 para no perder el modo.
+    //  - semana de deload: se respeta la carga que dictó el plan (la política
+    //    del deload es deliberadamente más liviana que tu carga actual).
+    const currentLoadKg =
+      planned.targetLoadKg === 0 || week.isDeload
+        ? planned.targetLoadKg
+        : lastLoggedLoad(history) ?? planned.targetLoadKg;
+
     const p = nextPrescription({
       exerciseHistory: history,
       model: meso.progressionModel,
       targetRir: planned.targetRir,
       repRange: planned.repRange,
-      currentLoadKg: planned.targetLoadKg,
+      currentLoadKg,
       // Carga 0 = modo peso corporal: el motor no sube carga, progresa por reps.
       equipmentType: planned.targetLoadKg === 0 ? "bodyweight" : exercise.equipmentType,
       equipment: settings.equipment,
@@ -152,4 +163,16 @@ async function exerciseHistoryBefore(
       .map((s) => s.id),
   );
   return allLogs.filter((l) => eligible.has(l.sessionId));
+}
+
+/**
+ * Carga real de la última sesión registrada de este ejercicio (la más pesada
+ * entre sus series). null si no hay historial.
+ */
+function lastLoggedLoad(history: SetLog[]): number | null {
+  const sessions = groupBySession(history);
+  if (sessions.length === 0) return null;
+  const last = sessions[sessions.length - 1];
+  const max = Math.max(...last.map((l) => l.actualLoadKg));
+  return Number.isFinite(max) && max > 0 ? max : null;
 }
