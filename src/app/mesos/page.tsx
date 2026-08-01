@@ -113,11 +113,15 @@ export default function MesosPage() {
                       onClick={async () => {
                         if (
                           confirm(
-                            "Recalcula los targets de series/reps/RIR de las semanas con el motor actual, manteniendo tus días, ejercicios y cargas. Lo ya registrado no se toca. ¿Continuar?",
+                            "Recalcula los targets de series/reps/RIR de las semanas que faltan, tomando lo que tengas editado en Plan (rangos de reps, series, cargas). Lo ya registrado no se toca. ¿Continuar?",
                           )
                         ) {
-                          await mesocycleRepo.regeneratePlan(m.id);
-                          alert("Plan recalculado con el motor actual.");
+                          const r = await mesocycleRepo.regeneratePlan(m.id);
+                          alert(
+                            r.usedBaseWeek
+                              ? "Plan recalculado con tu semana base actual (incluye los rangos de reps que hayas editado en Plan)."
+                              : "Plan recalculado con el motor actual. Nota: tu semana base tiene otra cantidad de días que este meso, así que se mantuvo la estructura original del plan.",
+                          );
                         }
                       }}
                     >

@@ -226,19 +226,32 @@ export const mesocycleRepo = {
   },
 
   /**
-   * Regenera el plan del meso con el motor/config ACTUAL, conservando la
-   * estructura original (semana 1 del plan viejo: mismos días, slots y cargas
-   * iniciales). Las sesiones y series ya registradas no se tocan: solo cambian
-   * los targets de lo que falta. Útil tras una mejora del motor.
+   * Regenera el plan del meso con el motor/config ACTUAL. Las sesiones y series
+   * ya registradas no se tocan: solo cambian los targets de lo que falta.
+   *
+   * De dónde toma la estructura: si la semana base guardada tiene la MISMA
+   * cantidad de días que el plan (o sea, el usuario la editó pero no cambió el
+   * esqueleto), se usa esa — así los cambios de rango de reps, series y cargas
+   * hechos en Plan llegan al meso activo. Si el esqueleto cambió (agregó o
+   * quitó días), se cae a la semana 1 del plan viejo, porque las sesiones ya
+   * creadas están indexadas por día y quedarían descolgadas.
    */
-  async regeneratePlan(id: string): Promise<void> {
+  async regeneratePlan(id: string): Promise<{ usedBaseWeek: boolean }> {
     const db = getDb();
     const rules = getRules();
     const meso = await db.mesocycles.get(id);
     if (!meso) throw new Error("Mesociclo no encontrado.");
-    const [settings, exercises] = await Promise.all([settingsRepo.get(), exerciseRepo.all()]);
+    const [settings, exercises, savedBaseWeek] = await Promise.all([
+      settingsRepo.get(),
+      exerciseRepo.all(),
+      baseWeekRepo.get(),
+    ]);
+    const planDays = (meso.plan.weeks.find((w) => !w.isDeload) ?? meso.plan.weeks[0]).days.length;
+    const usedBaseWeek =
+      savedBaseWeek.days.length === planDays &&
+      savedBaseWeek.days.some((d) => d.slots.length > 0);
     const plan = generateMesocycle({
-      baseWeek: deriveBaseWeekFromPlan(meso.plan),
+      baseWeek: usedBaseWeek ? savedBaseWeek : deriveBaseWeekFromPlan(meso.plan),
       exercises,
       profile: settings.experienceProfile,
       progressionModel: meso.progressionModel,
@@ -247,6 +260,7 @@ export const mesocycleRepo = {
       rules,
     });
     await db.mesocycles.update(id, { plan });
+    return { usedBaseWeek };
   },
 
   /** Activa un meso (pausa al activo actual, o lo completa si no le quedan sesiones). */
