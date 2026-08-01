@@ -84,24 +84,22 @@ describe("nextPrescription — doble progresión", () => {
     expect(p).toMatchObject({ nextLoadKg: 85, nextReps: 8 });
   });
 
-  it("mancuerna en el tope del inventario: sigue añadiendo reps (sin salto posible)", () => {
-    const history = sessionLogs({
-      sessionId: "s1",
-      exerciseId: "db-press",
-      sets: 3,
-      loadKg: 30,
-      reps: 12,
-      rir: 2,
-      timestamp: "2026-01-05T10:00:00Z",
-    });
-    const p = nextPrescription({
-      ...base,
-      equipmentType: "dumbbell",
-      currentLoadKg: 30,
-      exerciseHistory: history,
-    });
-    expect(p.nextLoadKg).toBe(30);
-    expect(p.nextReps).toBe(13);
+  it("mancuerna en el tope del rack: acumula reps pero la progresión NO se congela", () => {
+    // Antes: al llegar a la mancuerna más pesada del rack la carga quedaba
+    // clavada para siempre. Ahora el rack extrapola por su paso típico.
+    const mk = (id: string, reps: number, ts: string) =>
+      sessionLogs({ sessionId: id, exerciseId: "db-press", sets: 3, loadKg: 30, reps, rir: 2, targetReps: reps, targetRir: 2, timestamp: ts });
+    const db = { ...base, equipmentType: "dumbbell" as const, currentLoadKg: 30 };
+
+    // En el tope del rango todavía suma reps (el salto no es proporcional).
+    const p1 = nextPrescription({ ...db, exerciseHistory: mk("s1", 12, "2026-01-05T10:00:00Z") });
+    expect(p1.nextLoadKg).toBe(30);
+    expect(p1.nextReps).toBe(13);
+
+    // Pero con maxRepsOverCeiling acumuladas, sube igual (paso del rack).
+    const p2 = nextPrescription({ ...db, exerciseHistory: mk("s2", 14, "2026-01-08T10:00:00Z") });
+    expect(p2.nextLoadKg).toBeGreaterThan(30);
+    expect(p2.nextReps).toBe(8);
   });
 });
 
@@ -160,6 +158,40 @@ describe("nextPrescription — doble progresión ajustada por RIR", () => {
     });
     const p = nextPrescription({ ...base, exerciseHistory: history });
     expect(p.nextReps).toBe(13);
+  });
+});
+
+describe("nextPrescription — la carga sube igual si el salto nunca es 'proporcional'", () => {
+  // Regresión: con implementos de salto grande (mancuerna 20→22 = 10%) el
+  // crédito por reps (2.5% por rep) no alcanzaba nunca, así que la carga
+  // quedaba clavada y el motor pedía reps infinitas. Ahora hay un tope duro.
+  it("al acumular maxRepsOverCeiling reps sobre el tope, sube la carga", () => {
+    const max = rules.progressionModels.double.maxRepsOverCeiling;
+    const reps = 12 + max; // tope del rango (12) + el máximo permitido
+    const history = sessionLogs({
+      sessionId: "s1", exerciseId: "curl", sets: 3, loadKg: 20,
+      reps, rir: 2, targetReps: reps, targetRir: 2, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const p = nextPrescription({
+      ...base, equipmentType: "dumbbell", currentLoadKg: 20, exerciseHistory: history,
+    });
+    expect(p.nextLoadKg).toBe(22); // salto del 10%, aceptado por tope de reps
+    expect(p.nextReps).toBe(8); // vuelve al piso del rango
+    expect(p.rationale).toContain("reps sobre el tope");
+  });
+
+  it("una rep antes del tope todavía acumula en vez de saltar", () => {
+    const max = rules.progressionModels.double.maxRepsOverCeiling;
+    const reps = 12 + max - 1;
+    const history = sessionLogs({
+      sessionId: "s1", exerciseId: "curl", sets: 3, loadKg: 20,
+      reps, rir: 2, targetReps: reps, targetRir: 2, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const p = nextPrescription({
+      ...base, equipmentType: "dumbbell", currentLoadKg: 20, exerciseHistory: history,
+    });
+    expect(p.nextLoadKg).toBe(20);
+    expect(p.nextReps).toBe(reps + 1);
   });
 });
 

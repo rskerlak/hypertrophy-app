@@ -213,9 +213,11 @@ roundToAvailable(targetLoadKg: number, equipment: {
 }): number
 ```
 - **barbell:** paso mínimo = 2 × menor disco disponible. Redondear al peso alcanzable (barra + pares de discos) más cercano **por debajo o igual** al objetivo.
-- **dumbbell:** al escalón de mancuerna disponible más cercano ≤ objetivo.
+- **dumbbell:** dos modelos. **Rack fijo** (`dumbbellsKg`): al escalón disponible más cercano ≤ objetivo; si la carga supera la más pesada del rack, extrapolar por el salto típico (mediana de los saltos) en vez de congelar la progresión. **Armables** (`dumbbellPlatesKg` no vacío): mango + 2 × (discos combinados), igual que una barra — así se alcanzan pesos que ningún rack tiene (ej. 37,5 kg).
 - **machine/cable:** múltiplo de `machineStepKg` más cercano ≤ objetivo.
 - **bodyweight:** devolver el objetivo sin redondear (o gestionar lastre aparte).
+**Invariante clave:** `nextAchievableLoad` solo devuelve la carga actual si de verdad no hay progresión posible (peso corporal o inventario vacío). Cualquier otro caso DEBE devolver una carga mayor: si no, la doble progresión pide reps infinitas y la carga queda clavada para siempre.
+
 **Tests:** objetivo 82.1 kg barra con discos [1.25,2.5,5,...] → 82.5 imposible con par de 1.25? (paso 2.5) → 82.5 no alcanzable desde 80 con par mínimo 2.5 → 82.5 requiere par de 1.25 (2.5 total) → validar exactamente contra el inventario. Cubrir el caso sin disco de 1.25 (paso 5).
 
 ### `evaluateDeloadTrigger`

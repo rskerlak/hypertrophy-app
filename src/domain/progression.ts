@@ -267,6 +267,16 @@ function doubleProgression(
       rationale: "Tope del rango alcanzado: subir carga y volver al piso del rango.",
     };
   }
+  // Tope duro de reps por encima del rango: en implementos con saltos grandes
+  // (mancuernas, poleas) el crédito por reps podría no alcanzar nunca y la
+  // carga quedaría clavada. Al llegar al tope, se sube la carga igual.
+  if (surplus >= cfg.maxRepsOverCeiling) {
+    return {
+      nextLoadKg: nextLoad,
+      nextReps: repRange.min,
+      rationale: `Ya acumulaste ${surplus} reps sobre el tope del rango: subir carga (el salto de ${minJumpPct.toFixed(1)}% es el mínimo que permite tu equipamiento).`,
+    };
+  }
   return {
     nextLoadKg: input.currentLoadKg,
     nextReps: reps + cfg.repStepWhenBelowCeiling,

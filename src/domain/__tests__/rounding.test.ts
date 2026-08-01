@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { nextAchievableLoad, roundToAvailable } from "../rounding";
 import { equipment, equipmentNoSmallPlates } from "./fixtures";
+import type { Equipment } from "../types";
 
 describe("roundToAvailable — barbell", () => {
   it("redondea 82.1 kg hacia abajo a 80 con discos que incluyen 1.25 (82.5 > objetivo)", () => {
@@ -55,9 +56,10 @@ describe("nextAchievableLoad (salto mínimo)", () => {
     ).toBe(85);
   });
 
-  it("dumbbell: siguiente desde 26 es 30; desde 30 no hay (devuelve 30)", () => {
+  it("dumbbell: siguiente desde 26 es 30; en el tope extrapola por el paso típico", () => {
     expect(nextAchievableLoad(26, { type: "dumbbell", equipment })).toBe(30);
-    expect(nextAchievableLoad(30, { type: "dumbbell", equipment })).toBe(30);
+    // Antes devolvía 30 (progresión congelada); ahora sigue por la mediana (2).
+    expect(nextAchievableLoad(30, { type: "dumbbell", equipment })).toBe(32);
   });
 
   it("machine: siguiente múltiplo del paso", () => {
@@ -66,5 +68,42 @@ describe("nextAchievableLoad (salto mínimo)", () => {
 
   it("bodyweight: sin progresión de carga (devuelve la actual)", () => {
     expect(nextAchievableLoad(80, { type: "bodyweight", equipment })).toBe(80);
+  });
+});
+
+describe("mancuernas ARMABLES (discos que se combinan)", () => {
+  // Caso real: mango de 2 kg + discos por lado. Una mancuerna de 37.5 kg no
+  // existe en ningún rack fijo, pero sí se arma.
+  const loadable: Equipment = {
+    ...equipment,
+    dumbbellPlatesKg: [1.25, 2.5, 5, 10, 15, 20],
+    dumbbellHandleKg: 2,
+  };
+
+  it("alcanza pesos que ningún rack fijo tiene", () => {
+    // 2 + 2×17.5 = 37 (17.5 = 15+2.5); 37.5 no es alcanzable con estos discos
+    expect(roundToAvailable(37.5, { type: "dumbbell", equipment: loadable })).toBe(37);
+    expect(roundToAvailable(52, { type: "dumbbell", equipment: loadable })).toBe(52); // 2+2×25
+  });
+
+  it("progresa por encima de la mancuerna más pesada del rack fijo", () => {
+    // Con rack fijo (máx 30) desde 37.5 el motor quedaba CONGELADO.
+    expect(nextAchievableLoad(37.5, { type: "dumbbell", equipment: loadable })).toBe(39.5);
+  });
+
+  it("el salto mínimo es un par del disco más chico", () => {
+    expect(nextAchievableLoad(22, { type: "dumbbell", equipment: loadable })).toBe(24.5);
+  });
+});
+
+describe("rack fijo: nunca congelar la progresión por encima del máximo", () => {
+  it("por encima de la mancuerna más pesada, extrapola por el paso típico (mediana)", () => {
+    // Rack [2,4,5,6,8,…,26,30]: saltos mayormente de 2 → mediana 2.
+    expect(nextAchievableLoad(37.5, { type: "dumbbell", equipment })).toBe(39.5);
+    expect(nextAchievableLoad(30, { type: "dumbbell", equipment })).toBe(32);
+  });
+
+  it("dentro del rack sigue eligiendo el escalón real", () => {
+    expect(nextAchievableLoad(20, { type: "dumbbell", equipment })).toBe(22);
   });
 });

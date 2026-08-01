@@ -69,6 +69,7 @@ export const rulesSchema = z
           .object({
             loadIncrementPctOnRepCeiling: z.number(),
             repStepWhenBelowCeiling: z.number().int(),
+            maxRepsOverCeiling: z.number().int().min(0).default(2),
             rirAdjustmentCapReps: z.number().int().min(0).default(2),
             rirAdjustmentCapRepsHighRep: z.number().int().min(0).default(1),
             rirAdjustmentHighRepThreshold: z.number().int().min(1).default(15),
@@ -176,6 +177,8 @@ export const rulesSchema = z
         defaultBarWeightKg: z.number(),
         commonPlatesKg: z.array(z.number()),
         commonDumbbellsKg: z.array(z.number()),
+        commonDumbbellPlatesKg: z.array(z.number()).default([1.25, 2.5, 5, 10, 15, 20]),
+        defaultDumbbellHandleKg: z.number().default(2),
         machineStepKg: z.number(),
       })
       .passthrough(),

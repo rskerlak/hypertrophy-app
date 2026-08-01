@@ -24,7 +24,7 @@ export default function SettingsPage() {
     settingsRepo.update({ prioritizedMuscles: [...set] });
   };
 
-  const editList = (key: "platesKg" | "dumbbellsKg", raw: string) => {
+  const editList = (key: "platesKg" | "dumbbellsKg" | "dumbbellPlatesKg", raw: string) => {
     const nums = raw
       .split(",")
       .map((x) => parseFloat(x.trim()))
@@ -32,6 +32,9 @@ export default function SettingsPage() {
       .sort((a, b) => a - b);
     settingsRepo.update({ equipment: { ...settings.equipment, [key]: nums } });
   };
+
+  // Mancuernas armables si el usuario declaró discos de mancuerna.
+  const loadableDumbbells = (settings.equipment.dumbbellPlatesKg ?? []).length > 0;
 
   return (
     <>
@@ -154,12 +157,66 @@ export default function SettingsPage() {
           />
         </div>
         <div>
-          <Label>Mancuernas disponibles (kg) — separá con comas</Label>
-          <Input
-            defaultValue={settings.equipment.dumbbellsKg.join(", ")}
-            onBlur={(e) => editList("dumbbellsKg", e.target.value)}
-            inputMode="decimal"
-          />
+          <Label>Mancuernas armables (discos que se combinan)</Label>
+          <div className="mb-2 flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-2.5">
+            <span className="pr-3 text-sm">
+              Uso mancuernas de barra corta y les cargo discos
+            </span>
+            <Toggle
+              on={loadableDumbbells}
+              onChange={(v) =>
+                settingsRepo.update({
+                  equipment: {
+                    ...settings.equipment,
+                    dumbbellPlatesKg: v ? [...rules.loadIncrements.commonDumbbellPlatesKg] : [],
+                    dumbbellHandleKg: v
+                      ? (settings.equipment.dumbbellHandleKg ??
+                        rules.loadIncrements.defaultDumbbellHandleKg)
+                      : settings.equipment.dumbbellHandleKg,
+                  },
+                })
+              }
+            />
+          </div>
+          {loadableDumbbells ? (
+            <>
+              <Label>Discos de mancuerna (kg, por lado) — separá con comas</Label>
+              <Input
+                defaultValue={(settings.equipment.dumbbellPlatesKg ?? []).join(", ")}
+                onBlur={(e) => editList("dumbbellPlatesKg", e.target.value)}
+                inputMode="decimal"
+                className="mb-2"
+              />
+              <Label>Peso del mango</Label>
+              <Stepper
+                value={settings.equipment.dumbbellHandleKg ?? rules.loadIncrements.defaultDumbbellHandleKg}
+                step={0.5}
+                min={0}
+                suffix="kg"
+                onChange={(v) =>
+                  settingsRepo.update({ equipment: { ...settings.equipment, dumbbellHandleKg: v } })
+                }
+                format={fmtKg}
+              />
+              <p className="mt-1.5 text-xs text-[var(--muted)]">
+                El motor calcula cada mancuerna como mango + 2 × (discos combinados), así llega a
+                pesos que un rack fijo no tiene (ej. 37·5 kg).
+              </p>
+            </>
+          ) : (
+            <>
+              <Label>Rack de mancuernas (kg) — separá con comas</Label>
+              <Input
+                defaultValue={settings.equipment.dumbbellsKg.join(", ")}
+                onBlur={(e) => editList("dumbbellsKg", e.target.value)}
+                inputMode="decimal"
+              />
+              <p className="mt-1.5 text-xs text-[var(--muted)]">
+                Cada valor es una mancuerna entera. Si superás la más pesada, el motor extrapola
+                por el salto típico del rack.
+              </p>
+            </>
+          )}
         </div>
         <div>
           <Label>Paso de máquinas/poleas</Label>

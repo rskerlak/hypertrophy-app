@@ -106,6 +106,8 @@
       "description": "Dentro del rango de reps, subir reps hasta el tope al RIR objetivo; al topar, subir carga al incremento minimo disponible y volver al piso del rango. Metodo core recomendado.",
       "loadIncrementPctOnRepCeiling": 2.5,
       "repStepWhenBelowCeiling": 1,
+      "maxRepsOverCeiling": 2,
+      "_ceilingNote": "Cuantas reps se permiten ACUMULAR por encima del tope del rango antes de forzar la subida de carga. Sin este tope, en implementos con saltos grandes (mancuerna 20->22 = 10%) el credito por reps nunca alcanzaba el salto minimo y la carga no subia nunca: habria que llegar a 16 reps en un rango 8-12. RP lo plantea al reves: si el salto no entra, agregas UNA rep y despues tomas el salto igual.",
       "rirAdjustmentCapReps": 2,
       "rirAdjustmentCapRepsHighRep": 1,
       "rirAdjustmentHighRepThreshold": 15,
@@ -199,6 +201,9 @@
     "defaultBarWeightKg": 20,
     "commonPlatesKg": [1.25, 2.5, 5, 10, 15, 20, 25],
     "commonDumbbellsKg": [2, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 30],
+    "commonDumbbellPlatesKg": [1.25, 2.5, 5, 10, 15, 20],
+    "defaultDumbbellHandleKg": 2,
+    "_dumbbellNote": "Dos modelos posibles. Rack FIJO: commonDumbbellsKg lista mancuernas enteras. ARMABLE: el usuario carga discos por lado sobre un mango, y entonces el peso alcanzable es mango + 2x(discos combinados), igual que una barra. Si el usuario configura discos de mancuerna, se usa el modelo armable.",
     "machineStepKg": 5,
     "_barbellNote": "Para barra, el paso minimo = 2x el disco mas chico disponible (un par). Redondear al alcanzable mas cercano por debajo del objetivo."
   },

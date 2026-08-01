@@ -34,8 +34,17 @@ export interface Exercise {
 export interface Equipment {
   barWeightKg: number;
   platesKg: number[];
+  /** Rack FIJO de mancuernas (cada valor es una mancuerna entera). */
   dumbbellsKg: number[];
   machineStepKg: number;
+  /**
+   * Discos POR LADO para mancuernas ARMABLES. Si tiene elementos, las
+   * mancuernas se calculan como mango + 2×(discos combinados) y se ignora el
+   * rack fijo. Es el caso de gimnasios con mancuernas de barra corta.
+   */
+  dumbbellPlatesKg?: number[];
+  /** Peso del mango de mancuerna armable (kg). */
+  dumbbellHandleKg?: number;
 }
 
 export interface BaseWeekSlot {
