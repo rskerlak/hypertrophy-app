@@ -209,7 +209,8 @@ function ExerciseBlock({
       </div>
       <p className="mb-3 text-xs text-[var(--muted)]">
         Objetivo: {isBodyweight ? "corporal" : `${fmtKg(suggestedLoadKg)} kg`} × {suggestedReps} reps ({planned.repRange.min}–
-        {planned.repRange.max}) · {planned.sets} series
+        {planned.repRange.max}
+        {suggestedReps > planned.repRange.max ? ` +${suggestedReps - planned.repRange.max}` : ""}) · {planned.sets} series
       </p>
 
       <div className="space-y-2">

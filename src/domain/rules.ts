@@ -69,7 +69,7 @@ export const rulesSchema = z
           .object({
             loadIncrementPctOnRepCeiling: z.number(),
             repStepWhenBelowCeiling: z.number().int(),
-            maxRepsOverCeiling: z.number().int().min(0).default(2),
+            maxRepsOverCeiling: z.number().int().min(0).default(0),
             rirAdjustmentCapReps: z.number().int().min(0).default(2),
             rirAdjustmentCapRepsHighRep: z.number().int().min(0).default(1),
             rirAdjustmentHighRepThreshold: z.number().int().min(1).default(15),

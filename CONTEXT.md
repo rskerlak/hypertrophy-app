@@ -202,7 +202,7 @@ nextPrescription(input: {
 ```
 Despacha a la progresión:
 - **linear:** si en la última sesión se alcanzaron las reps objetivo al RIR objetivo, subir carga por `loadIncrementPctPerSession` redondeado con `roundToAvailable`. Si no se progresó en `failToProgressThreshold` sesiones, mantener.
-- **double:** si las reps logradas < tope del rango al RIR objetivo → subir reps en `repStepWhenBelowCeiling`, misma carga. Si se alcanzó el tope → subir carga (`loadIncrementPctOnRepCeiling` vía `roundToAvailable`) y volver al piso del rango. **Si el salto mínimo de carga excede el % objetivo → no subir carga aún; añadir una rep** (aunque supere el tope) hasta que el salto sea proporcional.
+- **double:** si las reps logradas < tope del rango al RIR objetivo → subir reps en `repStepWhenBelowCeiling`, misma carga. Si se alcanzó el tope → subir carga al **mínimo alcanzable** (`nextAchievableLoad`) y volver al piso del rango. **El rango configurado por el usuario es un límite duro**: nunca se prescriben más reps que el tope, aunque el salto mínimo de carga exceda el % objetivo (`loadIncrementPctOnRepCeiling`); en ese caso se sube igual y la razón avisa que el salto es grande. Si con la carga nueva no se llega al piso, la rama "debajo del tope" repite la carga hasta consolidar. `maxRepsOverCeiling` (default 0) permite opcionalmente un colchón de N reps sobre el tope solo para saltos desproporcionados; si es >0 la UI lo muestra como `+N`.
 - **dup:** elegir `dayType` según el día; aplicar su `repRange` y `targetRirOffset`; dentro de eso, doble progresión.
 - **block:** determinar la fase por `week / totalWeeks` vs `fractionOfMeso`; aplicar `repRange` y `rirBias` de la fase; dentro, doble progresión.
 

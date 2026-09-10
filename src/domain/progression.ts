@@ -256,31 +256,31 @@ function doubleProgression(
   }
   const minJumpPct =
     ((nextLoad - input.currentLoadKg) / input.currentLoadKg) * 100;
-  // Cada rep por encima del tope "acredita" ~loadIncrementPct de progreso.
   const surplus = reps - repRange.max;
+  // Cada rep por encima del tope "acredita" ~loadIncrementPct de progreso.
   const creditPct = (surplus + 1) * cfg.loadIncrementPctOnRepCeiling;
+  const jumpIsProportional = creditPct >= minJumpPct;
 
-  if (creditPct >= minJumpPct) {
+  // Colchón OPCIONAL (maxRepsOverCeiling > 0): solo si el salto es
+  // desproporcionado y todavía quedan reps de colchón, sumar una rep sobre el
+  // tope. Con el default 0 este bloque nunca corre: el rango del usuario es
+  // un límite duro.
+  if (!jumpIsProportional && surplus < cfg.maxRepsOverCeiling) {
     return {
-      nextLoadKg: nextLoad,
-      nextReps: repRange.min,
-      rationale: "Tope del rango alcanzado: subir carga y volver al piso del rango.",
+      nextLoadKg: input.currentLoadKg,
+      nextReps: reps + cfg.repStepWhenBelowCeiling,
+      rationale: `El salto mínimo de tu equipamiento (+${minJumpPct.toFixed(1)}%) es grande: sumo una rep sobre el tope (colchón ${surplus + 1}/${cfg.maxRepsOverCeiling}) antes de subir carga.`,
     };
   }
-  // Tope duro de reps por encima del rango: en implementos con saltos grandes
-  // (mancuernas, poleas) el crédito por reps podría no alcanzar nunca y la
-  // carga quedaría clavada. Al llegar al tope, se sube la carga igual.
-  if (surplus >= cfg.maxRepsOverCeiling) {
-    return {
-      nextLoadKg: nextLoad,
-      nextReps: repRange.min,
-      rationale: `Ya acumulaste ${surplus} reps sobre el tope del rango: subir carga (el salto de ${minJumpPct.toFixed(1)}% es el mínimo que permite tu equipamiento).`,
-    };
-  }
+
+  // Tope alcanzado → subir carga al mínimo alcanzable y volver al piso.
+  // Si el salto es grande se avisa: puede que no se llegue al piso, y en ese
+  // caso la rama "debajo del tope" repite la carga hasta consolidar.
   return {
-    nextLoadKg: input.currentLoadKg,
-    nextReps: reps + cfg.repStepWhenBelowCeiling,
-    rationale:
-      "El salto mínimo de carga excede el % objetivo: añadir una rep aunque supere el tope.",
+    nextLoadKg: nextLoad,
+    nextReps: repRange.min,
+    rationale: jumpIsProportional
+      ? "Tope del rango alcanzado: subir carga y volver al piso del rango."
+      : `Tope del rango alcanzado: subir carga. El salto mínimo de tu equipamiento es grande (+${minJumpPct.toFixed(1)}%): si no llegás a ${repRange.min} reps, la próxima repite la carga hasta consolidar.`,
   };
 }

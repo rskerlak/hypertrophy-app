@@ -36,70 +36,41 @@ describe("nextPrescription — doble progresión", () => {
     expect(p.nextReps).toBe(11);
   });
 
-  it("tope alcanzado con discos finos (salto 3.1% vs credit 2.5%): añade rep; con una rep de excedente sí salta", () => {
-    // Con discos de 1.25: salto mínimo desde 80 = 82.5 (+3.125%) > 2.5% → añadir rep.
+  it("tope alcanzado con discos finos (salto 3.1%): sube carga y vuelve al piso", () => {
+    // El rango es un límite duro: al tocar 12 se sube al mínimo alcanzable
+    // (80 → 82.5) aunque el salto (3.125%) exceda el % objetivo (2.5%).
     const atCeiling = sessionLogs({
-      sessionId: "s1",
-      exerciseId: "bench",
-      sets: 3,
-      loadKg: 80,
-      reps: 12,
-      rir: 2,
-      timestamp: "2026-01-05T10:00:00Z",
+      sessionId: "s1", exerciseId: "bench", sets: 3, loadKg: 80,
+      reps: 12, rir: 2, timestamp: "2026-01-05T10:00:00Z",
     });
-    const p1 = nextPrescription({ ...base, exerciseHistory: atCeiling });
-    expect(p1.nextLoadKg).toBe(80);
-    expect(p1.nextReps).toBe(13);
-
-    // Con 13 reps (1 de excedente): crédito 5% ≥ 3.125% → subir a 82.5 y volver al piso.
-    const overCeiling = sessionLogs({
-      sessionId: "s2",
-      exerciseId: "bench",
-      sets: 3,
-      loadKg: 80,
-      reps: 13,
-      rir: 2,
-      timestamp: "2026-01-08T10:00:00Z",
-    });
-    const p2 = nextPrescription({ ...base, exerciseHistory: [...atCeiling, ...overCeiling] });
-    expect(p2.nextLoadKg).toBe(82.5);
-    expect(p2.nextReps).toBe(8);
+    const p = nextPrescription({ ...base, exerciseHistory: atCeiling });
+    expect(p.nextLoadKg).toBe(82.5);
+    expect(p.nextReps).toBe(8);
   });
 
-  it("salto mínimo grande (sin discos de 1.25, 6.25%): acumula reps hasta que el salto sea proporcional", () => {
-    const mk = (id: string, reps: number, ts: string) =>
-      sessionLogs({ sessionId: id, exerciseId: "bench", sets: 3, loadKg: 80, reps, rir: 2, timestamp: ts });
-    const noSmall = { ...base, equipment: equipmentNoSmallPlates };
-
-    // 12 reps (tope): crédito 2.5% < 6.25% → rep 13.
-    let p = nextPrescription({ ...noSmall, exerciseHistory: mk("s1", 12, "2026-01-05T10:00:00Z") });
-    expect(p).toMatchObject({ nextLoadKg: 80, nextReps: 13 });
-
-    // 13 reps: crédito 5% < 6.25% → rep 14.
-    p = nextPrescription({ ...noSmall, exerciseHistory: mk("s2", 13, "2026-01-08T10:00:00Z") });
-    expect(p).toMatchObject({ nextLoadKg: 80, nextReps: 14 });
-
-    // 14 reps: crédito 7.5% ≥ 6.25% → saltar a 85 y volver al piso.
-    p = nextPrescription({ ...noSmall, exerciseHistory: mk("s3", 14, "2026-01-11T10:00:00Z") });
+  it("salto mínimo grande (sin discos de 1.25, 6.25%): sube igual y AVISA que el salto es grande", () => {
+    const history = sessionLogs({
+      sessionId: "s1", exerciseId: "bench", sets: 3, loadKg: 80,
+      reps: 12, rir: 2, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const p = nextPrescription({ ...base, equipment: equipmentNoSmallPlates, exerciseHistory: history });
     expect(p).toMatchObject({ nextLoadKg: 85, nextReps: 8 });
+    expect(p.rationale).toContain("salto mínimo");
+    expect(p.rationale).toContain("6.3%");
   });
 
-  it("mancuerna en el tope del rack: acumula reps pero la progresión NO se congela", () => {
+  it("mancuerna en el tope del rack: sube por el paso del rack, sin acumular reps sobre el tope", () => {
     // Antes: al llegar a la mancuerna más pesada del rack la carga quedaba
     // clavada para siempre. Ahora el rack extrapola por su paso típico.
-    const mk = (id: string, reps: number, ts: string) =>
-      sessionLogs({ sessionId: id, exerciseId: "db-press", sets: 3, loadKg: 30, reps, rir: 2, targetReps: reps, targetRir: 2, timestamp: ts });
-    const db = { ...base, equipmentType: "dumbbell" as const, currentLoadKg: 30 };
-
-    // En el tope del rango todavía suma reps (el salto no es proporcional).
-    const p1 = nextPrescription({ ...db, exerciseHistory: mk("s1", 12, "2026-01-05T10:00:00Z") });
-    expect(p1.nextLoadKg).toBe(30);
-    expect(p1.nextReps).toBe(13);
-
-    // Pero con maxRepsOverCeiling acumuladas, sube igual (paso del rack).
-    const p2 = nextPrescription({ ...db, exerciseHistory: mk("s2", 14, "2026-01-08T10:00:00Z") });
-    expect(p2.nextLoadKg).toBeGreaterThan(30);
-    expect(p2.nextReps).toBe(8);
+    const history = sessionLogs({
+      sessionId: "s1", exerciseId: "db-press", sets: 3, loadKg: 30,
+      reps: 12, rir: 2, targetReps: 12, targetRir: 2, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const p = nextPrescription({
+      ...base, equipmentType: "dumbbell", currentLoadKg: 30, exerciseHistory: history,
+    });
+    expect(p.nextLoadKg).toBeGreaterThan(30);
+    expect(p.nextReps).toBe(8);
   });
 });
 
@@ -150,48 +121,86 @@ describe("nextPrescription — doble progresión ajustada por RIR", () => {
   });
 
   it("con el mismo excedente pero cerca del fallo, el ajuste NO se atenúa", () => {
-    // 10 reps @ RIR 3 objetivo 1 → excedente +2, por debajo del umbral de
-    // atenuación: ajustadas 12 = tope → añade rep (crédito insuficiente aún).
+    // 10 reps @ RIR 3 objetivo 1 → excedente +2 sin atenuar → ajustadas 12 =
+    // tope → sube carga. (Con atenuación quedarían en 11 y pediría 12.)
     const history = sessionLogs({
       sessionId: "s1", exerciseId: "bench", sets: 3, loadKg: 80,
       reps: 10, rir: 3, targetReps: 10, targetRir: 1, timestamp: "2026-01-05T10:00:00Z",
     });
     const p = nextPrescription({ ...base, exerciseHistory: history });
-    expect(p.nextReps).toBe(13);
+    expect(p.nextLoadKg).toBe(82.5);
+    expect(p.nextReps).toBe(8);
   });
 });
 
-describe("nextPrescription — la carga sube igual si el salto nunca es 'proporcional'", () => {
-  // Regresión: con implementos de salto grande (mancuerna 20→22 = 10%) el
-  // crédito por reps (2.5% por rep) no alcanzaba nunca, así que la carga
-  // quedaba clavada y el motor pedía reps infinitas. Ahora hay un tope duro.
-  it("al acumular maxRepsOverCeiling reps sobre el tope, sube la carga", () => {
-    const max = rules.progressionModels.double.maxRepsOverCeiling;
-    const reps = 12 + max; // tope del rango (12) + el máximo permitido
+describe("nextPrescription — el rango configurado es un LÍMITE DURO", () => {
+  // Regresión (bug reportado con laterales 14 kg, rango 10–12): el motor
+  // prescribía 13 y 14 reps "aunque supere el tope" porque el salto de
+  // mancuernas (14→16 = +14%) excedía el % objetivo. El rango es
+  // configuración explícita del usuario: nunca se prescribe por encima.
+  const rack = { ...equipment, dumbbellsKg: [2, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 30] };
+
+  it("laterales 14 kg × 12 (10–12) → 16 kg × 10, nunca 13 ni 14 reps", () => {
     const history = sessionLogs({
-      sessionId: "s1", exerciseId: "curl", sets: 3, loadKg: 20,
-      reps, rir: 2, targetReps: reps, targetRir: 2, timestamp: "2026-01-05T10:00:00Z",
+      sessionId: "s1", exerciseId: "lat", sets: 3, loadKg: 14,
+      reps: 12, rir: 1, targetReps: 12, targetRir: 1, timestamp: "2026-01-05T10:00:00Z",
     });
     const p = nextPrescription({
-      ...base, equipmentType: "dumbbell", currentLoadKg: 20, exerciseHistory: history,
+      ...base, repRange: { min: 10, max: 12 }, targetRir: 1,
+      equipmentType: "dumbbell", currentLoadKg: 14, equipment: rack, exerciseHistory: history,
     });
-    expect(p.nextLoadKg).toBe(22); // salto del 10%, aceptado por tope de reps
-    expect(p.nextReps).toBe(8); // vuelve al piso del rango
-    expect(p.rationale).toContain("reps sobre el tope");
+    expect(p.nextLoadKg).toBe(16);
+    expect(p.nextReps).toBe(10);
+    expect(p.rationale).toContain("+14.3%");
   });
 
-  it("una rep antes del tope todavía acumula en vez de saltar", () => {
-    const max = rules.progressionModels.double.maxRepsOverCeiling;
-    const reps = 12 + max - 1;
+  it("INVARIANTE: para cualquier historial, nextReps ≤ tope del rango (con salto de carga posible)", () => {
+    const range = { min: 10, max: 12 };
+    for (const reps of [8, 10, 11, 12, 13, 14, 16, 20]) {
+      for (const rir of [0, 1, 2, 4]) {
+        const history = sessionLogs({
+          sessionId: "s1", exerciseId: "lat", sets: 3, loadKg: 14,
+          reps, rir, targetReps: 12, targetRir: 1, timestamp: "2026-01-05T10:00:00Z",
+        });
+        const p = nextPrescription({
+          ...base, repRange: range, targetRir: 1,
+          equipmentType: "dumbbell", currentLoadKg: 14, equipment: rack, exerciseHistory: history,
+        });
+        expect(p.nextReps, `reps=${reps} rir=${rir}`).toBeLessThanOrEqual(range.max);
+        expect(p.nextReps, `reps=${reps} rir=${rir}`).toBeGreaterThanOrEqual(range.min);
+      }
+    }
+  });
+
+  it("si el usuario registra MÁS reps que el tope, igual se sube carga al piso (no se premia con más reps)", () => {
     const history = sessionLogs({
-      sessionId: "s1", exerciseId: "curl", sets: 3, loadKg: 20,
-      reps, rir: 2, targetReps: reps, targetRir: 2, timestamp: "2026-01-05T10:00:00Z",
+      sessionId: "s1", exerciseId: "lat", sets: 3, loadKg: 14,
+      reps: 15, rir: 1, targetReps: 12, targetRir: 1, timestamp: "2026-01-05T10:00:00Z",
     });
     const p = nextPrescription({
-      ...base, equipmentType: "dumbbell", currentLoadKg: 20, exerciseHistory: history,
+      ...base, repRange: { min: 10, max: 12 }, targetRir: 1,
+      equipmentType: "dumbbell", currentLoadKg: 14, equipment: rack, exerciseHistory: history,
     });
-    expect(p.nextLoadKg).toBe(20);
-    expect(p.nextReps).toBe(reps + 1);
+    expect(p).toMatchObject({ nextLoadKg: 16, nextReps: 10 });
+  });
+
+  it("colchón opcional (maxRepsOverCeiling > 0): solo entonces suma reps sobre el tope, y las muestra", () => {
+    const cushion = {
+      ...rules,
+      progressionModels: {
+        ...rules.progressionModels,
+        double: { ...rules.progressionModels.double, maxRepsOverCeiling: 2 },
+      },
+    };
+    const mk = (reps: number) => sessionLogs({
+      sessionId: "s1", exerciseId: "lat", sets: 3, loadKg: 14,
+      reps, rir: 1, targetReps: reps, targetRir: 1, timestamp: "2026-01-05T10:00:00Z",
+    });
+    const args = { ...base, rules: cushion, repRange: { min: 10, max: 12 }, targetRir: 1, equipmentType: "dumbbell" as const, currentLoadKg: 14, equipment: rack };
+    expect(nextPrescription({ ...args, exerciseHistory: mk(12) })).toMatchObject({ nextLoadKg: 14, nextReps: 13 });
+    expect(nextPrescription({ ...args, exerciseHistory: mk(13) })).toMatchObject({ nextLoadKg: 14, nextReps: 14 });
+    expect(nextPrescription({ ...args, exerciseHistory: mk(14) })).toMatchObject({ nextLoadKg: 16, nextReps: 10 });
+    expect(nextPrescription({ ...args, exerciseHistory: mk(12) }).rationale).toContain("colchón 1/2");
   });
 });
 
