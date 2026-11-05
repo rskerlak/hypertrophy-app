@@ -265,9 +265,12 @@ describe("deriveBaseWeekFromPlan (continuación de meso)", () => {
     });
   });
 
-  it("aplica cargas heredadas por ejercicio y conserva las demás", () => {
+  it("aplica cargas heredadas por SLOT (día:índice) y conserva las demás", () => {
+    // Por slot y no por ejercicio: el mismo ejercicio en un día fuerte y en
+    // uno liviano hereda cargas distintas.
     const plan = gen("double", 5);
-    const bw = deriveBaseWeekFromPlan(plan, new Map([["bench", 87.5]]));
+    const benchIdx = plan.weeks[0].days[0].slots.findIndex((s) => s.exerciseId === "bench");
+    const bw = deriveBaseWeekFromPlan(plan, new Map([[`0:${benchIdx}`, 87.5]]));
     const benchSlot = bw.days[0].slots.find((s) => s.exerciseId === "bench")!;
     const rowSlot = bw.days[0].slots.find((s) => s.exerciseId === "row")!;
     expect(benchSlot.startingLoadKg).toBe(87.5);

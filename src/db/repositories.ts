@@ -7,13 +7,16 @@ import type {
   Exercise,
   MesocyclePlan,
   ProgressionModel,
+  RirBand,
   SetLog,
 } from "@/domain/types";
 import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
 import { deriveBaseWeekFromPlan, generateMesocycle } from "@/domain/mesocycle";
-import { groupBySession, nextPrescription } from "@/domain/progression";
-import { getDb, type ActivityRow, type BaseWeekRow, type MeasurementRow, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
+import { groupBySession, nextPrescription, sameProgressionTrack } from "@/domain/progression";
+import { suggestLoadFromHistory } from "@/domain/oneRepMax";
+import { z } from "zod";
+import { getDb, type ActivityRow, type BaseWeekRow, type BugReportRow, type MeasurementRow, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
 import { SEED_VERSION, defaultSettings, seedExercises } from "./seed";
 
 // ---- Bootstrap ----
@@ -126,6 +129,57 @@ export const baseWeekRepo = {
   async set(baseWeek: BaseWeek): Promise<void> {
     await getDb().baseWeek.put({ id: "default", ...baseWeek });
   },
+
+  /**
+   * Reemplaza la semana base por una rutina precargada. Las cargas iniciales
+   * NO quedan las fijas de la plantilla: para cada ejercicio con historial se
+   * estiman desde el 1RM de tu última sesión real (sin deloads) para el piso
+   * del rango, al RIR de referencia del config + el offset del día. Así el día
+   * fuerte arranca más pesado y el liviano más liviano. Sin historial (o en
+   * modo peso corporal, carga 0) se conserva la carga de la plantilla.
+   */
+  async applyTemplate(days: BaseWeek["days"]): Promise<{ estimated: number; kept: number }> {
+    const db = getDb();
+    const rules = getRules();
+    const [settings, exercises, sessions] = await Promise.all([
+      settingsRepo.get(),
+      exerciseRepo.byId(),
+      db.sessions.where("status").equals("completed").toArray(),
+    ]);
+    const okSessions = new Set(sessions.filter((x) => !x.isDeload).map((x) => x.id));
+    let estimated = 0;
+    let kept = 0;
+    const out: BaseWeek["days"] = [];
+    for (const day of days) {
+      const offset = day.intensity ? rules.dayIntensity[day.intensity].rirOffset : 0;
+      const refRir = Math.max(0, rules.dayIntensity.startingLoadReferenceRir + offset);
+      const slots = [];
+      for (const slot of day.slots) {
+        const ex = exercises.get(slot.exerciseId);
+        let load = slot.startingLoadKg;
+        if (ex && slot.startingLoadKg > 0 && ex.equipmentType !== "bodyweight") {
+          const history = (await db.setLogs.where("exerciseId").equals(slot.exerciseId).toArray()).filter((l) =>
+            okSessions.has(l.sessionId),
+          );
+          const suggested = suggestLoadFromHistory({
+            history,
+            targetReps: slot.repRange.min,
+            targetRir: refRir,
+            rules,
+            ctx: { type: ex.equipmentType, equipment: settings.equipment },
+          });
+          if (suggested !== null) {
+            load = suggested;
+            estimated++;
+          } else kept++;
+        } else kept++;
+        slots.push({ ...slot, repRange: { ...slot.repRange }, startingLoadKg: load });
+      }
+      out.push({ ...day, slots });
+    }
+    await baseWeekRepo.set({ days: out });
+    return { estimated, kept };
+  },
 };
 
 // ---- Mesociclos ----
@@ -152,6 +206,8 @@ export const mesocycleRepo = {
     /** Semana base explícita (continuación de meso); default: la semana base guardada. */
     baseWeekOverride?: BaseWeek;
     continuedFromId?: string;
+    /** Banda de RIR del meso (ej. 1–3). Sin valor: calendario del config. */
+    rirBand?: RirBand;
   }): Promise<MesocycleRow> {
     const db = getDb();
     const rules = getRules();
@@ -170,6 +226,7 @@ export const mesocycleRepo = {
       numAccumulationWeeks: args.numAccumulationWeeks,
       prioritizedMuscles: settings.prioritizedMuscles,
       rules,
+      rirBand: args.rirBand,
     });
 
     const meso: MesocycleRow = {
@@ -258,6 +315,7 @@ export const mesocycleRepo = {
       numAccumulationWeeks: meso.numAccumulationWeeks,
       prioritizedMuscles: settings.prioritizedMuscles,
       rules,
+      rirBand: meso.plan.rirBand,
     });
     await db.mesocycles.update(id, { plan });
     return { usedBaseWeek };
@@ -313,43 +371,46 @@ export const mesocycleRepo = {
       ...sessions.filter((x) => x.status === "completed" && !x.isDeload).map((x) => x.id),
     ];
     const logs = await db.setLogs.where("sessionId").anyOf(eligible).toArray();
-    const logsByExercise = new Map<string, SetLog[]>();
-    for (const l of logs) {
-      const arr = logsByExercise.get(l.exerciseId) ?? [];
-      arr.push(l);
-      logsByExercise.set(l.exerciseId, arr);
-    }
+    const sessionById = new Map(sessions.map((x) => [x.id, x]));
 
-    // Carga heredada por ejercicio: prescripción siguiente según el motor.
+    // Carga heredada POR SLOT: prescripción siguiente del motor usando solo el
+    // historial de la misma pista (un ejercicio en día fuerte y en día liviano
+    // hereda cargas distintas).
     const exercises = await exerciseRepo.byId();
     const overrides = new Map<string, number>();
     const week0 = source.plan.weeks.find((w) => !w.isDeload) ?? source.plan.weeks[0];
-    for (const day of week0.days) {
-      for (const slot of day.slots) {
-        if (overrides.has(slot.exerciseId)) continue;
-        const history = logsByExercise.get(slot.exerciseId) ?? [];
-        if (history.length === 0) continue; // sin datos: conserva la carga del plan
+    week0.days.forEach((day, dayIndex) => {
+      day.slots.forEach((slot, slotIndex) => {
+        const current = { slot, intensity: day.intensity };
+        const history = logs.filter((l) => {
+          if (l.exerciseId !== slot.exerciseId) return false;
+          const sess = sessionById.get(l.sessionId);
+          const pday = sess ? source.plan.weeks[sess.weekIndex]?.days[sess.dayIndex] : undefined;
+          const pslot = pday?.slots.find((x) => x.exerciseId === slot.exerciseId);
+          return !!pday && !!pslot && sameProgressionTrack(current, { slot: pslot, intensity: pday.intensity }, source.progressionModel);
+        });
+        if (history.length === 0) return; // sin datos: conserva la carga del plan
+        const ex = exercises.get(slot.exerciseId);
+        if (!ex) return;
         const bySession = groupBySession(history);
         const lastSession = bySession[bySession.length - 1];
         const lastLoad = Math.max(...lastSession.map((l) => l.actualLoadKg));
-        const ex = exercises.get(slot.exerciseId);
-        if (!ex) continue;
         const p = nextPrescription({
           exerciseHistory: history,
           model: source.progressionModel,
           targetRir: slot.targetRir,
           repRange: slot.repRange,
           currentLoadKg: lastLoad,
-          equipmentType: ex.equipmentType,
+          equipmentType: slot.targetLoadKg === 0 ? "bodyweight" : ex.equipmentType,
           equipment: settings.equipment,
           dayType: slot.dayType,
           weekIndex: 0,
           numAccumulationWeeks: source.plan.numAccumulationWeeks,
           rules,
         });
-        overrides.set(slot.exerciseId, p.nextLoadKg);
-      }
-    }
+        overrides.set(`${dayIndex}:${slotIndex}`, slot.targetLoadKg === 0 ? 0 : p.nextLoadKg);
+      });
+    });
 
     const baseWeek = deriveBaseWeekFromPlan(source.plan, overrides);
     const match = source.name.match(/^(.*) · (\d+)$/);
@@ -361,6 +422,7 @@ export const mesocycleRepo = {
       numAccumulationWeeks: source.plan.numAccumulationWeeks,
       baseWeekOverride: baseWeek,
       continuedFromId: sourceId,
+      rirBand: source.plan.rirBand,
     });
   },
 };
@@ -498,6 +560,65 @@ export const measurementRepo = {
   },
 };
 
+// ---- Bugs anotados por el usuario ----
+
+const bugReportInput = z.object({
+  text: z.string().trim().min(3, "Describí el bug en al menos 3 caracteres.").max(2000),
+  category: z.enum(["engine", "ui", "data", "other"]),
+  route: z.string().max(500),
+  buildSha: z.string().max(40),
+  context: z.object({
+    viewport: z.string().optional(),
+    visualViewport: z.string().optional(),
+    standalone: z.boolean().optional(),
+    userAgent: z.string().max(400).optional(),
+  }),
+});
+export type BugReportInput = z.input<typeof bugReportInput>;
+
+export const bugReportRepo = {
+  async all(): Promise<BugReportRow[]> {
+    return getDb().bugReports.orderBy("createdAt").reverse().toArray();
+  },
+  /**
+   * Valida y guarda un bug, enriqueciendo el contexto con el meso activo y,
+   * si la ruta es una sesión, con su semana y día (para reproducirlo).
+   */
+  async add(raw: BugReportInput): Promise<BugReportRow> {
+    const input = bugReportInput.parse(raw);
+    const db = getDb();
+    const active = await db.mesocycles.where("status").equals("active").first();
+    const sessionId = new URLSearchParams(input.route.split("?")[1] ?? "").get("id") ?? undefined;
+    const session =
+      input.route.startsWith("/session") && sessionId ? await db.sessions.get(sessionId) : undefined;
+    const row: BugReportRow = {
+      id: uuid(),
+      createdAt: new Date().toISOString(),
+      status: "open",
+      category: input.category,
+      text: input.text,
+      route: input.route,
+      buildSha: input.buildSha,
+      context: {
+        ...input.context,
+        activeMesocycleId: active?.id,
+        activeMesocycleName: active?.name,
+        sessionId: session?.id,
+        sessionWeekIndex: session?.weekIndex,
+        sessionDayLabel: session?.dayLabel,
+      },
+    };
+    await db.bugReports.put(row);
+    return row;
+  },
+  async setStatus(id: string, status: BugReportRow["status"]): Promise<void> {
+    await getDb().bugReports.update(id, { status });
+  },
+  async remove(id: string): Promise<void> {
+    await getDb().bugReports.delete(id);
+  },
+};
+
 // ---- Backup / restore (respaldo completo en JSON) ----
 
 export interface BackupFile {
@@ -514,6 +635,7 @@ export interface BackupFile {
     checkins: Checkin[];
     measurements?: MeasurementRow[];
     activities?: ActivityRow[];
+    bugReports?: BugReportRow[];
   };
 }
 
@@ -521,7 +643,7 @@ export const backupRepo = {
   /** Serializa TODA la base local a un objeto de respaldo. */
   async export(): Promise<BackupFile> {
     const db = getDb();
-    const [settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements, activities] =
+    const [settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements, activities, bugReports] =
       await Promise.all([
         db.settings.toArray(),
         db.baseWeek.toArray(),
@@ -532,12 +654,13 @@ export const backupRepo = {
         db.checkins.toArray(),
         db.measurements.toArray(),
         db.activities.toArray(),
+        db.bugReports.toArray(),
       ]);
     return {
       app: "hypertrophy",
       backupVersion: 1,
       exportedAt: new Date().toISOString(),
-      data: { settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements, activities },
+      data: { settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements, activities, bugReports },
     };
   },
 
@@ -558,12 +681,12 @@ export const backupRepo = {
     const db = getDb();
     await db.transaction(
       "rw",
-      [db.settings, db.baseWeek, db.exercises, db.mesocycles, db.sessions, db.setLogs, db.checkins, db.measurements, db.activities],
+      [db.settings, db.baseWeek, db.exercises, db.mesocycles, db.sessions, db.setLogs, db.checkins, db.measurements, db.activities, db.bugReports],
       async () => {
         await Promise.all([
           db.settings.clear(), db.baseWeek.clear(), db.exercises.clear(),
           db.mesocycles.clear(), db.sessions.clear(), db.setLogs.clear(), db.checkins.clear(),
-          db.measurements.clear(), db.activities.clear(),
+          db.measurements.clear(), db.activities.clear(), db.bugReports.clear(),
         ]);
         await db.settings.bulkPut(d.settings);
         await db.baseWeek.bulkPut(d.baseWeek);
@@ -574,6 +697,7 @@ export const backupRepo = {
         await db.checkins.bulkPut(d.checkins);
         if (Array.isArray(d.measurements)) await db.measurements.bulkPut(d.measurements);
         if (Array.isArray(d.activities)) await db.activities.bulkPut(d.activities);
+        if (Array.isArray(d.bugReports)) await db.bugReports.bulkPut(d.bugReports);
       },
     );
   },

@@ -82,7 +82,17 @@
       "8": [4, 3, 3, 2, 2, 1, 1, 0]
     },
     "barbellRiskFloor": 1,
-    "_barbellNote": "En ejercicios con riesgo (barra libre sobre el cuerpo: sentadilla, press banca sin seguros) el RIR objetivo minimo es 1, no 0."
+    "_barbellNote": "En ejercicios con riesgo (barra libre sobre el cuerpo: sentadilla, press banca sin seguros) el RIR objetivo minimo es 1, no 0.",
+    "selectableBand": { "min": 0, "max": 4 },
+    "_bandNote": "Limites de la banda de RIR que el usuario puede elegir por meso. Una banda 1-3 es defendible para hipertrofia: 1-2 RIR igualo al fallo en entrenados (Refalo 2024) y la curva RIR->hipertrofia se aplana cerca del fallo (Robinson 2024), asi que no llegar a 0 cuesta poco y reduce fatiga; mas de 3 RIR ya queda lejos del rango con buen estimulo por serie. Todo RIR planificado (deload incluido) se acota a la banda; el piso de barra sigue mandando por seguridad."
+  },
+
+  "dayIntensity": {
+    "_note": "Intensidad FIJA por dia de la semana base (dia fuerte / dia liviano), alternativa simple a DUP: el usuario define los rangos de reps por slot y el dia aplica un offset de RIR sobre el calendario semanal. Evidencia: ondular carga/reps entre dias es equivalente para hipertrofia con volumen igualado (Grgic 2017, d=-0.02); la eleccion es de preferencia/gestion de fatiga, no una optimizacion.",
+    "heavy": { "label": "Fuerte", "rirOffset": -1 },
+    "light": { "label": "Liviano", "rirOffset": 1 },
+    "startingLoadReferenceRir": 2,
+    "_startingLoadNote": "Al aplicar una rutina precargada, la carga inicial de cada ejercicio se estima desde el 1RM de tu ultima sesion real (Epley ajustado por RIR) para el piso del rango a este RIR de referencia + el offset del dia. Asi el dia fuerte arranca mas pesado y el liviano mas liviano sin adivinar."
   },
 
   "repRanges": {

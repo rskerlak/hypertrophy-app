@@ -1,5 +1,18 @@
 import type { NextConfig } from "next";
+import { execSync } from "node:child_process";
 import withSerwistInit from "@serwist/next";
+
+// SHA corto del build: viaja en cada bug anotado para saber qué versión corría.
+function buildSha(): string {
+  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 7);
+  try {
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+  } catch {
+    return "dev";
+  }
+}
 
 const withSerwist = withSerwistInit({
   swSrc: "src/app/sw.ts",
@@ -19,6 +32,7 @@ const nextConfig: NextConfig = {
   basePath: basePath || undefined,
   assetPrefix: basePath || undefined,
   images: { unoptimized: true },
+  env: { NEXT_PUBLIC_BUILD_SHA: buildSha() },
 };
 
 export default withSerwist(nextConfig);

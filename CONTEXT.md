@@ -93,7 +93,8 @@ Tipar todo con TypeScript. IDs `string` (uuid). Índices donde se filtra.
 - `defaultRepRange`?: `{ min, max }` (si se omite, se deriva por tipo desde config)
 
 **`baseWeek`** (singleton, id fijo `"default"`)
-- `days`: `Array<{ label: string; slots: Array<{ exerciseId: string; targetSets: number; repRange: { min, max }; startingLoadKg: number }> }>`
+- `days`: `Array<{ label: string; intensity?: "heavy" | "light"; slots: Array<{ exerciseId: string; targetSets: number; repRange: { min, max }; startingLoadKg: number }> }>`
+- `intensity` = día **fuerte** / **liviano** (sin valor = normal): aplica `dayIntensity[x].rirOffset` sobre el calendario de RIR de la semana. El mismo ejercicio en un día fuerte y en uno liviano progresa por **pistas separadas** (`sameProgressionTrack`): historial, carga heredada y reps no se mezclan.
 
 **`mesocycles`**
 - `id`, `name`, `createdAt`
@@ -101,6 +102,7 @@ Tipar todo con TypeScript. IDs `string` (uuid). Índices donde se filtra.
 - `progressionModel`: `"linear" | "double" | "dup" | "block"`
 - `status`: `"planned" | "active" | "paused" | "completed"` (paused = empezado y suspendido para intercalar otro meso; reanudable sin perder progreso)
 - `plan`: snapshot generado (el plan completo semana×día×slot con targets). Ver §6 `generateMesocycle`.
+- `plan.rirBand`?: `{ min, max }` — banda de RIR elegida al generar (default en UI 1–3). **Todo** RIR planificado, deload incluido, se acota a la banda; el `barbellRiskFloor` se aplica después (la seguridad manda). Se conserva al recalcular y al continuar.
 - `continuedFromId`?: id del meso origen si este se generó como continuación (hereda cargas desde el rendimiento real del meso previo, excluyendo la semana de deload).
 
 **`sessions`**
@@ -114,6 +116,10 @@ Tipar todo con TypeScript. IDs `string` (uuid). Índices donde se filtra.
 - `targetLoadKg`, `targetReps`, `targetRir`
 - `actualLoadKg`, `actualReps`, `actualRir`
 - `timestamp`
+
+**`bugReports`** (v4)
+- `id`, `createdAt` (índice), `status: "open" | "resolved"`, `category: "engine" | "ui" | "data" | "other"`, `text`, `route`, `buildSha`, `context { activeMesocycleId?, sessionId?, sessionWeekIndex?, sessionDayLabel?, viewport?, visualViewport?, standalone?, userAgent? }`
+- Anotado por el usuario desde el botón del encabezado de cualquier pantalla; viaja en el respaldo JSON para reproducirlo después con los mismos datos. `NEXT_PUBLIC_BUILD_SHA` se inyecta en build (GITHUB_SHA o `git rev-parse`).
 
 **`checkins`**
 - `id`, `sessionId` (índice), `date`
@@ -133,7 +139,7 @@ Configurar perfil de experiencia, peso corporal, inventario de equipamiento (dis
 **Aceptación:** los defaults se leen de `rules.config.json`; los cambios persisten en `settings`; el inventario de equipamiento alimenta el redondeo de cargas.
 
 ### F2 — Definir semana base
-Crear días; añadir ejercicios a cada día con series objetivo, rango de reps y peso inicial; marcar `isSwappable` y `swapCandidates`.
+Crear días; añadir ejercicios a cada día con series objetivo, rango de reps y peso inicial; marcar `isSwappable` y `swapCandidates`. Cada día puede marcarse **fuerte / normal / liviano**. Al aplicar una **rutina precargada**, `baseWeekRepo.applyTemplate` re-estima cada carga inicial desde el 1RM de la última sesión real del ejercicio (sin deloads) para el piso del rango al RIR de referencia + offset del día; sin historial conserva la carga de la plantilla.
 **Aceptación:** se puede crear/editar/reordenar; el volumen semanal por músculo (en sets fraccionados) se calcula y muestra en vivo, comparado contra MEV/MAV/MRV del perfil (con etiqueta de "heurístico").
 
 ### F3 — Generar mesociclo
@@ -185,7 +191,7 @@ generateMesocycle(input: {
   rules: Rules;
 }): MesocyclePlan
 ```
-Pasos: (1) calcular volumen semanal base por músculo desde `baseWeek` (conteo fraccionado). (2) `rampVolume` según `volumeRamp.mode`: **`finalWeeksBump` (default)** — el volumen semanal se mantiene en el de la semana base y solo las últimas `bumpWeeks` semanas agregan sets extra acotados (`maxExtraSetsPerMusclePerWeek`) a músculos priorizados, sin superar MAV; la progresión primaria es reps/carga, no series (Barsuhn 2025, ver SCIENCE §1/§6). `linear` (legado) — interpolar hacia MAV (o MRV si `pushToMrv`) con `rampAggressiveness`. `none` — volumen constante. (3) `distributeVolumeByPriority`: repartir los sets añadidos hacia músculos priorizados con tope duro `maxExtraSetsPerSlotPerWeek` por slot (nunca apilar el extra semanal en una sola sesión). (4) asignar RIR objetivo por semana desde `rirSchedule.byAccumulationLength[N]`. (5) para el modelo elegido, derivar targets de reps/carga por día (DUP ondula por grupo muscular; DUP y block modifican la estructura intra-semana, no el volumen semanal total). (6) añadir la semana de deload desde `deloadStructure`.
+Entrada opcional `rirBand`. Pasos: (1) calcular volumen semanal base por músculo desde `baseWeek` (conteo fraccionado). (2) `rampVolume` según `volumeRamp.mode`: **`finalWeeksBump` (default)** — el volumen semanal se mantiene en el de la semana base y solo las últimas `bumpWeeks` semanas agregan sets extra acotados (`maxExtraSetsPerMusclePerWeek`) a músculos priorizados, sin superar MAV; la progresión primaria es reps/carga, no series (Barsuhn 2025, ver SCIENCE §1/§6). `linear` (legado) — interpolar hacia MAV (o MRV si `pushToMrv`) con `rampAggressiveness`. `none` — volumen constante. (3) `distributeVolumeByPriority`: repartir los sets añadidos hacia músculos priorizados con tope duro `maxExtraSetsPerSlotPerWeek` por slot (nunca apilar el extra semanal en una sola sesión). (4) asignar RIR objetivo por slot con `plannedRir`: calendario `rirSchedule.byAccumulationLength[N]` + offset del día (`dayIntensity`, fuerte −1 / liviano +1) + offset del modelo (DUP/block), acotado a `rirBand`, y por último el piso de barra. (5) para el modelo elegido, derivar targets de reps/carga por día (DUP ondula por grupo muscular; DUP y block modifican la estructura intra-semana, no el volumen semanal total). (6) añadir la semana de deload desde `deloadStructure`.
 **Invariantes:** el volumen semanal total por músculo es igual entre modelos para la misma semana; ningún músculo supera su MRV de perfil; el extra por slot respeta `maxExtraSetsPerSlotPerWeek`; el deload queda por debajo de MEV.
 
 ### `nextPrescription`

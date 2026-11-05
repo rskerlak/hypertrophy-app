@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { BugReportButton } from "./BugReport";
 
 export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -132,6 +133,8 @@ export function Badge({
 }
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
+  // El botón de bugs vive en el encabezado de TODAS las pantallas: sin
+  // botones flotantes extra que tapen contenido mientras se entrena.
   return (
     <header className="mb-6 flex items-end justify-between gap-3">
       <div>
@@ -142,7 +145,10 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
         )}
         <h1 className="text-[28px] font-bold leading-none tracking-tight">{title}</h1>
       </div>
-      {action}
+      <div className="flex shrink-0 items-center gap-2">
+        {action}
+        <BugReportButton />
+      </div>
     </header>
   );
 }

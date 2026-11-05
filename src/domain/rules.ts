@@ -47,8 +47,23 @@ export const rulesSchema = z
       .object({
         byAccumulationLength: z.record(z.string(), z.array(z.number())),
         barbellRiskFloor: z.number(),
+        selectableBand: z
+          .object({ min: z.number().int().min(0), max: z.number().int().min(0) })
+          .default({ min: 0, max: 4 }),
       })
       .passthrough(),
+    dayIntensity: z
+      .object({
+        heavy: z.object({ label: z.string(), rirOffset: z.number().int() }).passthrough(),
+        light: z.object({ label: z.string(), rirOffset: z.number().int() }).passthrough(),
+        startingLoadReferenceRir: z.number().min(0),
+      })
+      .passthrough()
+      .default({
+        heavy: { label: "Fuerte", rirOffset: -1 },
+        light: { label: "Liviano", rirOffset: 1 },
+        startingLoadReferenceRir: 2,
+      }),
     repRanges: z
       .object({
         compound: repRangeSchema,

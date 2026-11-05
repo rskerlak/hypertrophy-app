@@ -8,7 +8,7 @@ import { getRules } from "@/lib/rulesLoader";
 import { effectiveLandmarks } from "@/domain/rules";
 import { weeklyVolumeByMuscle } from "@/domain/volume";
 import { suggestVolumeTrim, trimRoleBySlot } from "@/domain/volumeTrim";
-import type { BaseWeek, Exercise, ProgressionModel } from "@/domain/types";
+import type { BaseWeek, DayIntensity, Exercise, ProgressionModel, RirBand } from "@/domain/types";
 import { Badge, Button, Card, EditableNumber, EmptyState, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { VolumeBar } from "@/components/VolumeBar";
 import { PROGRESSION_LABELS, fmtKg, fmtSets, muscleLabel } from "@/lib/format";
@@ -187,9 +187,16 @@ export default function PlanPage() {
               <Button
                 size="sm"
                 className="mt-3 w-full"
-                onClick={() =>
-                  save({ days: t.days.map((d) => ({ ...d, slots: d.slots.map((s) => ({ ...s })) })) })
-                }
+                onClick={async () => {
+                  const r = await baseWeekRepo.applyTemplate(
+                    t.days.map((d) => ({ ...d, slots: d.slots.map((s) => ({ ...s, repRange: { ...s.repRange } })) })),
+                  );
+                  if (r.estimated > 0) {
+                    alert(
+                      `Rutina aplicada. ${r.estimated} carga${r.estimated === 1 ? "" : "s"} estimada${r.estimated === 1 ? "" : "s"} desde tu historial real (1RM de tu última sesión, ajustado al rango y al RIR de cada día)${r.kept > 0 ? `; ${r.kept} sin historial quedaron como en la plantilla` : ""}. Revisalas antes de generar.`,
+                    );
+                  }
+                }}
               >
                 Usar como base (editable)
               </Button>
@@ -218,6 +225,20 @@ export default function PlanPage() {
                 ✕
               </button>
             </div>
+
+            <IntensityPicker
+              value={day.intensity}
+              onChange={(intensity) => {
+                const days = baseWeek.days.map((d, i) => {
+                  if (i !== dayIdx) return d;
+                  const next = { ...d };
+                  if (intensity) next.intensity = intensity;
+                  else delete next.intensity;
+                  return next;
+                });
+                save({ days });
+              }}
+            />
 
             <div className="space-y-2">
               {day.slots.map((slot, slotIdx) => {
@@ -310,8 +331,8 @@ export default function PlanPage() {
               defaultWeeks={rules.experienceProfiles[settings.experienceProfile].defaultAccumulationWeeks}
               maxWeeks={rules.experienceProfiles[settings.experienceProfile].maxAccumulationWeeks}
               onCancel={() => setShowGen(false)}
-              onGenerate={async (name, model, weeks) => {
-                await mesocycleRepo.createFromBaseWeek({ name, progressionModel: model, numAccumulationWeeks: weeks });
+              onGenerate={async (name, model, weeks, rirBand) => {
+                await mesocycleRepo.createFromBaseWeek({ name, progressionModel: model, numAccumulationWeeks: weeks, rirBand });
                 router.push("/");
               }}
             />
@@ -332,12 +353,17 @@ function GenerateForm({
   defaultModel: ProgressionModel;
   defaultWeeks: number;
   maxWeeks: number;
-  onGenerate: (name: string, model: ProgressionModel, weeks: number) => void;
+  onGenerate: (name: string, model: ProgressionModel, weeks: number, rirBand: RirBand) => void;
   onCancel: () => void;
 }) {
+  const rules = getRules();
   const [name, setName] = useState("Mesociclo 1");
   const [model, setModel] = useState<ProgressionModel>(defaultModel);
   const [weeks, setWeeks] = useState(defaultWeeks);
+  // Banda de RIR del meso. Default 1–3: 1–2 RIR iguala al fallo en entrenados
+  // y más de 3 queda lejos del estímulo (ver rules.config _bandNote).
+  const lim = rules.rirSchedule.selectableBand;
+  const [band, setBand] = useState<RirBand>({ min: Math.max(lim.min, 1), max: Math.min(lim.max, 3) });
 
   return (
     <Card className="space-y-4">
@@ -364,15 +390,85 @@ function GenerateForm({
         <Stepper value={weeks} min={2} step={1} onChange={(v) => setWeeks(Math.min(v, maxWeeks))} suffix="sem" />
         <p className="mt-1.5 text-xs text-[var(--muted)]">Máximo para tu perfil: {maxWeeks} semanas.</p>
       </div>
+      <div>
+        <Label>Banda de RIR del meso</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <Stepper
+            value={band.min}
+            min={lim.min}
+            step={1}
+            suffix="mín"
+            onChange={(v) => setBand({ min: Math.min(v, band.max), max: band.max })}
+          />
+          <Stepper
+            value={band.max}
+            min={band.min}
+            step={1}
+            suffix="máx"
+            onChange={(v) => setBand({ min: band.min, max: Math.min(v, lim.max) })}
+          />
+        </div>
+        <p className="mt-1.5 text-xs text-[var(--muted)]">
+          Todo RIR planificado (días fuertes/livianos y deload incluidos) se acota a esta banda.
+          1–3 es lo recomendado: 1–2 RIR iguala al fallo en entrenados (Refalo 2024) y más de 3
+          queda lejos del estímulo. El piso de 1 en barra libre se mantiene por seguridad.
+        </p>
+      </div>
       <div className="flex gap-2">
         <Button variant="secondary" className="flex-1" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button className="flex-1" onClick={() => onGenerate(name.trim() || "Mesociclo", model, weeks)}>
+        <Button className="flex-1" onClick={() => onGenerate(name.trim() || "Mesociclo", model, weeks, band)}>
           Generar
         </Button>
       </div>
     </Card>
+  );
+}
+
+/**
+ * Intensidad fija del día: fuerte (menos RIR) / normal / liviano (más RIR).
+ * El mismo ejercicio en un día fuerte y en uno liviano progresa por separado.
+ */
+function IntensityPicker({
+  value,
+  onChange,
+}: {
+  value?: DayIntensity;
+  onChange: (v: DayIntensity | undefined) => void;
+}) {
+  const rules = getRules();
+  const opts: Array<{ v: DayIntensity | undefined; label: string; hint: string }> = [
+    { v: "heavy", label: rules.dayIntensity.heavy.label, hint: `RIR ${rules.dayIntensity.heavy.rirOffset}` },
+    { v: undefined, label: "Normal", hint: "RIR ±0" },
+    { v: "light", label: rules.dayIntensity.light.label, hint: `RIR +${rules.dayIntensity.light.rirOffset}` },
+  ];
+  return (
+    <div className="mb-3 flex gap-1 rounded-xl bg-[var(--surface-2)] p-1">
+      {opts.map((o) => {
+        const active = (value ?? undefined) === o.v;
+        return (
+          <button
+            key={o.label}
+            type="button"
+            onClick={() => onChange(o.v)}
+            className={
+              "flex flex-1 flex-col items-center rounded-lg py-1.5 text-xs font-semibold transition-colors " +
+              (active
+                ? o.v === "heavy"
+                  ? "bg-[var(--danger)]/15 text-[var(--danger)]"
+                  : o.v === "light"
+                    ? "bg-[var(--primary)]/15 text-[var(--primary)]"
+                    : "bg-[var(--surface)] text-[var(--foreground)] shadow-sm"
+                : "text-[var(--muted)]")
+            }
+          >
+            {o.label}
+            <span className="text-[10px] font-normal opacity-70">{o.hint}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

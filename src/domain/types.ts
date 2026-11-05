@@ -11,6 +11,17 @@ export type EquipmentType =
   | "bodyweight";
 export type ResistanceProfile = "stretch" | "mid" | "short";
 export type DupDayType = "heavy" | "medium" | "light";
+/**
+ * Intensidad fija de un día de la semana base (independiente de DUP):
+ * "heavy" = día fuerte (menos RIR, rangos de reps más bajos los define el
+ * usuario por slot), "light" = día liviano (más RIR). Sin valor = normal.
+ */
+export type DayIntensity = "heavy" | "light";
+/** Banda de RIR permitida en un meso: todo RIR planificado se acota a [min, max]. */
+export interface RirBand {
+  min: number;
+  max: number;
+}
 
 export interface RepRange {
   min: number;
@@ -57,6 +68,7 @@ export interface BaseWeekSlot {
 export interface BaseWeekDay {
   label: string;
   slots: BaseWeekSlot[];
+  intensity?: DayIntensity;
 }
 
 export interface BaseWeek {
@@ -103,6 +115,7 @@ export interface PlannedSlot {
 export interface PlannedDay {
   label: string;
   slots: PlannedSlot[];
+  intensity?: DayIntensity;
 }
 
 export interface PlannedWeek {
@@ -118,6 +131,8 @@ export interface MesocyclePlan {
   progressionModel: ProgressionModel;
   numAccumulationWeeks: number;
   weeks: PlannedWeek[];
+  /** Banda de RIR elegida al generar (se conserva al recalcular/continuar). */
+  rirBand?: RirBand;
 }
 
 // ---- Señales de fatiga / deload ----

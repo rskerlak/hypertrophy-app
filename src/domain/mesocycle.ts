@@ -6,6 +6,7 @@ import type { Rules } from "./rules";
 import { effectiveLandmarks, rirScheduleForLength } from "./rules";
 import type {
   BaseWeek,
+  DayIntensity,
   DupDayType,
   Exercise,
   ExperienceProfileId,
@@ -14,6 +15,7 @@ import type {
   PlannedSlot,
   PlannedWeek,
   ProgressionModel,
+  RirBand,
 } from "./types";
 import { addExerciseVolume, emptyVolume, weeklyVolumeByMuscle, type VolumeByMuscle } from "./volume";
 
@@ -25,6 +27,30 @@ export interface GenerateMesocycleInput {
   numAccumulationWeeks: number;
   prioritizedMuscles: string[];
   rules: Rules;
+  /** Banda de RIR del meso (ej. 1–3). Sin valor: el calendario del config tal cual. */
+  rirBand?: RirBand;
+}
+
+/**
+ * RIR objetivo final de un slot: calendario semanal + offset del día
+ * (fuerte/liviano) + offset del modelo, acotado a la banda del meso. El piso
+ * de barra se aplica al final: la seguridad manda sobre la banda.
+ */
+export function plannedRir(args: {
+  baseRir: number;
+  intensity?: DayIntensity;
+  modelOffset?: number;
+  band?: RirBand;
+  isBarbell: boolean;
+  rules: Rules;
+}): number {
+  const { rules } = args;
+  let rir = args.baseRir + (args.modelOffset ?? 0);
+  if (args.intensity) rir += rules.dayIntensity[args.intensity].rirOffset;
+  if (args.band) rir = Math.min(args.band.max, Math.max(args.band.min, rir));
+  else rir = Math.max(0, rir);
+  if (args.isBarbell) rir = Math.max(rir, rules.rirSchedule.barbellRiskFloor);
+  return rir;
 }
 
 const DUP_CYCLE: DupDayType[] = ["heavy", "medium", "light"];
@@ -81,18 +107,20 @@ export function dupDayTypesForWeek(
  */
 export function deriveBaseWeekFromPlan(
   plan: MesocyclePlan,
-  loadOverridesByExercise?: Map<string, number>,
+  /** Cargas heredadas por slot, clave `${dayIndex}:${slotIndex}`. */
+  loadOverridesBySlot?: Map<string, number>,
 ): BaseWeek {
   const week0 = plan.weeks.find((w) => !w.isDeload) ?? plan.weeks[0];
   return {
-    days: week0.days.map((day) => ({
+    days: week0.days.map((day, dayIndex) => ({
       label: day.label,
-      slots: day.slots.map((slot) => ({
+      ...(day.intensity ? { intensity: day.intensity } : {}),
+      slots: day.slots.map((slot, slotIndex) => ({
         exerciseId: slot.exerciseId,
         targetSets: slot.sets,
         repRange: { ...slot.repRange },
         startingLoadKg:
-          loadOverridesByExercise?.get(slot.exerciseId) ?? slot.targetLoadKg,
+          loadOverridesBySlot?.get(`${dayIndex}:${slotIndex}`) ?? slot.targetLoadKg,
       })),
     })),
   };
@@ -119,13 +147,19 @@ export function generateMesocycle(input: GenerateMesocycleInput): MesocyclePlan 
         progressionModel,
         prioritizedMuscles,
         rules,
+        rirBand: input.rirBand,
       }),
     );
   }
 
-  weeks.push(buildDeloadWeek(weeks[0], weeks[N - 1], exercisesById, profile, rules, N));
+  weeks.push(buildDeloadWeek(weeks[0], weeks[N - 1], exercisesById, profile, rules, N, input.rirBand));
 
-  return { progressionModel, numAccumulationWeeks: N, weeks };
+  return {
+    progressionModel,
+    numAccumulationWeeks: N,
+    weeks,
+    ...(input.rirBand ? { rirBand: { ...input.rirBand } } : {}),
+  };
 }
 
 /**
@@ -181,8 +215,9 @@ function buildAccumulationWeek(args: {
   progressionModel: ProgressionModel;
   prioritizedMuscles: string[];
   rules: Rules;
+  rirBand?: RirBand;
 }): PlannedWeek {
-  const { baseWeek, exercisesById, baseVol, weekIndex, numAccumulationWeeks, profile, progressionModel, prioritizedMuscles, rules } = args;
+  const { baseWeek, exercisesById, baseVol, weekIndex, numAccumulationWeeks, profile, progressionModel, prioritizedMuscles, rules, rirBand } = args;
   const rirSchedule = rirScheduleForLength(rules, numAccumulationWeeks);
   const baseRir = rirSchedule[weekIndex];
 
@@ -224,26 +259,31 @@ function buildAccumulationWeek(args: {
       const ex = exercisesById.get(slot.exerciseId);
       const extra = extraSetsBySlot.get(`${dayIndex}:${slotIndex}`) ?? 0;
       let repRange = slot.repRange;
-      let rir = baseRir;
+      let modelOffset = 0;
       let phase: string | undefined;
       let slotDayType: DupDayType | undefined;
 
       if (progressionModel === "dup") {
         const dt = rules.progressionModels.dup.dayTypes[dayType];
         repRange = dt.repRange;
-        rir = baseRir + dt.targetRirOffset;
+        modelOffset = dt.targetRirOffset;
         slotDayType = dayType;
       } else if (progressionModel === "block") {
         const p = blockPhase(rules, weekIndex, numAccumulationWeeks);
         repRange = p.repRange;
-        rir = baseRir + p.rirBias;
+        modelOffset = p.rirBias;
         phase = p.name;
       }
 
-      // Piso de RIR en ejercicios con riesgo de barra.
-      if (ex?.equipmentType === "barbell") {
-        rir = Math.max(rir, rules.rirSchedule.barbellRiskFloor);
-      }
+      // Calendario + día fuerte/liviano + modelo, acotado a la banda; piso de barra.
+      const rir = plannedRir({
+        baseRir,
+        intensity: day.intensity,
+        modelOffset,
+        band: rirBand,
+        isBarbell: ex?.equipmentType === "barbell",
+        rules,
+      });
 
       return {
         exerciseId: slot.exerciseId,
@@ -255,7 +295,7 @@ function buildAccumulationWeek(args: {
         phase,
       };
     });
-    return { label: day.label, slots };
+    return { label: day.label, slots, ...(day.intensity ? { intensity: day.intensity } : {}) };
   });
 
   // 4. Volumen resultante de la semana.
@@ -365,6 +405,7 @@ function buildDeloadWeek(
   profile: ExperienceProfileId,
   rules: Rules,
   numAccumulationWeeks: number,
+  rirBand?: RirBand,
 ): PlannedWeek {
   const d = rules.deloadStructure;
 
@@ -384,6 +425,7 @@ function buildDeloadWeek(
 
   const days: PlannedDay[] = week1.days.map((day) => ({
     label: `${day.label} (deload)`,
+    ...(day.intensity ? { intensity: day.intensity } : {}),
     slots: day.slots.map((slot) => {
       const ex = exercisesById.get(slot.exerciseId);
       const f = ex ? (factorByMuscle[ex.primaryMuscle] ?? d.volumeFractionFallback) : d.volumeFractionFallback;
@@ -394,7 +436,8 @@ function buildDeloadWeek(
           min: Math.max(1, Math.round(slot.repRange.min * d.repsFraction)),
           max: Math.max(1, Math.round(slot.repRange.max * d.repsFraction)),
         },
-        targetRir: d.targetRir,
+        // El deload también respeta la banda del meso (ej. 1–3 → RIR 3).
+        targetRir: rirBand ? Math.min(rirBand.max, Math.max(rirBand.min, d.targetRir)) : d.targetRir,
         targetLoadKg: slot.targetLoadKg, // carga de semana 1; la 2ª mitad usa la fracción de la política
       };
     }),

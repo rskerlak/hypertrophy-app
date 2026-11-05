@@ -1,8 +1,84 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "./ui";
+
+/** Campos que abren el teclado del celular (no selects ni checkboxes). */
+function isTypingTarget(el: EventTarget | null): boolean {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.isContentEditable || el.tagName === "TEXTAREA") return true;
+  if (el.tagName !== "INPUT") return false;
+  const type = (el as HTMLInputElement).type;
+  return !["checkbox", "radio", "button", "submit", "file", "range", "color"].includes(type);
+}
+
+/**
+ * Cuándo esconder la barra. En iOS un elemento `position: fixed` queda
+ * "suelto" a mitad de pantalla mientras el teclado está abierto, y a veces
+ * sigue desplazado después de cerrarlo hasta el próximo scroll. Por eso:
+ *  - se oculta mientras hay un campo de texto con foco o el teclado abierto
+ *    (visualViewport más bajo que la ventana);
+ *  - al cerrar el teclado se fuerza un re-layout para que vuelva al borde;
+ *  - en la sesión de entrenamiento se esconde al bajar y reaparece al subir,
+ *    para no tapar los botones de Log mientras se entrena.
+ */
+function useNavHidden(autoHideOnScroll: boolean): boolean {
+  const [typing, setTyping] = useState(false);
+  const [keyboard, setKeyboard] = useState(false);
+  const [scrolledAway, setScrolledAway] = useState(false);
+
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      if (isTypingTarget(e.target)) setTyping(true);
+    };
+    const onFocusOut = () => {
+      // Esperar a que el foco aterrice en el siguiente campo (Tab / "siguiente").
+      setTimeout(() => {
+        if (isTypingTarget(document.activeElement)) return;
+        setTyping(false);
+        // iOS: re-layout para que los elementos fixed vuelvan a su lugar.
+        window.scrollTo(window.scrollX, window.scrollY);
+      }, 60);
+    };
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+
+    const vv = window.visualViewport;
+    const onViewport = () => {
+      if (!vv) return;
+      // Teclado abierto ≈ el viewport visible perdió más de un cuarto de alto.
+      setKeyboard(vv.height < window.innerHeight * 0.75);
+    };
+    vv?.addEventListener("resize", onViewport);
+    onViewport();
+
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+      vv?.removeEventListener("resize", onViewport);
+    };
+  }, []);
+
+  useEffect(() => {
+    setScrolledAway(false);
+    if (!autoHideOnScroll) return;
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const nearBottom = window.innerHeight + y >= document.documentElement.scrollHeight - 4;
+      if (y < 80) setScrolledAway(false);
+      else if (y > lastY + 6 && !nearBottom) setScrolledAway(true);
+      else if (y < lastY - 6) setScrolledAway(false);
+      lastY = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [autoHideOnScroll]);
+
+  return typing || keyboard || scrolledAway;
+}
 
 function Icon({ d, filled }: { d: string; filled?: boolean }) {
   return (
@@ -41,8 +117,17 @@ const items = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  const hidden = useNavHidden(pathname.startsWith("/session"));
   return (
-    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-50 pb-[max(env(safe-area-inset-bottom),12px)]">
+    <nav
+      data-hidden={hidden || undefined}
+      aria-hidden={hidden || undefined}
+      inert={hidden || undefined}
+      className={cn(
+        "pointer-events-none fixed inset-x-0 bottom-0 z-50 pb-[max(env(safe-area-inset-bottom),12px)] transition-[transform,opacity] duration-200 ease-out",
+        hidden && "translate-y-[calc(100%+16px)] opacity-0",
+      )}
+    >
       <div className="pointer-events-auto mx-auto flex w-[calc(100%-32px)] max-w-[420px] items-stretch justify-around rounded-3xl border border-[var(--border)] bg-[var(--glass)] px-1.5 py-1.5 shadow-[var(--pop-shadow)] backdrop-blur-xl">
         {items.map((item) => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);

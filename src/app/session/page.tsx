@@ -117,7 +117,13 @@ function SessionRunner() {
       <PageHeader
         title={session.dayLabel}
         subtitle={`${loggedSets}/${totalSets} series`}
-        action={isDeload ? <Badge tone="warning">Deload</Badge> : undefined}
+        action={
+          <>
+            {view.intensity === "heavy" && <Badge tone="danger">Fuerte</Badge>}
+            {view.intensity === "light" && <Badge tone="primary">Liviano</Badge>}
+            {isDeload && <Badge tone="warning">Deload</Badge>}
+          </>
+        }
       />
 
       {!done && <RestTimer resetKey={restKey} />}

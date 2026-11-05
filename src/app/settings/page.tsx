@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Card, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { InstallCard } from "@/components/InstallCard";
 import { BackupCard } from "@/components/BackupCard";
+import { BugListCard } from "@/components/BugReport";
 import { applyTheme, type Theme } from "@/lib/theme";
 import { PROFILE_LABELS, fmtKg, muscleLabel } from "@/lib/format";
 import type { ExperienceProfileId } from "@/domain/types";
@@ -298,6 +299,14 @@ export default function SettingsPage() {
       <div className="mb-4">
         <BackupCard />
       </div>
+
+      <div className="mb-4">
+        <BugListCard />
+      </div>
+
+      <p className="mb-4 text-center text-[11px] text-[var(--muted)]/70">
+        Versión {process.env.NEXT_PUBLIC_BUILD_SHA ?? "dev"}
+      </p>
 
       <HonestNote>
         Los landmarks de volumen (MEV/MAV/MRV) y los disparadores de deload son heurísticas de

@@ -1,7 +1,7 @@
 // Compone el plan del día con la autorregulación (F6). No es dominio puro
 // (lee repos), pero delega todo el cálculo a src/domain.
 
-import { groupBySession, nextPrescription } from "@/domain/progression";
+import { groupBySession, nextPrescription, sameProgressionTrack } from "@/domain/progression";
 import {
   assessRirCalibration,
   calibratedRirCap,
@@ -9,7 +9,7 @@ import {
   type RirCalibration,
 } from "@/domain/rirCalibration";
 import { getRules } from "@/lib/rulesLoader";
-import type { Equipment, Exercise, PlannedSlot, SetLog } from "@/domain/types";
+import type { DayIntensity, Equipment, Exercise, PlannedSlot, SetLog } from "@/domain/types";
 import { mesocycleRepo, sessionRepo, setLogRepo, exerciseRepo, settingsRepo } from "@/db/repositories";
 import type { SessionRow } from "@/db/schema";
 
@@ -30,6 +30,8 @@ export interface SessionView {
   equipment: Equipment;
   /** Calibración medida del RIR del usuario (para mostrar y para el motor). */
   rirCalibration: RirCalibration;
+  /** Intensidad fija del día (fuerte/liviano), si la semana base la define. */
+  intensity?: DayIntensity;
 }
 
 export async function buildSessionView(sessionId: string): Promise<SessionView | null> {
@@ -68,11 +70,10 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
     // En DUP el mismo ejercicio rota de zona (pesado/medio/liviano): la doble
     // progresión debe comparar solo contra sesiones de la MISMA zona.
     const history = await exerciseHistoryBefore(
-      planned.exerciseId,
+      { slot: planned, intensity: day.intensity },
       meso,
       session.weekIndex,
       session.dayIndex,
-      meso.progressionModel === "dup" ? planned.dayType : undefined,
     );
 
     // Carga base = la ÚLTIMA carga realmente registrada de este ejercicio, no
@@ -126,39 +127,39 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
     slots,
     equipment: settings.equipment,
     rirCalibration,
+    intensity: day.intensity,
   };
 }
 
 /**
- * SetLogs de un ejercicio en sesiones completadas del meso previas a (week, day).
- * Si se pasa `dayType` (DUP), solo cuenta sesiones donde el slot planificado de
- * ese ejercicio estaba en la misma zona.
+ * SetLogs de un ejercicio en sesiones completadas del meso previas a (week, day),
+ * solo de sesiones de la MISMA pista de progresión (ver sameProgressionTrack):
+ * el mismo ejercicio en un día fuerte y en uno liviano progresa por separado.
  */
 async function exerciseHistoryBefore(
-  exerciseId: string,
+  current: { slot: PlannedSlot; intensity?: DayIntensity },
   meso: NonNullable<Awaited<ReturnType<typeof mesocycleRepo.get>>>,
   weekIndex: number,
   dayIndex: number,
-  dayType?: SessionView["slots"][number]["planned"]["dayType"],
 ): Promise<SetLog[]> {
+  const exerciseId = current.slot.exerciseId;
   const [allLogs, sessions] = await Promise.all([
     setLogRepo.forExercise(exerciseId),
     sessionRepo.forMesocycle(meso.id),
   ]);
   const order = (w: number, d: number) => w * 1000 + d;
   const cutoff = order(weekIndex, dayIndex);
-  const sameZone = (s: { weekIndex: number; dayIndex: number }) => {
-    if (!dayType) return true;
-    const slot = meso.plan.weeks[s.weekIndex]?.days[s.dayIndex]?.slots.find(
-      (x) => x.exerciseId === exerciseId,
-    );
-    return slot?.dayType === dayType;
+  const sameTrack = (s: { weekIndex: number; dayIndex: number }) => {
+    const day = meso.plan.weeks[s.weekIndex]?.days[s.dayIndex];
+    const slot = day?.slots.find((x) => x.exerciseId === exerciseId);
+    if (!day || !slot) return false;
+    return sameProgressionTrack(current, { slot, intensity: day.intensity }, meso.progressionModel);
   };
   const eligible = new Set(
     sessions
       .filter(
         (s) =>
-          s.status === "completed" && order(s.weekIndex, s.dayIndex) < cutoff && sameZone(s),
+          s.status === "completed" && order(s.weekIndex, s.dayIndex) < cutoff && sameTrack(s),
       )
       .map((s) => s.id),
   );

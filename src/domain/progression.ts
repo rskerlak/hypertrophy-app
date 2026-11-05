@@ -3,6 +3,7 @@
 
 import type { Rules } from "./rules";
 import type {
+  DayIntensity,
   DupDayType,
   EquipmentType,
   Equipment,
@@ -58,6 +59,27 @@ export function groupBySession(history: SetLog[]): SetLog[][] {
   );
   for (const s of sessions) s.sort((a, b) => a.setIndex - b.setIndex);
   return sessions;
+}
+
+/**
+ * ¿Dos apariciones planificadas de un ejercicio comparten PISTA de progresión?
+ * Un mismo ejercicio puede estar en varios días con prescripciones distintas
+ * (banca en día fuerte 6–8 y en día liviano 10–12): si compartieran historial,
+ * el día liviano heredaría la carga y las reps del fuerte. Reglas:
+ *  - distinta intensidad de día (fuerte/normal/liviano) → pistas separadas;
+ *  - DUP: además, misma zona (dayType);
+ *  - doble/lineal: además, mismo rango de reps;
+ *  - bloques: el rango cambia por fase A PROPÓSITO, así que no separa por rango.
+ */
+export function sameProgressionTrack(
+  a: { slot: { repRange: RepRange; dayType?: DupDayType }; intensity?: DayIntensity },
+  b: { slot: { repRange: RepRange; dayType?: DupDayType }; intensity?: DayIntensity },
+  model: ProgressionModel,
+): boolean {
+  if ((a.intensity ?? null) !== (b.intensity ?? null)) return false;
+  if (model === "dup") return a.slot.dayType === b.slot.dayType;
+  if (model === "block") return true;
+  return a.slot.repRange.min === b.slot.repRange.min && a.slot.repRange.max === b.slot.repRange.max;
 }
 
 /** Reps "logradas" de una sesión: el mínimo entre sus series (criterio conservador). */

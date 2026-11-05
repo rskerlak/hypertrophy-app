@@ -81,6 +81,33 @@ export interface MesocycleRow {
   continuedFromId?: string;
 }
 
+/**
+ * Bug anotado por el usuario desde la app. Viaja en el respaldo JSON para
+ * poder reproducirlo después con los mismos datos (ruta, sesión, versión).
+ */
+export interface BugReportRow {
+  id: string;
+  createdAt: string;
+  status: "open" | "resolved";
+  category: "engine" | "ui" | "data" | "other";
+  text: string;
+  /** Ruta + query donde se anotó (ej. /session?id=…). */
+  route: string;
+  /** SHA corto del build que estaba corriendo. */
+  buildSha: string;
+  context: {
+    activeMesocycleId?: string;
+    activeMesocycleName?: string;
+    sessionId?: string;
+    sessionWeekIndex?: number;
+    sessionDayLabel?: string;
+    viewport?: string;
+    visualViewport?: string;
+    standalone?: boolean;
+    userAgent?: string;
+  };
+}
+
 export interface SessionRow {
   id: string;
   mesocycleId: string;
@@ -103,6 +130,7 @@ export class HypertrophyDB extends Dexie {
   checkins!: EntityTable<Checkin, "id">;
   measurements!: EntityTable<MeasurementRow, "id">;
   activities!: EntityTable<ActivityRow, "id">;
+  bugReports!: EntityTable<BugReportRow, "id">;
 
   constructor() {
     super("hypertrophy");
@@ -122,6 +150,10 @@ export class HypertrophyDB extends Dexie {
     // v3: actividades extra (cardio/deporte) opcionales, correlacionables.
     this.version(3).stores({
       activities: "id, date",
+    });
+    // v4: bugs anotados por el usuario (viajan en el respaldo JSON).
+    this.version(4).stores({
+      bugReports: "id, createdAt, status",
     });
   }
 }
