@@ -35,6 +35,15 @@ export interface NextPrescriptionInput {
    * corre solo si esa semana y `weekIndex` caen en fases distintas (N1/N2).
    */
   historyWeekIndex?: number;
+  /** Solo block: semanas de acumulación del meso de la última sesión (si es otro meso, A5.1). */
+  historyNumAccumulationWeeks?: number;
+  /**
+   * A5.1: sin historial en la pista pero con sesiones reales del ejercicio en
+   * otra pista (track-changed) o tras una pausa larga (gap): la carga se
+   * re-ancla desde el e1RM de esa última sesión real. Solo actúa si el
+   * historial de la pista está vacío.
+   */
+  anchor?: { logs: SetLog[]; reason: "track-changed" | "gap"; ageDays?: number };
   /**
    * Tope del ajuste por RIR ya corregido por la calibración medida del usuario
    * (ver rirCalibration). Si se omite, se usa el del config por rango de reps.
@@ -59,6 +68,8 @@ export type PrescriptionRule =
   | "linear-hit-large-jump"
   | "bodyweight-cap"
   | "block-phase-reanchor"
+  | "track-reanchor"
+  | "gap-reanchor"
   | "linear-miss"
   | "double-below-ceiling"
   | "double-consolidate"
@@ -224,6 +235,8 @@ export function nextPrescription(input: NextPrescriptionInput): Prescription {
   // bajada de carga dentro de la sesión no entran al mínimo de reps (H2).
   const sessions = progressionSessions(input.exerciseHistory);
   if (sessions.length === 0) {
+    const reanchored = continuityReanchor(input, repRange, targetRir);
+    if (reanchored) return reanchored;
     return {
       nextLoadKg: input.currentLoadKg,
       nextReps: repRange.min,
@@ -500,7 +513,7 @@ function blockPhaseReanchor(
   if (input.equipmentType === "bodyweight" || input.currentLoadKg === 0) return null;
   const { weekIndex, historyWeekIndex, numAccumulationWeeks } = input;
   if (weekIndex === undefined || historyWeekIndex === undefined || numAccumulationWeeks === undefined) return null;
-  const before = blockPhaseForWeek(input.rules, historyWeekIndex, numAccumulationWeeks);
+  const before = blockPhaseForWeek(input.rules, historyWeekIndex, input.historyNumAccumulationWeeks ?? numAccumulationWeeks);
   const now = blockPhaseForWeek(input.rules, weekIndex, numAccumulationWeeks);
   if (before.name === now.name) return null; // misma fase: progresión normal (N2)
   const last = sessions[sessions.length - 1];
@@ -518,6 +531,52 @@ function blockPhaseReanchor(
     explain: {
       rule: "block-phase-reanchor",
       inputs: { repsPrescritasAntes: prescribed, pisoReps: repRange.min, topeRango: repRange.max, e1rmKg: +e1rm.toFixed(1), cargaAnteriorKg: input.currentLoadKg, cargaNuevaKg: next },
+    },
+  };
+}
+
+/**
+ * A5.1: re-anclaje al empezar una pista nueva (otro rango/intensidad/modelo) o
+ * tras una pausa larga. e1RM de la última sesión real del ejercicio (Epley
+ * ajustado por RIR) × descuento si hubo pausa, invertido para el piso del
+ * rango al RIR objetivo y redondeado. null en peso corporal o sin carga.
+ */
+function continuityReanchor(input: NextPrescriptionInput, repRange: RepRange, targetRir: number): Prescription | null {
+  const a = input.anchor;
+  if (!a || input.equipmentType === "bodyweight" || input.currentLoadKg === 0) return null;
+  const loaded = a.logs.filter((l) => l.actualLoadKg > 0);
+  if (loaded.length === 0) return null;
+  const cfg = input.rules.progression.continuity;
+  const best = loaded.reduce((b, l) => {
+    const e = estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, input.rules);
+    return e > b.e ? { e, l } : b;
+  }, { e: 0, l: loaded[0] });
+  const paused = a.reason === "gap" || (a.ageDays ?? 0) > cfg.maxGapDays;
+  const factor = paused ? cfg.gapE1rmFactor : 1;
+  const ctx = { type: input.equipmentType, equipment: input.equipment };
+  const next = loadForTarget(best.e * factor, repRange.min, Math.max(0, targetRir), input.rules, ctx);
+  if (next <= 0) return null;
+  const rule = a.reason === "gap" ? ("gap-reanchor" as const) : ("track-reanchor" as const);
+  return {
+    nextLoadKg: next,
+    nextReps: repRange.min,
+    rationale:
+      rule === "gap-reanchor"
+        ? `Volvés después de ${a.ageDays ?? "varios"} días: carga estimada desde tu 1RM de la última sesión, con un ${Math.round((1 - factor) * 100)}% de margen.`
+        : `Pista nueva para este ejercicio (${repRange.min}–${repRange.max} reps): carga estimada desde tu 1RM de la última sesión real${paused ? `, con un ${Math.round((1 - factor) * 100)}% de margen por la pausa` : ""}.`,
+    explain: {
+      rule,
+      inputs: {
+        cargaOrigenKg: best.l.actualLoadKg,
+        repsOrigen: best.l.actualReps,
+        rirOrigen: best.l.actualRir,
+        e1rmKg: +best.e.toFixed(1),
+        factor,
+        pisoReps: repRange.min,
+        rirObjetivo: Math.max(0, targetRir),
+        cargaNuevaKg: next,
+        ...(a.ageDays !== undefined ? { diasDesdeLaUltima: a.ageDays } : {}),
+      },
     },
   };
 }

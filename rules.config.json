@@ -95,6 +95,15 @@
     "_note": "Valores iniciales de un ejercicio recien agregado a la semana base cuando no hay historial. 3 series por ejercicio deja el volumen semanal en zona de 'maxima eficiencia' por musculo con 2 ejercicios (Pelland 2026: 5-10 sets fraccionados/sem). La carga es solo un punto de partida editable: con historial se usa el 1RM real (suggestLoadFromHistory) y la doble progresion la corrige en 1-2 sesiones."
   },
 
+  "progression": {
+    "continuity": {
+      "enabled": true,
+      "maxGapDays": 21,
+      "gapE1rmFactor": 0.95,
+      "_note": "A5.1 (memoria corta). La pista de progresion (ejercicio + rango + intensidad del dia) CONTINUA entre mesos: la proxima sesion parte de lo ultimo que hiciste en esa pista, no de la carga de la semana base. Si la pista cambia (otro rango, otra intensidad, otro modelo) o la ultima sesion de la pista es de hace mas de maxGapDays dias, no se arrastran reps: la carga se re-ancla desde el e1RM de tu ultima sesion real del ejercicio (Epley ajustado por RIR, SCIENCE 7 bis) para el piso del rango al RIR objetivo, con un descuento gapE1rmFactor tras una pausa. Heuristico: la fuerza se conserva bien 2-3 semanas sin entrenar; 21 dias y 5% son prudentes, no medidos. enabled=false vuelve al comportamiento anterior (cada meso arranca de cero)."
+    }
+  },
+
   "measurements": {
     "weightTrendAlpha": 0.1,
     "_note": "Tendencia del peso corporal por media movil exponencial (A3.5). MacroFactor y Dr. Muscle usan ~10%: heuristica de suavizado para leer tendencia por encima del ruido diario (agua, sal, glucogeno), no fisiologia."

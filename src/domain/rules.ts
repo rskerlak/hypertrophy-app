@@ -57,6 +57,18 @@ export const rulesSchema = z
       .object({ slotSets: z.number().int().min(1), startingLoadKg: z.number().min(0) })
       .passthrough()
       .default({ slotSets: 3, startingLoadKg: 20 }),
+    progression: z
+      .object({
+        continuity: z
+          .object({
+            enabled: z.boolean(),
+            maxGapDays: z.number().int().min(1),
+            gapE1rmFactor: z.number().gt(0).max(1),
+          })
+          .passthrough(),
+      })
+      .passthrough()
+      .default({ continuity: { enabled: true, maxGapDays: 21, gapE1rmFactor: 0.95 } }),
     measurements: z
       .object({ weightTrendAlpha: z.number().gt(0).max(1) })
       .passthrough()

@@ -397,6 +397,32 @@ export default function PlanPage() {
         + Agregar día
       </Button>
 
+      {hasSlots && (
+        <Button
+          variant="secondary"
+          className="mt-2 w-full"
+          onClick={async () => {
+            const ok = await askConfirm({
+              title: "Estimar cargas",
+              message:
+                "Recalcula la carga inicial de cada ejercicio desde tu 1RM real de la última sesión (sin deloads), para el piso del rango y el RIR del día. Los ejercicios sin historial o de peso corporal no cambian. Tus mesos ya generados no cambian.",
+              confirmLabel: "Estimar",
+            });
+            if (!ok) return;
+            const r = await baseWeekRepo.applyTemplate(
+              baseWeek.days.map((d) => ({ ...d, slots: d.slots.map((sl) => ({ ...sl, repRange: { ...sl.repRange } })) })),
+            );
+            await showAlert(
+              r.estimated > 0
+                ? `${r.estimated} carga${r.estimated === 1 ? "" : "s"} estimada${r.estimated === 1 ? "" : "s"} desde tu historial${r.kept > 0 ? `; ${r.kept} sin historial quedaron igual` : ""}. Revisalas antes de generar.`
+                : "No hay historial para estos ejercicios: las cargas quedaron igual.",
+            );
+          }}
+        >
+          Estimar cargas desde mi historial
+        </Button>
+      )}
+
       {baseWeek.days.length > 0 && (
         <details className="mt-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
           <summary className="cursor-pointer text-sm font-semibold">Cambiar a una rutina precargada</summary>

@@ -16,7 +16,8 @@ import { uuid } from "@/lib/id";
 import { countExerciseInPlan, deriveBaseWeekFromPlan, generateMesocycle, replaceExerciseInPlan, swapExerciseInPlan } from "@/domain/mesocycle";
 import { scheduleDates } from "@/domain/analytics";
 import { CURRENT_BACKUP_VERSION, equipmentSchema, validateBackup } from "@/db/backupSchema";
-import { groupBySession, nextPrescription, sameProgressionTrack } from "@/domain/progression";
+import { groupBySession, nextPrescription } from "@/domain/progression";
+import { trackHistory } from "@/domain/history";
 import { suggestLoadFromHistory } from "@/domain/oneRepMax";
 import { roundToAvailable } from "@/domain/rounding";
 import { assessRirCalibration, calibratedRirCap } from "@/domain/rirCalibration";
@@ -604,14 +605,25 @@ export const mesocycleRepo = {
     if (!source) throw new Error("Mesociclo origen no encontrado.");
     const settings = await settingsRepo.get();
 
-    // Historial por ejercicio SIN deload (sesiones completadas).
+    // Calibración del RIR con el meso origen (sin deload, completadas).
     const sessions = await db.sessions.where("mesocycleId").equals(sourceId).toArray();
     const eligible = [
       ...sessions.filter((x) => x.status === "completed" && !x.isDeload).map((x) => x.id),
     ];
     const logs = await db.setLogs.where("sessionId").anyOf(eligible).toArray();
-    const sessionById = new Map(sessions.map((x) => [x.id, x]));
     const calibration = assessRirCalibration(logs, rules);
+    // Historial de cada pista: el mismo que usa la sesión (A5.1), que cruza mesos.
+    const allMesos = await db.mesocycles.toArray();
+    const mesoRefs = new Map(
+      allMesos.map((m) => [m.id, { plan: m.plan, progressionModel: m.progressionModel, numAccumulationWeeks: m.numAccumulationWeeks }]),
+    );
+    const today = new Date().toISOString();
+    const tracks = new Map<string, { logs: SetLog[]; sessions: SessionRow[] }>();
+    for (const exerciseId of new Set(source.plan.weeks.flatMap((w) => w.days.flatMap((d) => d.slots.map((x) => x.exerciseId))))) {
+      const exLogs = await db.setLogs.where("exerciseId").equals(exerciseId).toArray();
+      const exSessions = await db.sessions.bulkGet([...new Set(exLogs.map((l) => l.sessionId))]);
+      tracks.set(exerciseId, { logs: exLogs, sessions: exSessions.filter((x): x is SessionRow => !!x) });
+    }
 
     // Carga heredada POR SLOT: prescripción siguiente del motor usando solo el
     // historial de la misma pista (un ejercicio en día fuerte y en día liviano
@@ -621,25 +633,28 @@ export const mesocycleRepo = {
     const week0 = source.plan.weeks.find((w) => !w.isDeload) ?? source.plan.weeks[0];
     week0.days.forEach((day, dayIndex) => {
       day.slots.forEach((slot, slotIndex) => {
-        const current = { slot, intensity: day.intensity };
-        const history = logs.filter((l) => {
-          if (l.exerciseId !== slot.exerciseId) return false;
-          const sess = sessionById.get(l.sessionId);
-          const pday = sess ? source.plan.weeks[sess.weekIndex]?.days[sess.dayIndex] : undefined;
-          if (!pday) return false;
-          // Mismo slot si el ejercicio se repite en el día (auditoría S1).
-          const idx = pday.slots[slotIndex]?.exerciseId === slot.exerciseId ? slotIndex : pday.slots.findIndex((x) => x.exerciseId === slot.exerciseId);
-          const pslot = pday.slots[idx];
-          const repeated = pday.slots.filter((x) => x.exerciseId === slot.exerciseId).length > 1;
-          if (!pslot || (l.slotIndex === undefined ? repeated : l.slotIndex !== idx)) return false;
-          return sameProgressionTrack(current, { slot: pslot, intensity: pday.intensity }, source.progressionModel);
+        const data = tracks.get(slot.exerciseId);
+        if (!data) return;
+        // Después de todo el meso origen (todas sus sesiones son anteriores).
+        const r = trackHistory({
+          logs: data.logs,
+          sessions: data.sessions,
+          mesos: mesoRefs,
+          current: { mesocycleId: sourceId, weekIndex: source.plan.weeks.length, dayIndex: 0, slotIndex, slot, intensity: day.intensity },
+          today,
+          rules,
         });
-        if (history.length === 0) return; // sin datos: conserva la carga del plan
+        const history = r.history;
+        const anchor =
+          r.anchor && (r.continuity === "track-changed" || r.continuity === "gap")
+            ? { logs: r.anchor, reason: r.continuity, ageDays: r.anchorAgeDays }
+            : undefined;
+        if (history.length === 0 && !anchor) return; // sin datos: conserva la carga del plan
         const ex = exercises.get(slot.exerciseId);
         if (!ex) return;
         const bySession = groupBySession(history);
         const lastSession = bySession[bySession.length - 1];
-        const lastLoad = Math.max(...lastSession.map((l) => l.actualLoadKg));
+        const lastLoad = lastSession ? Math.max(...lastSession.map((l) => l.actualLoadKg)) : slot.targetLoadKg;
         const p = nextPrescription({
           exerciseHistory: history,
           model: source.progressionModel,
@@ -650,8 +665,10 @@ export const mesocycleRepo = {
           equipment: settings.equipment,
           dayType: slot.dayType,
           weekIndex: 0,
-          historyWeekIndex: sessionById.get(lastSession[0].sessionId)?.weekIndex,
+          historyWeekIndex: r.last?.weekIndex,
+          historyNumAccumulationWeeks: r.last ? mesoRefs.get(r.last.mesocycleId)?.numAccumulationWeeks : undefined,
           numAccumulationWeeks: source.plan.numAccumulationWeeks,
+          anchor,
           // Mismos parámetros que la sesión (auditoría M5): APRE y confianza en el RIR.
           slotProgression: slot.progression,
           rirCapOverride: calibratedRirCap(rules.progressionModels.double.rirAdjustmentCapReps, calibration, rules),
