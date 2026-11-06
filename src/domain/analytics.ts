@@ -5,7 +5,7 @@ import type { Rules } from "./rules";
 import { estimate1RM } from "./oneRepMax";
 import { progressionTrackKey } from "./progression";
 import { addExerciseVolume, emptyVolume } from "./volume";
-import { isRirReported, isWorkingSet, type Checkin, type Exercise, type MesocyclePlan, type MesoIntent, type SetLog } from "./types";
+import { isComparableSet, isRirReported, isWorkingSet, type Checkin, type Exercise, type MesocyclePlan, type MesoIntent, type SetLog } from "./types";
 
 export interface SessionRef {
   id: string;
@@ -341,7 +341,7 @@ export function repDeltaBySession(ordered: Array<{ sessionId: string; dayKey: st
   const lastByDay = new Map<string, SetLog[]>();
   return ordered.map((s) => {
     const prev = lastByDay.get(s.dayKey);
-    const cur = s.logs.filter(isWorkingSet);
+    const cur = s.logs.filter(isComparableSet);
     lastByDay.set(s.dayKey, cur);
     if (!prev) return null;
     const deltas: number[] = [];

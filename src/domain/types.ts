@@ -129,6 +129,13 @@ export interface SetLog {
   /** Lado en ejercicios unilaterales. */
   side?: "L" | "R";
   note?: string;
+  /**
+   * A5.8: test de precisión del RIR. Al punto donde habría parado, el usuario
+   * llevaba `repsAtPrediction` reps y creía que le quedaban `predictedRir`;
+   * después siguió hasta el fallo (`actualReps` = total, `kind: "failure"`).
+   * La serie es estímulo pero no decide la progresión.
+   */
+  amrapTest?: { predictedRir: number; repsAtPrediction: number };
   timestamp: string;
 }
 
@@ -138,12 +145,24 @@ export function isWorkingSet(l: Pick<SetLog, "kind">): boolean {
 }
 
 /**
+ * A5.8: ¿sirve para comparar reps a carga fija entre sesiones (fatiga,
+ * estancamiento, deload por ejercicio)? La serie del test AMRAP se llevó al
+ * fallo a propósito: contra ella, cualquier sesión normal "cae".
+ */
+export function isComparableSet(l: Pick<SetLog, "kind" | "amrapTest">): boolean {
+  return isWorkingSet(l) && !l.amrapTest;
+}
+
+/**
  * ¿Esta serie decide la progresión? Solo trabajo normal o al fallo. Las drop y
  * las parciales son estímulo (cuentan para volumen y stats) pero se hacen con
  * otra carga u otro ROM: si entraran al mínimo de reps, la carga se congelaría
  * (auditoría Plan A, H2).
  */
-export function isProgressionSet(l: Pick<SetLog, "kind">): boolean {
+export function isProgressionSet(l: Pick<SetLog, "kind" | "amrapTest">): boolean {
+  // A5.8: la serie del test se lleva al fallo a propósito; si decidiera la
+  // progresión, el motor leería reps de más y subiría la carga de más.
+  if (l.amrapTest) return false;
   return l.kind === undefined || l.kind === "working" || l.kind === "failure";
 }
 

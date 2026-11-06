@@ -159,7 +159,8 @@ export default function StatsPage() {
         name: meso.name,
         exNames: new Map(exercises.map((e) => [e.id, e.name])),
         exportData: { meso, sessions, setLogs, checkins, exercises, stats, activities },
-        rirCal: assessRirCalibration(setLogs, rules),
+        // A5.8: los tests al fallo de cualquier meso cuentan (la precisión es tuya).
+        rirCal: assessRirCalibration(setLogs, rules, await setLogRepo.amrapTests()),
         weeks,
         adherence: loadAdherence(setLogs),
         sleep: { r: pearson(pairs), n: pairs.length },
@@ -404,7 +405,36 @@ export default function StatsPage() {
         Calibración de tu RIR
       </h2>
       <Card className="mb-4">
-        {rirCal.echoDetected ? (
+        {rirCal.source === "measured" && rirCal.measured ? (
+          <>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm">Error contra el fallo real</span>
+              <span className="flex items-center gap-2">
+                <span className="tabular-nums text-[var(--muted)]">±{rirCal.measured.madReps} reps</span>
+                <Badge tone={rirCal.wellCalibrated ? "success" : "warning"}>{rirCal.wellCalibrated ? "calibrado" : "impreciso"}</Badge>
+              </span>
+            </div>
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span>Sesgo</span>
+              <span className="tabular-nums text-[var(--muted)]">
+                {rirCal.measured.meanErrorReps > 0 ? "+" : ""}
+                {rirCal.measured.meanErrorReps} reps ·{" "}
+                {rirCal.measured.bias === "underestimates"
+                  ? "te quedaban más de las que creías"
+                  : rirCal.measured.bias === "overestimates"
+                    ? "te quedaban menos de las que creías"
+                    : "sin sesgo claro"}
+              </span>
+            </div>
+            <p className="text-xs leading-relaxed text-[var(--muted)]">
+              Medido contra el fallo, n={rirCal.measured.n} tests (protocolo de Martikainen 2025 adaptado a una serie).
+              {rirCal.wellCalibrated
+                ? " El motor confía en tu RIR con el tope completo."
+                : " El motor recorta el ajuste por RIR y mantiene un piso de 1 RIR."}{" "}
+              En entrenados lo habitual es subestimar la reserva por 1–1,5 reps. Con pocos tests el número todavía se mueve.
+            </p>
+          </>
+        ) : rirCal.echoDetected ? (
           <>
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm">RIR igual al objetivo</span>
@@ -426,6 +456,9 @@ export default function StatsPage() {
             Todavía no hay suficientes series repetidas a la misma carga para estimar tu precisión.
             Mientras tanto el motor es conservador: usa medio tope de ajuste por RIR y no prescribe
             0 RIR.
+            {rirCal.measured
+              ? ` Llevás ${rirCal.measured.n} de ${getRules().amrapTest.minTests} tests al fallo para medirlo de verdad (error medio hasta ahora: ${rirCal.measured.meanErrorReps > 0 ? "+" : ""}${rirCal.measured.meanErrorReps} reps).`
+              : " La forma más rápida de medirlo: aceptá el test de precisión cuando la sesión lo ofrezca."}
           </p>
         ) : (
           <>
@@ -453,6 +486,9 @@ export default function StatsPage() {
                 : "Tu capacidad implícita (reps + RIR) varía bastante a carga fija, así que el motor recorta el ajuste por RIR y mantiene un piso de 1 RIR: sin precisión, prescribir el fallo es adivinar."}{" "}
               Medido sobre {rirCal.samples} comparaciones. Es una cota superior del ruido: también
               incluye variación real de rendimiento.
+              {rirCal.measured
+                ? ` Llevás ${rirCal.measured.n} de ${getRules().amrapTest.minTests} tests al fallo para medirlo de verdad.`
+                : " Para medirlo contra el fallo real, aceptá el test de precisión cuando la sesión lo ofrezca."}
             </p>
           </>
         )}

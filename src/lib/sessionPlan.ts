@@ -18,11 +18,18 @@ import {
 import { roundToAvailable } from "@/domain/rounding";
 import { deloadLoadForDay } from "@/domain/deload";
 import {
+  amrapTestEligibility,
   assessRirCalibration,
   calibratedRirCap,
   calibratedRirFloor,
+  sessionsSinceLastAmrapTest,
+  type AmrapEligibility,
   type RirCalibration,
 } from "@/domain/rirCalibration";
+import { estimate1RM } from "@/domain/oneRepMax";
+import { exerciseZones } from "@/domain/pain";
+import { isProgressionSet, isRirReported, type PainZone } from "@/domain/types";
+import { painStatus } from "@/lib/pain";
 import { getRules } from "@/lib/rulesLoader";
 import type { DayIntensity, Equipment, Exercise, PlannedSlot, SetLog } from "@/domain/types";
 import { loadEstimator, mesocycleRepo, sessionRepo, setLogRepo, exerciseRepo, settingsRepo } from "@/db/repositories";
@@ -51,6 +58,8 @@ export interface SlotPrescription {
   painAdjusted?: boolean;
   /** A5.1: de dónde viene el historial de la pista (continúa entre mesos, cambió, pausa). */
   continuity: TrackContinuity;
+  /** A5.8: ¿se ofrece hoy el test de precisión del RIR en la última serie? */
+  amrapTest: AmrapEligibility;
 }
 
 export interface SessionView {
@@ -90,7 +99,10 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
       mesoSessions.filter((s) => s.status === "completed").map((s) => setLogRepo.forSession(s.id)),
     )
   ).flat();
-  const rirCalibration = assessRirCalibration(mesoLogs, rules);
+  // A5.8: los tests al fallo valen de cualquier meso (la precisión es tuya, no del meso).
+  const rirCalibration = assessRirCalibration(mesoLogs, rules, await setLogRepo.amrapTests());
+  const pain = await painStatus(meso.id);
+  const activePainZones: PainZone[] = pain ? pain.signal.zones.filter((z) => z.level === "act").map((z) => z.zone) : [];
   const rirFloor = calibratedRirFloor(rirCalibration, rules);
 
   const slots: SlotPrescription[] = [];
@@ -227,6 +239,20 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
       equipment: settings.equipment,
     };
     const baseSets = Math.max(1, planned.sets + setsDelta);
+    const exLogs = await setLogRepo.forExercise(exercise.id);
+    const exSessions = await sessionRepo.byIds([...new Set(exLogs.map((l) => l.sessionId))]);
+    const amrapTest = amrapTestEligibility({
+      equipmentType: planned.targetLoadKg === 0 ? "bodyweight" : exercise.equipmentType,
+      isDeload: week.isDeload || !!exDeload,
+      slotIsApre: planned.progression === "apre" || !!planned.setTargets?.some((t) => t.amrap),
+      loadKg: p.nextLoadKg,
+      e1rmKg: bestE1rm(history, rules),
+      loadedZones: exerciseZones(exercise, rules),
+      activePainZones,
+      sessionsSinceLastTest: sessionsSinceLastAmrapTest(exLogs, exSessions),
+      barbellFailureAllowed: !!settings.barbellFailureAllowed,
+      rules,
+    });
     slots.push({
       slotIndex: i,
       exercise,
@@ -253,6 +279,7 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
       exerciseDeload: !!exDeload,
       painAdjusted: !!painAdj,
       continuity: track.result.continuity,
+      amrapTest,
     });
   }
 
@@ -264,6 +291,14 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
     rirCalibration,
     intensity: day.intensity,
   };
+}
+
+/** Mejor e1RM de la última sesión de la pista (series de progresión con RIR reportado). */
+function bestE1rm(history: SetLog[], rules: ReturnType<typeof getRules>): number | null {
+  const usable = history.filter((l) => isProgressionSet(l) && isRirReported(l) && l.actualLoadKg > 0);
+  if (usable.length === 0) return null;
+  const lastSession = [...usable].sort((a, b) => a.timestamp.localeCompare(b.timestamp)).at(-1)!.sessionId;
+  return Math.max(...usable.filter((l) => l.sessionId === lastSession).map((l) => estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, rules)));
 }
 
 /** Mesos en la forma que necesita `trackHistory`. */

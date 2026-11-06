@@ -204,6 +204,26 @@ export const rulesSchema = z
           .passthrough(),
       })
       .passthrough(),
+    amrapTest: z
+      .object({
+        enabled: z.boolean(),
+        everySessionsPerExercise: z.number().int().min(1),
+        minLoadPctE1rm: z.number().min(0).max(100),
+        allowedEquipment: z.array(z.enum(["barbell", "dumbbell", "machine", "cable", "bodyweight"])),
+        minTests: z.number().int().min(1),
+        maxPredictedRir: z.number().int().min(1).max(10),
+        neutralBiasReps: z.number().min(0),
+      })
+      .passthrough()
+      .default({
+        enabled: true,
+        everySessionsPerExercise: 6,
+        minLoadPctE1rm: 70,
+        allowedEquipment: ["machine", "cable", "dumbbell", "bodyweight"],
+        minTests: 3,
+        maxPredictedRir: 5,
+        neutralBiasReps: 0.5,
+      }),
     rirCalibration: z
       .object({
         minSamplesToAssess: z.number().int().min(1),

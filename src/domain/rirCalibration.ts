@@ -16,7 +16,7 @@
 // mide, no se asume.
 
 import type { Rules } from "./rules";
-import { isRirReported, isWorkingSet, type SetLog } from "./types";
+import { isRirReported, isWorkingSet, type EquipmentType, type PainZone, type SetLog } from "./types";
 
 export interface RirCalibration {
   /** Desvío absoluto medio de la capacidad implícita (reps + RIR) a carga fija. */
@@ -36,6 +36,23 @@ export interface RirCalibration {
    * usuario (se confirmó el valor precargado). Nunca se declara "calibrado".
    */
   echoDetected: boolean;
+  /**
+   * A5.8: de dónde sale el juicio de calibración. `proxy` = dispersión a carga
+   * fija (cota superior del ruido); `measured` = tests al fallo (≥ minTests).
+   */
+  source: "proxy" | "measured";
+  /** Resultado de los tests al fallo, si hay alguno. */
+  measured?: RirAccuracy;
+}
+
+export interface RirAccuracy {
+  /** Nº de tests al fallo. */
+  n: number;
+  /** Error medio (reps que de verdad quedaban − RIR que creías). + = subestimás tu reserva. */
+  meanErrorReps: number;
+  /** Error absoluto medio. */
+  madReps: number;
+  bias: "underestimates" | "overestimates" | "neutral";
 }
 
 /** % de series con RIR registrado === RIR objetivo (null si no hay series). */
@@ -51,7 +68,29 @@ export function rirEchoPct(allLogs: SetLog[]): number | null {
  * Estima la calibración del RIR desde el historial. Solo usa grupos de ≥2
  * series con el MISMO ejercicio y la MISMA carga real.
  */
-export function assessRirCalibration(allLogs: SetLog[], rules: Rules): RirCalibration {
+export function assessRirCalibration(
+  allLogs: SetLog[],
+  rules: Rules,
+  /** A5.8: tests al fallo a considerar (por defecto, los de `allLogs`). Pueden venir de otros mesos. */
+  testLogs: SetLog[] = allLogs,
+): RirCalibration {
+  const proxy = assessProxy(allLogs.filter((l) => !l.amrapTest), rules);
+  const measured = rirAccuracyFromTests(testLogs, rules);
+  if (!measured || measured.n < rules.amrapTest.minTests) return { ...proxy, ...(measured ? { measured } : {}) };
+  // Medido contra el fallo: manda sobre el proxy y sobre el eco (es una
+  // medición, no una percepción precargada).
+  return {
+    ...proxy,
+    meanAbsDeviationReps: measured.madReps,
+    samples: measured.n,
+    wellCalibrated: measured.madReps <= rules.rirCalibration.wellCalibratedMadReps,
+    insufficientData: false,
+    source: "measured",
+    measured,
+  };
+}
+
+function assessProxy(allLogs: SetLog[], rules: Rules): RirCalibration {
   const cfg = rules.rirCalibration;
   // Calibrar solo con RIR reportado (A1.11): el precargado no mide percepción.
   const logs = allLogs.filter((l) => isRirReported(l) && isWorkingSet(l));
@@ -93,6 +132,7 @@ export function assessRirCalibration(allLogs: SetLog[], rules: Rules): RirCalibr
       insufficientData: true,
       echoPct,
       echoDetected,
+      source: "proxy",
     };
   }
 
@@ -107,6 +147,7 @@ export function assessRirCalibration(allLogs: SetLog[], rules: Rules): RirCalibr
     insufficientData: false,
     echoPct,
     echoDetected,
+    source: "proxy",
   };
 }
 
@@ -146,3 +187,98 @@ export function calibratedRirFloor(
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// ---------------- A5.8: test AMRAP de precisión ----------------
+
+/** Error de un test: reps que de verdad quedaban − RIR que el usuario creía. null si no es test. */
+export function amrapTestError(l: Pick<SetLog, "amrapTest" | "actualReps">): number | null {
+  if (!l.amrapTest) return null;
+  return l.actualReps - l.amrapTest.repsAtPrediction - l.amrapTest.predictedRir;
+}
+
+/**
+ * Precisión del RIR medida contra el fallo real (Martikainen 2025). Solo usa
+ * series con `amrapTest`. En entrenados el sesgo típico es subestimar la
+ * reserva (error positivo: podías más de lo que creías).
+ */
+export function rirAccuracyFromTests(logs: SetLog[], rules: Rules): RirAccuracy | null {
+  const errors = logs.map(amrapTestError).filter((e): e is number => e !== null);
+  if (errors.length === 0) return null;
+  const meanError = mean(errors);
+  const band = rules.amrapTest.neutralBiasReps;
+  return {
+    n: errors.length,
+    meanErrorReps: round2(meanError),
+    madReps: round2(mean(errors.map(Math.abs))),
+    bias: meanError > band ? "underestimates" : meanError < -band ? "overestimates" : "neutral",
+  };
+}
+
+/**
+ * Sesiones completadas del ejercicio desde su último test (null = nunca se
+ * testeó). `sessions` trae estado y fecha de las sesiones de esos logs.
+ */
+export function sessionsSinceLastAmrapTest(
+  logs: Array<Pick<SetLog, "sessionId" | "amrapTest">>,
+  sessions: Array<{ id: string; status: string; completedAt?: string }>,
+): number | null {
+  const byId = new Map(sessions.map((s) => [s.id, s]));
+  const done = [...new Set(logs.map((l) => l.sessionId))]
+    .map((id) => byId.get(id))
+    .filter((s): s is NonNullable<typeof s> => !!s && s.status === "completed" && !!s.completedAt)
+    .sort((a, b) => a.completedAt!.localeCompare(b.completedAt!));
+  const tested = new Set(logs.filter((l) => l.amrapTest).map((l) => l.sessionId));
+  let last = -1;
+  done.forEach((s, k) => {
+    if (tested.has(s.id)) last = k;
+  });
+  return last < 0 ? null : done.length - 1 - last;
+}
+
+export interface AmrapEligibility {
+  eligible: boolean;
+  /** Motivo legible (por qué sí o por qué no). */
+  reason: string;
+}
+
+/**
+ * ¿Se ofrece el test hoy en este ejercicio? Nunca en deload, ni en barra libre
+ * sin seguros declarados, ni con dolor activo en una zona que el ejercicio
+ * carga, ni en slots APRE (ya terminan al fallo y sus reps deciden la carga),
+ * ni con cargas livianas (la precisión cae), ni más seguido que la frecuencia
+ * del config.
+ */
+export function amrapTestEligibility(input: {
+  equipmentType: EquipmentType;
+  isDeload: boolean;
+  slotIsApre: boolean;
+  loadKg: number;
+  e1rmKg: number | null;
+  loadedZones: PainZone[];
+  activePainZones: PainZone[];
+  sessionsSinceLastTest: number | null;
+  barbellFailureAllowed: boolean;
+  rules: Rules;
+}): AmrapEligibility {
+  const cfg = input.rules.amrapTest;
+  const no = (reason: string): AmrapEligibility => ({ eligible: false, reason });
+  if (!cfg.enabled) return no("Test desactivado en la configuración.");
+  if (input.isDeload) return no("En deload no se va al fallo.");
+  if (input.slotIsApre) return no("Este ejercicio es APRE: su última serie ya es al fallo.");
+  const barbellOk = input.equipmentType === "barbell" && input.barbellFailureAllowed;
+  if (!cfg.allowedEquipment.includes(input.equipmentType) && !barbellOk) {
+    return no(input.equipmentType === "barbell" ? "Barra libre sin seguros declarados: no se va al fallo." : "Tipo de equipo no habilitado para el test.");
+  }
+  const hurts = input.loadedZones.filter((z) => input.activePainZones.includes(z));
+  if (hurts.length > 0) return no("Hay dolor activo en una zona que este ejercicio carga.");
+  if (input.equipmentType !== "bodyweight") {
+    if (input.e1rmKg === null || input.e1rmKg <= 0) return no("Sin historial para estimar la carga relativa.");
+    if ((input.loadKg / input.e1rmKg) * 100 < cfg.minLoadPctE1rm) {
+      return no(`Carga por debajo del ${cfg.minLoadPctE1rm} % del e1RM: el RIR es menos preciso con cargas livianas.`);
+    }
+  }
+  if (input.sessionsSinceLastTest !== null && input.sessionsSinceLastTest < cfg.everySessionsPerExercise) {
+    return no(`Último test hace ${input.sessionsSinceLastTest} sesiones de este ejercicio (cada ${cfg.everySessionsPerExercise}).`);
+  }
+  return { eligible: true, reason: "Opcional: mide qué tan preciso es tu RIR contra el fallo real." };
+}

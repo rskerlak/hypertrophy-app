@@ -316,6 +316,16 @@
     "_note": "Ajuste SUGERIDO entre series (A2.6): si una serie salio con RIR reportado >= rirShortfall por debajo del objetivo, se sugiere bajar loadDropPct% la carga de la siguiente (o 1 rep si no hay salto menor). Evidencia indirecta: la perdida de rendimiento crece linealmente con la proximidad al fallo (Refalo 2023, Sports Med Open). Solo un boton 'usar'; nunca cambia el objetivo guardado."
   },
 
+  "amrapTest": {
+    "_note": "A5.8. Test OPCIONAL de precision del RIR contra el fallo real: en la ultima serie el usuario anota cuantas reps lleva y cuantas cree que le quedan al punto donde pararia, y sigue hasta el fallo. Adapta el protocolo validado de Martikainen 2025 (J Sci Sport Exerc, DOI 10.1007/s42978-025-00338-8: tests al 80% 1RM cantando 3-RIR y 1-RIR y siguiendo al fallo) a una serie por ejercicio. La serie cuenta como estimulo pero NO decide la progresion (el fallo inflaria la carga siguiente). minLoadPctE1rm 70: piso prudente porque la precision cae con cargas livianas (Russo 2025, revision de 26 estudios). everySessionsPerExercise, minTests y neutralBiasReps son HEURISTICOS (frecuencia para no acumular series al fallo; n minimo para pasar de proxy a medido; banda de sesgo 'neutral').",
+    "enabled": true,
+    "everySessionsPerExercise": 6,
+    "minLoadPctE1rm": 70,
+    "allowedEquipment": ["machine", "cable", "dumbbell", "bodyweight"],
+    "minTests": 3,
+    "maxPredictedRir": 5,
+    "neutralBiasReps": 0.5
+  },
   "apre": {
     "_note": "Modo APRE opcional por ejercicio (A2.8): la ultima serie es AMRAP (al fallo) y sus reps deciden la carga de la proxima sesion. Huang 2025 (J Exerc Sci Fit, red-meta): APRE con la mejor senal para FUERZA (banca SMD -0.83 vs % fijo), estudios chicos en universitarios; RIR/RPE sin ventaja clara. Implica una serie al fallo por ejercicio (mas fatiga, Refalo 2023). Opcional, no default, y prohibido en barra libre salvo que el usuario declare seguros/spotter.",
     "belowMinPct": -5,

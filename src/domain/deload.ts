@@ -5,7 +5,7 @@
 import type { Rules } from "./rules";
 import { effectiveLandmarks } from "./rules";
 import { roundToAvailable, type RoundingContext } from "./rounding";
-import { isRirReported, isWorkingSet } from "./types";
+import { isComparableSet, isRirReported } from "./types";
 import { estimate1RM } from "./oneRepMax";
 import type {
   Checkin,
@@ -27,8 +27,9 @@ export function summarizeSessionPair(
 ): SessionSummary {
   const prevByExercise = new Map<string, SetLog[]>();
   // Solo series de trabajo: el calentamiento no dice nada de fatiga.
-  prevLogs = prevLogs.filter(isWorkingSet);
-  currLogs = currLogs.filter(isWorkingSet);
+  // Sin la serie del test AMRAP (A5.8): fue al fallo a propósito.
+  prevLogs = prevLogs.filter(isComparableSet);
+  currLogs = currLogs.filter(isComparableSet);
   for (const l of prevLogs) {
     const arr = prevByExercise.get(l.exerciseId) ?? [];
     arr.push(l);
@@ -270,7 +271,7 @@ export interface ExerciseDeloadSuggestion {
 export function evaluateExerciseDeload(history: SetLog[], rules: Rules): ExerciseDeloadSuggestion {
   const cfg = rules.deloadTriggers.exerciseDeload;
   if (!cfg.enabled) return { suggest: false };
-  const usable = history.filter((l) => isWorkingSet(l) && isRirReported(l) && l.actualLoadKg > 0);
+  const usable = history.filter((l) => isComparableSet(l) && isRirReported(l) && l.actualLoadKg > 0);
   const bySession = new Map<string, SetLog[]>();
   for (const l of usable) bySession.set(l.sessionId, [...(bySession.get(l.sessionId) ?? []), l]);
   const ordered = [...bySession.values()].sort((a, b) => a[0].timestamp.localeCompare(b[0].timestamp));

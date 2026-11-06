@@ -52,6 +52,8 @@ interface LogArgs {
   side?: "L" | "R";
   note?: string;
   existingId?: string;
+  /** A5.8: datos del test de precisión, si esta serie lo es. */
+  amrapTest?: { predictedRir: number; repsAtPrediction: number };
 }
 
 function SessionRunner() {
@@ -181,6 +183,7 @@ function SessionRunner() {
       kind: a.kind === "working" ? undefined : a.kind,
       side: a.side,
       note: a.note?.trim() || undefined,
+      ...(a.amrapTest ? { amrapTest: a.amrapTest } : {}),
       timestamp: ts,
     };
     await setLogRepo.put(log);
@@ -510,6 +513,11 @@ function ExerciseBlock({
   const working = logs.filter(isWorkingSet);
   const warmLogs = logs.filter((l) => !isWorkingSet(l));
   const byIndex = new Map(working.map((l) => [l.setIndex, l]));
+  // A5.8: test de precisión del RIR en la última serie (opcional).
+  const lastExisting = byIndex.get(slot.sets - 1);
+  const [testOn, setTestOn] = useState(false);
+  const [testDismissed, setTestDismissed] = useState(false);
+  const testActive = testOn || !!lastExisting?.amrapTest;
   /** Carga de la última serie de trabajo registrada HOY antes de `i`, si difiere de la sugerida (UX-07). */
   const deviatedLoadBefore = (i: number): number | null => {
     for (let k = i - 1; k >= 0; k--) {
@@ -698,6 +706,25 @@ function ExerciseBlock({
         </div>
       )}
 
+      {slot.amrapTest.eligible && !disabled && !lastExisting && !testActive && !testDismissed && (
+        <div className="mt-3 rounded-xl border border-[var(--primary)]/30 bg-[var(--primary)]/5 p-3">
+          <p className="text-sm font-medium">¿Test de precisión del RIR en la última serie?</p>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+            Opcional. Cuando llegues a donde normalmente pararías, anotás cuántas reps llevás y cuántas creés que te
+            quedan; después seguís hasta el fallo. Mide tu RIR contra el fallo real. Esa serie no cambia la carga de la
+            próxima sesión.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" className="flex-1" onClick={() => setTestOn(true)}>
+              Hacer el test
+            </Button>
+            <Button size="sm" variant="secondary" className="flex-1" onClick={() => setTestDismissed(true)}>
+              Ahora no
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="mt-3 space-y-2">
         {Array.from({ length: slot.sets }).map((_, i) => (
           <SetRow
@@ -718,7 +745,9 @@ function ExerciseBlock({
             // RIR explícito en la ÚLTIMA serie (A1.11), en la serie ancla y en
             // la AMRAP: son las más cercanas al fallo y las más informativas.
             requireRir={i === slot.sets - 1 || isAnchor(i) || isAmrap(i)}
-            tag={isAmrap(i) ? "AMRAP al fallo" : isAnchor(i) ? "ancla" : undefined}
+            amrapTest={i === slot.sets - 1 && testActive}
+            onCancelTest={i === slot.sets - 1 && testOn ? () => setTestOn(false) : undefined}
+            tag={i === slot.sets - 1 && testActive ? "Test de precisión · al fallo" : isAmrap(i) ? "AMRAP al fallo" : isAnchor(i) ? "ancla" : undefined}
             hint={i === hintIndex ? hint : null}
             onLog={(v) =>
               onLog({
@@ -733,9 +762,10 @@ function ExerciseBlock({
                 targetReps: suggestedReps,
                 targetRir: setRir(i),
                 rirReported: v.rirReported,
-                kind: isAmrap(i) && v.kind === "working" ? "failure" : v.kind,
+                kind: (isAmrap(i) || v.amrapTest) && v.kind === "working" ? "failure" : v.kind,
                 side: v.side,
                 note: v.note,
+                amrapTest: v.amrapTest,
               })
             }
           />
@@ -800,6 +830,8 @@ function SetRow({
   bodyweight,
   ctx,
   requireRir,
+  amrapTest = false,
+  onCancelTest,
   tag,
   hint,
   onLog,
@@ -816,11 +848,23 @@ function SetRow({
   bodyweight: boolean;
   ctx: RoundingContext;
   requireRir: boolean;
+  /** A5.8: esta serie es el test de precisión (se registra RIR predicho y se sigue al fallo). */
+  amrapTest?: boolean;
+  onCancelTest?: () => void;
   /** Etiqueta de la serie ("ancla", "AMRAP al fallo"). */
   tag?: string;
   /** Ajuste sugerido para esta serie (A2.6). */
   hint?: IntraSessionHint | null;
-  onLog: (v: { load: number; reps: number; rir: number; rirReported: boolean; kind: SetKind; side?: "L" | "R"; note?: string }) => void | Promise<void>;
+  onLog: (v: {
+    load: number;
+    reps: number;
+    rir: number;
+    rirReported: boolean;
+    kind: SetKind;
+    side?: "L" | "R";
+    note?: string;
+    amrapTest?: { predictedRir: number; repsAtPrediction: number };
+  }) => void | Promise<void>;
 }) {
   const draft = !existing ? readDraft(sessionId, slotIndex, index) : null;
   const [load, setLoadS] = useState(existing?.actualLoadKg ?? draft?.load ?? defaultLoad);
@@ -852,7 +896,11 @@ function SetRow({
 
   const logged = !!existing;
   const locked = disabled || logged;
-  const needsRir = requireRir && rir === null && !logged;
+  // A5.8: en el test el RIR registrado es 0 (fallo) y lo que se pide es el RIR predicho.
+  const [predRir, setPredRir] = useState<number | null>(existing?.amrapTest?.predictedRir ?? null);
+  const [repsAt, setRepsAt] = useState(existing?.amrapTest?.repsAtPrediction ?? defaultReps);
+  const testIncomplete = amrapTest && !logged && (predRir === null || reps < repsAt);
+  const needsRir = (amrapTest ? false : requireRir && rir === null && !logged) || testIncomplete;
 
   const persist = (patch: Partial<Draft>) => {
     if (logged) return;
@@ -926,7 +974,7 @@ function SetRow({
           </p>
           <button
             type="button"
-            disabled={locked}
+            disabled={locked || amrapTest}
             onClick={() => setRirOpen((v) => !v)}
             className={cn(
               "h-11 w-full rounded-lg text-sm font-semibold tabular-nums disabled:opacity-40",
@@ -935,7 +983,7 @@ function SetRow({
             )}
             aria-label="Elegir RIR"
           >
-            {rir === null ? "?" : rir >= 4 ? "4+" : rir}
+            {amrapTest ? "0" : rir === null ? "?" : rir >= 4 ? "4+" : rir}
           </button>
         </div>
         <Button
@@ -944,7 +992,7 @@ function SetRow({
           disabled={disabled || needsRir || busy}
           className="h-11 w-11 shrink-0 px-0"
           aria-label={logged ? `Serie ${index + 1} registrada: editar` : `Registrar serie ${index + 1}`}
-          title={logged ? "Editar esta serie" : needsRir ? "Elegí el RIR de esta serie" : "Registrar serie"}
+          title={logged ? "Editar esta serie" : testIncomplete ? "Completá el test: RIR que sentías y reps totales al fallo" : needsRir ? "Elegí el RIR de esta serie" : "Registrar serie"}
           onClick={async () => {
             if (logged) {
               // Toques dentro del segundo siguiente al registro son rebote: se ignoran.
@@ -964,15 +1012,28 @@ function SetRow({
             setBusy(true);
             loggedAt.current = Date.now();
             try {
-              await onLog({
-                load: bodyweight ? defaultLoad : load,
-                reps,
-                rir: rir ?? defaultRir,
-                rirReported: requireRir || rirTouched,
-                kind,
-                side,
-                note,
-              });
+              await onLog(
+                amrapTest && predRir !== null
+                  ? {
+                      load: bodyweight ? defaultLoad : load,
+                      reps,
+                      rir: 0,
+                      rirReported: true,
+                      kind: kind === "working" ? "failure" : kind,
+                      side,
+                      note,
+                      amrapTest: { predictedRir: predRir, repsAtPrediction: Math.min(repsAt, reps) },
+                    }
+                  : {
+                      load: bodyweight ? defaultLoad : load,
+                      reps,
+                      rir: rir ?? defaultRir,
+                      rirReported: requireRir || rirTouched,
+                      kind,
+                      side,
+                      note,
+                    },
+              );
             } finally {
               setBusy(false);
             }
@@ -984,7 +1045,53 @@ function SetRow({
 
       {tag && !logged && (
         <p className="mt-0.5 pl-6 text-[10px] font-semibold uppercase tracking-wide text-[var(--primary-ink)]">
-          {tag} · RIR objetivo {defaultRir}
+          {tag}
+          {amrapTest ? "" : ` · RIR objetivo ${defaultRir}`}
+        </p>
+      )}
+
+      {amrapTest && !logged && !disabled && (
+        <div className="mt-1 space-y-2 rounded-xl border border-[var(--primary)]/30 bg-[var(--surface)] p-2.5 text-xs">
+          <p className="font-medium">1 · Donde normalmente pararías</p>
+          <div className="flex items-center gap-2">
+            <span className="w-28 shrink-0 text-[var(--muted)]">reps que llevás</span>
+            <Field label="reps" value={repsAt} min={0} onChange={setRepsAt} down={(v) => Math.max(0, v - 1)} up={(v) => v + 1} disabled={false} />
+          </div>
+          <fieldset>
+            <legend className="mb-1 text-[var(--muted)]">¿Cuántas creés que te quedan?</legend>
+            <div className="grid grid-cols-6 gap-1">
+              {Array.from({ length: getRules().amrapTest.maxPredictedRir + 1 }, (_, k) => k).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={predRir === k}
+                  onClick={() => setPredRir(k)}
+                  className={cn(
+                    "h-11 rounded-lg border text-sm font-semibold tabular-nums",
+                    predRir === k
+                      ? "border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--primary-ink)]"
+                      : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]",
+                  )}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <p className="font-medium">2 · Seguí hasta el fallo y anotá arriba las reps totales</p>
+          {reps < repsAt && <p className="text-[var(--warning)]">Las reps totales no pueden ser menos que las que llevabas.</p>}
+          {onCancelTest && (
+            <button type="button" className="min-h-11 text-[11px] font-semibold text-[var(--muted)] underline" onClick={onCancelTest}>
+              No hacer el test hoy
+            </button>
+          )}
+        </div>
+      )}
+
+      {logged && existing.amrapTest && (
+        <p className="mt-0.5 pl-6 text-[10px] text-[var(--muted)]">
+          Test: creías que te quedaban {existing.amrapTest.predictedRir}; te quedaban{" "}
+          {existing.actualReps - existing.amrapTest.repsAtPrediction}.
         </p>
       )}
 

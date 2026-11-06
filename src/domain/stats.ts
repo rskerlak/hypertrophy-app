@@ -2,7 +2,7 @@
 // NUNCA bombeo/dolor como progreso. Incluye siempre el aviso de "n pequeño".
 
 import type { Rules } from "./rules";
-import { isRirReported, isWorkingSet, type Checkin, type Exercise, type MesoStats, type MesocyclePlan, type SetLog } from "./types";
+import { isComparableSet, isRirReported, isWorkingSet, type Checkin, type Exercise, type MesoStats, type MesocyclePlan, type SetLog } from "./types";
 import { estimate1RM } from "./oneRepMax";
 import { groupBySession, progressionTrackKey } from "./progression";
 import { rirEchoPct } from "./rirCalibration";
@@ -155,7 +155,7 @@ export function computeMesoStats(input: ComputeMesoStatsInput): MesoStats {
     if (topLoad === undefined) continue;
     const byWeek = new Map<number, number>();
     for (const l of logs) {
-      if (l.actualLoadKg !== topLoad) continue;
+      if (l.actualLoadKg !== topLoad || !isComparableSet(l)) continue;
       const w = sessionWeek.get(l.sessionId);
       if (w === undefined) continue;
       byWeek.set(w, Math.max(byWeek.get(w) ?? 0, l.actualReps));

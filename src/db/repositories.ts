@@ -629,7 +629,8 @@ export const mesocycleRepo = {
       ...sessions.filter((x) => x.status === "completed" && !x.isDeload).map((x) => x.id),
     ];
     const logs = await db.setLogs.where("sessionId").anyOf(eligible).toArray();
-    const calibration = assessRirCalibration(logs, rules);
+    // A5.8: los tests al fallo valen de cualquier meso (la precisión es del usuario).
+    const calibration = assessRirCalibration(logs, rules, await db.setLogs.filter((l) => !!l.amrapTest).toArray());
     // Historial de cada pista: el mismo que usa la sesión (A5.1), que cruza mesos.
     const allMesos = await db.mesocycles.toArray();
     const mesoRefs = new Map(
@@ -943,6 +944,10 @@ export const setLogRepo = {
     return logs.filter((l) => ok.has(l.sessionId));
   },
   /** Actualiza nota/tipo/lado de una serie ya registrada. */
+  /** A5.8: todas las series de test de precisión, de cualquier meso. */
+  async amrapTests(): Promise<SetLog[]> {
+    return getDb().setLogs.filter((l) => !!l.amrapTest).toArray();
+  },
   async patch(id: string, changes: Partial<Pick<SetLog, "note" | "kind" | "side">>): Promise<void> {
     await getDb().setLogs.update(id, changes);
   },

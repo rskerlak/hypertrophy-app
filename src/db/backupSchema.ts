@@ -227,9 +227,14 @@ const setLogRow = z
     slotIndex: index.optional(),
     side: z.enum(["L", "R"]).optional(),
     note: longText.optional(),
+    amrapTest: z.object({ predictedRir: rir, repsAtPrediction: reps }).passthrough().optional(),
     timestamp: isoDate,
   })
-  .passthrough();
+  .passthrough()
+  .refine((l) => !l.amrapTest || l.amrapTest.repsAtPrediction <= l.actualReps, {
+    message: "test AMRAP: reps al punto de predicción mayores que las reps totales",
+    path: ["amrapTest", "repsAtPrediction"],
+  });
 
 const checkinRow = z
   .object({

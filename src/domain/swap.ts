@@ -2,7 +2,7 @@
 // estancamiento sostenido. Nunca rotación aleatoria/frecuente (Kassiano 2022).
 
 import type { Rules } from "./rules";
-import { isWorkingSet, type Exercise, type SetLog } from "./types";
+import { isComparableSet, type Exercise, type SetLog } from "./types";
 import { groupBySession } from "./progression";
 import { estimate1RM } from "./oneRepMax";
 
@@ -25,7 +25,8 @@ export function suggestExerciseSwap(input: SuggestSwapInput): SwapSuggestion {
   if (!exercise.isSwappable) return { suggest: false };
 
   const cfg = rules.exerciseRotation.suggestSwapWhen;
-  const sessions = groupBySession(history.filter(isWorkingSet));
+  // Sin tests AMRAP (A5.8): su e1RM al fallo inflaría la referencia y fingiría estancamiento.
+  const sessions = groupBySession(history.filter(isComparableSet));
   // Se necesitan stagnationSessions sesiones SIN progreso respecto a una previa:
   // ventana de stagnationSessions + 1 sesiones.
   if (sessions.length < cfg.stagnationSessions + 1) return { suggest: false };

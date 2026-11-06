@@ -106,6 +106,17 @@ describe("validateBackup (A4.1)", () => {
     expect(withActivity({ avgHr: 400 })).toBe(false);
     expect(withActivity({ distanceKm: 2000 })).toBe(false);
   });
+  it("A5.8: test AMRAP con reps coherentes", () => {
+    const b = valid() as unknown as { data: { setLogs: Array<Record<string, unknown>> } };
+    b.data.setLogs[0] = { ...b.data.setLogs[0], kind: "failure", actualReps: 14, actualRir: 0, amrapTest: { predictedRir: 2, repsAtPrediction: 10 } };
+    expect(validateBackup(b).ok).toBe(true);
+    b.data.setLogs[0].amrapTest = { predictedRir: 2, repsAtPrediction: 20 };
+    const r = validateBackup(b);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/amrapTest/);
+    b.data.setLogs[0].amrapTest = { predictedRir: 20, repsAtPrediction: 10 };
+    expect(validateBackup(b).ok).toBe(false);
+  });
   it("R-01: overrides de sesión con factores imposibles se rechazan", () => {
     const b = valid() as unknown as { data: { sessions: Array<Record<string, unknown>> } };
     b.data.sessions[0].overrides = { exerciseDeload: [{ slotIndex: 0, setsFactor: 0.5, loadFactor: 1e9 }] };

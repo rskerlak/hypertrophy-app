@@ -171,7 +171,8 @@ Los hallazgos con la exportación real (rutas de `DI_CONNECT/`, unidades, fecha 
 
 ---
 
-## A5.8 — Test AMRAP opcional: medir la precisión del RIR contra el fallo real
+## A5.8 — Test AMRAP opcional: medir la precisión del RIR contra el fallo real ✅ (2026-11-06)
+Hecha. Agregado sobre la spec: la serie del test tampoco entra a las comparaciones de reps a carga fija (`isComparableSet`), porque si no la sesión siguiente "caería" contra ella y dispararía una falsa señal de deload o de estancamiento; no se ofrece en slots APRE (ya terminan al fallo); los tests cuentan para la calibración desde cualquier meso.
 
 - Hoy la calibración es un proxy (dispersión a carga fija, `rirCalibration._methodCaveat`). El protocolo validado (Martikainen 2025) canta un RIR y sigue hasta el fallo. Se ofrece como test **opcional** en la última serie de un ejercicio elegible.
 - Elegibilidad: `equipmentType` en `amrapTest.allowedEquipment` (máquina, polea, mancuerna, peso corporal; barra solo con `settings.barbellFailureAllowed`), carga ≥ `minLoadPctE1rm` del e1RM, no en deload, no con dolor `act` en una zona que el ejercicio carga, y como máximo una vez cada `everySessionsPerExercise` sesiones del ejercicio.
