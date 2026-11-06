@@ -93,3 +93,45 @@ describe("assessRirCalibration", () => {
     expect(c.insufficientData).toBe(true);
   });
 });
+
+describe("detección de RIR eco (A0.8): RIR registrado = objetivo casi siempre", () => {
+  // Caso real del usuario: 30×8@3, 30×9@2, 30×8@1, 30×8@0 — el RIR es siempre
+  // el objetivo de la semana. La dispersión sale "baja" por construcción.
+  const echoed = [
+    { reps: 8, rir: 3, target: 3 }, { reps: 9, rir: 2, target: 2 },
+    { reps: 8, rir: 1, target: 1 }, { reps: 8, rir: 0, target: 0 },
+  ].flatMap((r, i) =>
+    sessionLogs({
+      sessionId: `e${i}`, exerciseId: "fly", sets: 3, loadKg: 30, reps: r.reps, rir: r.rir,
+      targetReps: r.reps, targetRir: r.target, timestamp: `2026-03-0${i + 1}T10:00:00Z`,
+    }),
+  );
+
+  it("marca eco, nunca 'calibrado', y el motor actúa como no calibrado", () => {
+    const c = assessRirCalibration(echoed, rules);
+    expect(c.echoPct).toBe(100);
+    expect(c.echoDetected).toBe(true);
+    expect(c.wellCalibrated).toBe(false);
+    expect(calibratedRirCap(2, c, rules)).toBe(rules.rirCalibration.capWhenUncalibrated);
+    expect(calibratedRirFloor(c, rules)).toBe(rules.rirCalibration.rirFloorWhenUncalibrated);
+  });
+
+  it("un RIR que varía respecto del objetivo no es eco", () => {
+    const varied = [
+      { reps: 10, rir: 2 }, { reps: 11, rir: 1 }, { reps: 9, rir: 3 }, { reps: 10, rir: 2 },
+    ].flatMap((r, i) =>
+      sessionLogs({
+        sessionId: `v${i}`, exerciseId: "bench", sets: 2, loadKg: 80, reps: r.reps, rir: r.rir,
+        targetReps: 10, targetRir: 2, timestamp: `2026-04-0${i + 1}T10:00:00Z`,
+      }),
+    );
+    const c = assessRirCalibration(varied, rules);
+    expect(c.echoPct).toBe(50);
+    expect(c.echoDetected).toBe(false);
+    expect(c.wellCalibrated).toBe(true);
+  });
+
+  it("el umbral sale del config", () => {
+    expect(rules.rirCalibration.echoThresholdPct).toBeGreaterThan(50);
+  });
+});

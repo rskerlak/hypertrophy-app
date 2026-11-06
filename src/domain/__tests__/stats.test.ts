@@ -99,7 +99,7 @@ describe("computeMesoStats — Δ1RM sin deload y por pista (A0.3)", () => {
 
   it("sin dayIndex (llamadas viejas) cae a una sola pista por ejercicio y sin etiqueta", () => {
     const legacy = computeMesoStats({
-      plan: p, sessions: sessions2.map(({ dayIndex: _d, ...r }) => r), setLogs: logs, checkins: [], exercises, rules,
+      plan: p, sessions: sessions2.map((x) => ({ id: x.id, weekIndex: x.weekIndex, status: x.status })), setLogs: logs, checkins: [], exercises, rules,
     });
     const b = legacy.perExercise.filter((e) => e.exerciseId === "bench");
     expect(b).toHaveLength(1);

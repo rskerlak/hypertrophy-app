@@ -136,7 +136,21 @@ function SessionRunner() {
         </div>
       )}
 
-      {!done && !view.rirCalibration.wellCalibrated && !view.rirCalibration.insufficientData && (
+      {!done && view.rirCalibration.echoDetected && (
+        <div className="mt-4">
+          <HonestNote>
+            En el {Math.round(view.rirCalibration.echoPct ?? 0)}% de tus series el RIR registrado es
+            exactamente el objetivo precargado. Si al terminar cada serie ajustás el RIR a lo que
+            sentiste (aunque sea ±1), el motor puede adaptar reps y cargas a vos; mientras tanto se
+            comporta como no calibrado (piso de 1 RIR, ajuste prudente).
+          </HonestNote>
+        </div>
+      )}
+
+      {!done &&
+        !view.rirCalibration.echoDetected &&
+        !view.rirCalibration.wellCalibrated &&
+        !view.rirCalibration.insufficientData && (
         <div className="mt-4">
           <HonestNote>
             Tu RIR reportado viene variando ±{view.rirCalibration.meanAbsDeviationReps} reps a carga

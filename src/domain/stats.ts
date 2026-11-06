@@ -5,6 +5,7 @@ import type { Rules } from "./rules";
 import type { Checkin, Exercise, MesoStats, MesocyclePlan, SetLog } from "./types";
 import { estimate1RM } from "./oneRepMax";
 import { groupBySession, progressionTrackKey } from "./progression";
+import { rirEchoPct } from "./rirCalibration";
 
 export interface ComputeMesoStatsInput {
   plan: MesocyclePlan;
@@ -185,6 +186,7 @@ export function computeMesoStats(input: ComputeMesoStatsInput): MesoStats {
       pct: sessions.length > 0 ? round1((completedCount / sessions.length) * 100) : 0,
     },
     smallSampleWarning: rules.statsPolicy.smallSampleWarning,
+    rirEchoPct: rirEchoPct(progressLogs),
   };
 }
 

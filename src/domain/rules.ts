@@ -124,6 +124,7 @@ export const rulesSchema = z
     rirCalibration: z
       .object({
         minSamplesToAssess: z.number().int().min(1),
+        echoThresholdPct: z.number().min(0).max(100).default(90),
         wellCalibratedMadReps: z.number().min(0),
         capWhenUncalibrated: z.number().int().min(0),
         raiseFloorWhenUncalibrated: z.boolean(),
@@ -133,6 +134,7 @@ export const rulesSchema = z
       .passthrough()
       .default({
         minSamplesToAssess: 6,
+        echoThresholdPct: 90,
         wellCalibratedMadReps: 1.5,
         highRirDampenFrom: 4,
         capWhenUncalibrated: 1,

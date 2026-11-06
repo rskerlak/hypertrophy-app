@@ -191,4 +191,9 @@ export interface MesoStats {
     pct: number;
   };
   smallSampleWarning: string;
+  /**
+   * % de series con RIR registrado === objetivo. Si es alto, el e1RM (que usa
+   * el RIR) refleja el calendario de RIR más que la fuerza: la UI lo advierte.
+   */
+  rirEchoPct: number | null;
 }

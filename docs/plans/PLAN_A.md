@@ -49,6 +49,11 @@ Corregir, sin cambiar la lógica:
 - Mismas correcciones en las notas `_rirCapNote`, `_thresholdNote` y `rirCalibration._note` de `rules.config.json`.
 - **Aceptación**: revisión por lectura; `npm run test` sigue en verde (los tests de reglas no dependen de las notas).
 
+### A0.8 RIR eco (descubierto al ejecutar A0 — hecho)
+- **Hallazgo con datos reales**: en el 99,3 % de 1.589 series el RIR registrado es exactamente el objetivo (la app precarga el objetivo y se confirma sin tocar). La calibración declaraba "±0,55, calibrado", el ajuste por RIR nunca actuó y los Δ1RM salían negativos (mismas reps a misma carga con RIR objetivo 3 → 0 se leen como pérdida de fuerza).
+- **Hecho**: `rirEchoPct` y `echoDetected` en `src/domain/rirCalibration.ts` (`echoThresholdPct: 90` en config), calibración "no medible", motor como no calibrado, aviso en sesión y en Stats junto al Δ1RM.
+- **Pendiente (decisión de producto, ver A1.11)**: cambiar el flujo de carga del RIR en la sesión para que no se pueda "ecoar" sin querer.
+
 ### A0.7 Tests de regresión y nota en CONTEXT.md
 Agregar una sección "Bugs corregidos en A0" en `CONTEXT.md` §6 con la regla que cada uno fija, para que no vuelvan.
 
@@ -114,6 +119,12 @@ Principio de diseño: **menos taps, más contexto, cero sorpresas**. Todo lo que
 - **Dominio**: `nextPrescription` ya devuelve `rationale`. Extender `Prescription` con `explain: { rule: string; inputs: Record<string, number | string> }` (ej. `rule: "ceiling-reached"`, `inputs: { achievedReps: 12, ceiling: 12, minJumpPct: 14.3, targetPct: 2.5 }`). Sin cambiar `rationale`.
 - **UI**: chip "¿por qué?" junto al objetivo que despliega el `rationale` + una tabla de `inputs` legible. Es el diferencial de producto más citado por los usuarios de RP/MacroFactor/Fitbod ("no sé por qué me pide esto").
 - **Aceptación**: tests de que cada rama de `doubleProgression` y `linearProgression` produce un `explain.rule` distinto y documentado en `CONTEXT.md` §6.
+
+### A1.11 Carga del RIR que mida percepción, no eco (depende de A0.8)
+- **Problema**: precargar el RIR objetivo en cada serie hace que se confirme sin pensar (99 % de eco en datos reales). Sin RIR real, el ajuste por RIR, la calibración, la señal de RIR creep y el e1RM pierden sentido.
+- **Opciones (elige el usuario)**: (a) RIR vacío hasta que se toque: selector rápido de 5 botones (0 · 1 · 2 · 3 · 4+) en la fila, con "Log" deshabilitado hasta elegir; (b) precarga solo en la serie 1 y en las siguientes el RIR de la serie anterior (refleja fatiga intra-sesión); (c) precarga como hoy pero pedir RIR explícito solo en la **última serie** de cada ejercicio (la más informativa: más cerca del fallo, Russo 2025) y marcar las demás como "RIR no reportado" (excluidas de calibración).
+- **Requisitos comunes**: `SetLog.rirReported?: boolean` (false = valor por defecto no tocado) para que calibración/ajuste ignoren lo no reportado; nunca más de 1 tap extra por serie; tono neutral.
+- **Aceptación**: test de que `assessRirCalibration` y `rirAdjustedReps` ignoran `rirReported === false`; E2E de 4 series registradas con la opción elegida contando taps.
 
 ---
 

@@ -29,6 +29,20 @@ export interface RirCalibration {
   wellCalibrated: boolean;
   /** Datos insuficientes para opinar. */
   insufficientData: boolean;
+  /** % de series cuyo RIR registrado coincide EXACTAMENTE con el objetivo. */
+  echoPct: number | null;
+  /**
+   * true si ese % supera `echoThresholdPct`: el RIR no mide la percepción del
+   * usuario (se confirmó el valor precargado). Nunca se declara "calibrado".
+   */
+  echoDetected: boolean;
+}
+
+/** % de series con RIR registrado === RIR objetivo (null si no hay series). */
+export function rirEchoPct(logs: SetLog[]): number | null {
+  if (logs.length === 0) return null;
+  const eq = logs.filter((l) => l.actualRir === l.targetRir).length;
+  return round2((eq / logs.length) * 100);
 }
 
 /**
@@ -57,6 +71,9 @@ export function assessRirCalibration(logs: SetLog[], rules: Rules): RirCalibrati
   }
 
   const biases = logs.map((l) => l.actualRir - l.targetRir);
+  const echoPct = rirEchoPct(logs);
+  const echoDetected =
+    echoPct !== null && logs.length >= cfg.minSamplesToAssess && echoPct >= cfg.echoThresholdPct;
 
   if (deviations.length < cfg.minSamplesToAssess) {
     return {
@@ -65,6 +82,8 @@ export function assessRirCalibration(logs: SetLog[], rules: Rules): RirCalibrati
       samples: deviations.length,
       wellCalibrated: false,
       insufficientData: true,
+      echoPct,
+      echoDetected,
     };
   }
 
@@ -73,8 +92,11 @@ export function assessRirCalibration(logs: SetLog[], rules: Rules): RirCalibrati
     meanAbsDeviationReps: round2(mad),
     meanSignedBiasReps: round2(mean(biases)),
     samples: deviations.length,
-    wellCalibrated: mad <= cfg.wellCalibratedMadReps,
+    // Con eco la dispersión mide el calendario de RIR, no la percepción.
+    wellCalibrated: !echoDetected && mad <= cfg.wellCalibratedMadReps,
     insufficientData: false,
+    echoPct,
+    echoDetected,
   };
 }
 

@@ -270,6 +270,15 @@ Como la progresión es por sesión, la recomendación por defecto es **correr** 
 
 ---
 
+### Reglas fijadas por las correcciones de A0 (no deben volver)
+Cada una tiene test de regresión en `src/domain/__tests__/`.
+- **A0.1 — `SetLog.targetLoadKg` es la carga PRESCRITA** (0 en peso corporal); `actualLoadKg` es la real. La progresión usa solo `actualLoadKg`; `targetLoadKg` sirve para adherencia y para evaluar al motor.
+- **A0.2 — El deload no progresa.** Los slots de la semana de deload no pasan por `nextPrescription`: `deloadLoadForDay` da la carga de la semana 1 en la primera mitad y `× loadSecondHalf` (redondeada) en la segunda (`dayIndex ≥ ceil(días/2)`).
+- **A0.3 — Stats de progreso excluyen deload y sesiones saltadas, y se calculan por pista** (`progressionTrackKey`, la misma definición que usa el motor).
+- **A0.4 — La caída de rendimiento se compara contra la sesión previa del MISMO día del split** (`SessionSummary.dayKey`), sobre todo el meso sin deload; la ventana evaluada es `max(recentWindowSessions, días × consecutiveSessions)`.
+- **A0.5 — Durante el deload `evaluateDeloadTrigger` no sugiere nada** (`isDeload`), y la ventana sale del config.
+- **A0.8 — RIR eco:** si en ≥ `rirCalibration.echoThresholdPct` % de las series el RIR registrado es exactamente el objetivo, la calibración es **no medible** (`echoDetected`), nunca "calibrado", y el motor se comporta como no calibrado. `MesoStats.rirEchoPct` permite advertir que el e1RM (que usa el RIR) refleja el calendario de RIR y no la fuerza.
+
 ## 7. Esquema de `rules.config.json`
 
 Ya provisto como archivo. Puntos que el agente debe respetar al consumirlo:

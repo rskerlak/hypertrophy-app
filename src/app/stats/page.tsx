@@ -162,6 +162,16 @@ export default function StatsPage() {
       {stats.perExercise.length > 0 && (
         <>
           <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">Progresión de carga estimada (1RM)</h2>
+          {stats.rirEchoPct !== null && stats.rirEchoPct >= getRules().rirCalibration.echoThresholdPct && (
+            <div className="mb-2">
+              <HonestNote>
+                El 1RM estimado usa el RIR que registraste, y en el {Math.round(stats.rirEchoPct)}% de
+                las series coincide exactamente con el objetivo. Como el objetivo baja semana a semana
+                (3 → 0), las mismas reps a la misma carga se leen como «más cerca del fallo» y el Δ sale
+                artificialmente bajo o negativo. Para este meso, mirá mejor carga y reps a carga fija.
+              </HonestNote>
+            </div>
+          )}
           <Card className="mb-4 space-y-2">
             {stats.perExercise.map((e) => (
               <div key={`${e.exerciseId}|${e.track ?? ""}`} className="flex items-center justify-between text-sm">
@@ -235,7 +245,24 @@ export default function StatsPage() {
         Calibración de tu RIR
       </h2>
       <Card className="mb-4">
-        {rirCal.insufficientData ? (
+        {rirCal.echoDetected ? (
+          <>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm">RIR igual al objetivo</span>
+              <span className="flex items-center gap-2">
+                <span className="tabular-nums text-[var(--muted)]">{Math.round(rirCal.echoPct ?? 0)}% de las series</span>
+                <Badge tone="warning">no medible</Badge>
+              </span>
+            </div>
+            <p className="text-xs leading-relaxed text-[var(--muted)]">
+              Casi siempre registraste exactamente el RIR precargado, así que no hay forma de saber
+              cuán preciso es tu reporte: la dispersión saldría baja por construcción, no por
+              precisión. Ningún estudio de precisión de RIR muestra coincidencias exactas tan
+              sostenidas (el error típico es 0,6–1,5 reps). El motor se comporta como no calibrado
+              hasta que el RIR registrado refleje lo que sentís en cada serie.
+            </p>
+          </>
+        ) : rirCal.insufficientData ? (
           <p className="text-sm leading-relaxed text-[var(--muted)]">
             Todavía no hay suficientes series repetidas a la misma carga para estimar tu precisión.
             Mientras tanto el motor es conservador: usa medio tope de ajuste por RIR y no prescribe
