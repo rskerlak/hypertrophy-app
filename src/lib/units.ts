@@ -44,3 +44,19 @@ export function displayStep(stepKg: number, unit: LoadUnit = current): number {
   const lb = toDisplay(stepKg, unit);
   return lb >= 4 ? 5 : lb >= 1.5 ? 2.5 : 1;
 }
+
+/**
+ * Lista de pesos tipeada en la unidad de pantalla → kg. Un valor que se ve
+ * igual que uno ya guardado conserva el kg exacto: re-convertir lo redondeado
+ * corrompería el inventario al mostrarlo en lb (auditoría M1). Ordenada.
+ */
+export function parseLoadList(raw: string, originalKg: number[], unit: LoadUnit = current): number[] {
+  const byText = new Map(originalKg.map((k) => [fmtLoad(k, unit), k]));
+  return raw
+    .split(",")
+    .map((x) => x.trim())
+    .filter((x) => x.length > 0)
+    .map((x) => byText.get(x) ?? fromDisplay(parseFloat(x), unit))
+    .filter((x) => Number.isFinite(x) && x > 0)
+    .sort((a, b) => a - b);
+}

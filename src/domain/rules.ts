@@ -53,6 +53,10 @@ export const rulesSchema = z
           .default({ min: 0, max: 4 }),
       })
       .passthrough(),
+    baseWeekDefaults: z
+      .object({ slotSets: z.number().int().min(1), startingLoadKg: z.number().min(0) })
+      .passthrough()
+      .default({ slotSets: 3, startingLoadKg: 20 }),
     measurements: z
       .object({ weightTrendAlpha: z.number().gt(0).max(1) })
       .passthrough()
@@ -197,7 +201,7 @@ export const rulesSchema = z
               .passthrough(),
             reachedMrv: z.object({ enabled: z.boolean(), weight: z.number().min(0).default(1) }).passthrough(),
             chronicPoorReadiness: z
-              .object({ enabled: z.boolean(), windowSessions: z.number().int(), weight: z.number().min(0).default(1) })
+              .object({ enabled: z.boolean(), windowSessions: z.number().int(), weight: z.number().min(0).default(1), readinessMax: z.number().int().min(1).max(5).default(2) })
               .passthrough(),
             perceivedFatigue: z
               .object({
@@ -344,6 +348,9 @@ export function rirScheduleForLength(rules: Rules, weeks: number): number[] {
   const exact = rules.rirSchedule.byAccumulationLength[String(weeks)];
   if (exact && exact.length === weeks) return exact;
   const out: number[] = [];
-  for (let i = 0; i < weeks; i++) out.push(Math.min(4, weeks - 1 - i));
+  // Sin tabla para esta longitud: descender hasta 0 en la última semana, con
+  // techo en el máximo de la banda seleccionable (config), nunca un literal.
+  const ceiling = rules.rirSchedule.selectableBand.max;
+  for (let i = 0; i < weeks; i++) out.push(Math.min(ceiling, weeks - 1 - i));
   return out;
 }

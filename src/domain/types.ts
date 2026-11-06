@@ -44,6 +44,12 @@ export interface Exercise {
   note?: string;
   /** Descanso propio en segundos (si falta, default por tipo desde config). */
   restSec?: number;
+  /**
+   * Archivado (auditoría M4): se "borró" pero tiene historial. No aparece en
+   * listas ni selectores; sigue existiendo para que el historial conserve
+   * nombre, músculos y volumen.
+   */
+  archived?: boolean;
 }
 
 /**
@@ -123,6 +129,16 @@ export interface SetLog {
 /** Serie de trabajo = todo salvo aproximación. Las de calentamiento no son estímulo medido. */
 export function isWorkingSet(l: Pick<SetLog, "kind">): boolean {
   return l.kind !== "warmup";
+}
+
+/**
+ * ¿Esta serie decide la progresión? Solo trabajo normal o al fallo. Las drop y
+ * las parciales son estímulo (cuentan para volumen y stats) pero se hacen con
+ * otra carga u otro ROM: si entraran al mínimo de reps, la carga se congelaría
+ * (auditoría Plan A, H2).
+ */
+export function isProgressionSet(l: Pick<SetLog, "kind">): boolean {
+  return l.kind === undefined || l.kind === "working" || l.kind === "failure";
 }
 
 /** ¿El RIR de esta serie informa la percepción del usuario? (ver SetLog.rirReported) */

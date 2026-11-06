@@ -7,55 +7,19 @@
 //
 // Sin dependencias extra: servidor estático propio sobre out/.
 
-import { createServer } from "node:http";
-import { readFile, stat } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { readFile } from "node:fs/promises";
+import { startStaticServer } from "./static-server.mjs";
 import { createRequire } from "node:module";
 import { chromium } from "playwright-core";
 
 const require = createRequire(import.meta.url);
 const AXE_SOURCE = await readFile(require.resolve("axe-core/axe.min.js"), "utf-8");
-const OUT = join(process.cwd(), "out");
 const PORT = Number(process.env.A11Y_PORT ?? 4173);
 const NL = String.fromCharCode(10);
 const log = (...a) => process.stdout.write(a.join(" ") + NL);
 
-const TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript",
-  ".css": "text/css",
-  ".json": "application/json",
-  ".webmanifest": "application/manifest+json",
-  ".png": "image/png",
-  ".ico": "image/x-icon",
-  ".svg": "image/svg+xml",
-  ".txt": "text/plain",
-  ".woff2": "font/woff2",
-};
-
-async function resolveFile(urlPath) {
-  const clean = normalize(decodeURIComponent(urlPath.split("?")[0])).replace(/^([/\\])+/, "");
-  for (const candidate of [clean, `${clean}.html`, join(clean, "index.html")]) {
-    const full = join(OUT, candidate);
-    if (!full.startsWith(OUT)) return null;
-    try {
-      if ((await stat(full)).isFile()) return full;
-    } catch {
-      /* siguiente */
-    }
-  }
-  return null;
-}
-
-const server = createServer(async (req, res) => {
-  const file = (await resolveFile(req.url ?? "/")) ?? join(OUT, "404.html");
-  res.writeHead(file.endsWith("404.html") && req.url !== "/404" ? 404 : 200, {
-    "content-type": TYPES[extname(file)] ?? "application/octet-stream",
-  });
-  res.end(await readFile(file));
-});
-await new Promise((r) => server.listen(PORT, r));
-const B = `http://localhost:${PORT}`;
+const server = await startStaticServer(PORT);
+const B = `http://127.0.0.1:${PORT}`;
 
 const timer = setTimeout(() => {
   log("TIMEOUT");
@@ -179,6 +143,30 @@ await page.keyboard.press("Escape");
 const closed = (await page.locator('[role="dialog"]').count()) === 0;
 const returned = await page.evaluate(() => (document.activeElement?.getAttribute("aria-label") ?? "").startsWith("Eliminar "));
 const dialogOk = dlg.length === 0 && focusInside && stillInside && closed && returned;
+
+// Las otras hojas (UX-08): Nuevo meso y Cambiar ejercicio, mismo contrato.
+async function sheetCheck(name, open) {
+  await open();
+  await page.locator('[role="dialog"]').waitFor();
+  for (let i = 0; i < 25; i++) await page.keyboard.press("Tab");
+  const trapped = await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'));
+  await page.keyboard.press("Escape");
+  const gone = (await page.locator('[role="dialog"]').count()) === 0;
+  log(trapped && gone ? "PASS" : "FAIL", `hoja ${name}: trap ${trapped} Escape ${gone}`);
+  if (!(trapped && gone)) failures++;
+}
+await sheetCheck("nuevo meso", async () => {
+  await page.goto(B + "/mesos");
+  await page.waitForTimeout(800);
+  await page.locator('button:has-text("Nuevo")').first().click();
+});
+await sheetCheck("cambiar ejercicio", async () => {
+  await page.goto(B + `/session?id=${sessionId}`);
+  await page.waitForTimeout(1200);
+  const skip = page.locator('button:text-is("Saltar")').first();
+  if (await skip.isVisible().catch(() => false)) await skip.click();
+  await page.locator('button:has-text("Cambiar ejercicio")').first().click();
+});
 log(dialogOk ? "PASS" : "FAIL", "diálogo: axe", JSON.stringify(dlg), "foco adentro", focusInside, "trap", stillInside, "Escape", closed, "foco devuelto", returned);
 if (!dialogOk) failures++;
 

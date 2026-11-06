@@ -203,8 +203,11 @@ export function EditableNumber({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
 
+  // Texto mostrado al enfocar: si al salir el borrador no cambió, no se guarda
+  // nada (en lb, kg→lb→kg redondeado alteraría la carga sin que la toques; M1).
+  const shown = load ? fmtLoad(value) : String(value);
   const commit = () => {
-    if (draft !== null) {
+    if (draft !== null && draft.trim() !== shown) {
       const n = parseFloat(draft.replace(",", "."));
       if (Number.isFinite(n)) onChange(Math.max(min, load ? fromDisplay(n) : n));
     }
@@ -219,7 +222,7 @@ export function EditableNumber({
       disabled={disabled}
       value={draft ?? (format ? format(value) : load ? fmtLoad(value) : String(value))}
       onFocus={(e) => {
-        setDraft(load ? fmtLoad(value) : String(value));
+        setDraft(shown);
         // seleccionar todo para reemplazar de un tipeo
         requestAnimationFrame(() => e.target.select());
       }}

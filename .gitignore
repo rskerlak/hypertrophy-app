@@ -45,3 +45,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 files.zip
+
+# temporales y datos personales (auditoría S-09): nunca al repo público
+*.tmp.*
+myonoesis-*.json
+*.xlsx

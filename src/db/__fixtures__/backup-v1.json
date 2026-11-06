@@ -1,0 +1,15 @@
+{
+  "app": "hypertrophy",
+  "backupVersion": 1,
+  "exportedAt": "2026-07-12T18:40:00.000Z",
+  "data": {
+    "settings": [{ "id": "default", "experienceProfile": "intermediate", "bodyweightKg": 85, "proteinTargetGperKg": 1.6, "minSleepHours": 7, "prioritizedMuscles": [], "equipment": { "barWeightKg": 20, "platesKg": [1.25, 2.5, 5, 10, 20], "dumbbellsKg": [10, 12.5, 15], "machineStepKg": 5 }, "wakeLockEnabled": true, "onboarded": true, "seedVersion": 3 }],
+    "baseWeek": [{ "id": "default", "days": [{ "label": "A", "slots": [{ "exerciseId": "bench", "targetSets": 3, "repRange": { "min": 8, "max": 12 }, "startingLoadKg": 80 }] }] }],
+    "exercises": [{ "id": "bench", "name": "Press banca", "primaryMuscle": "chest", "secondaryMuscles": ["triceps"], "equipmentType": "barbell", "resistanceProfile": "mid", "isSwappable": true, "swapCandidates": [] }],
+    "mesocycles": [{ "id": "m1", "name": "Mesociclo 1", "createdAt": "2026-06-01T10:00:00.000Z", "numAccumulationWeeks": 4, "deloadWeeks": 1, "progressionModel": "double", "status": "completed", "plan": { "numAccumulationWeeks": 4, "weeks": [{ "weekIndex": 0, "isDeload": false, "days": [{ "label": "A", "slots": [{ "exerciseId": "bench", "sets": 3, "repRange": { "min": 8, "max": 12 }, "targetRir": 3, "targetLoadKg": 80 }] }] }] } }],
+    "sessions": [{ "id": "s1", "mesocycleId": "m1", "weekIndex": 0, "dayIndex": 0, "dayLabel": "A", "isDeload": false, "status": "completed", "completedAt": "2026-06-02T11:00:00.000Z" }],
+    "setLogs": [{ "id": "l1", "sessionId": "s1", "exerciseId": "bench", "setIndex": 0, "targetLoadKg": 80, "targetReps": 8, "targetRir": 3, "actualLoadKg": 80, "actualReps": 9, "actualRir": 3, "timestamp": "2026-06-02T10:20:00.000Z" }],
+    "checkins": [{ "id": "c1", "sessionId": "s1", "date": "2026-06-02", "sleptMinimum": true, "proteinSufficient": true, "energyBalance": "maintenance", "readiness": 4 }],
+    "measurements": [{ "id": "x1", "date": "2026-06-01T10:00:00.000Z", "trigger": "onboarding", "bodyweightKg": 85, "waistCm": 88 }]
+  }
+}

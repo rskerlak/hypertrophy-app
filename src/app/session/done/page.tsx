@@ -201,7 +201,7 @@ function SessionDone() {
           onClick={async () => {
             if (!(await askConfirm({ message: "¿Reabrir la sesión para corregir algo?", confirmLabel: "Reabrir" }))) return;
             await sessionRepo.reopen(id);
-            router.push(`/session?id=${id}`);
+            router.push(`/session?id=${encodeURIComponent(id)}`);
           }}
         >
           Reabrir

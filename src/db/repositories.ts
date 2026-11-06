@@ -15,9 +15,11 @@ import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
 import { countExerciseInPlan, deriveBaseWeekFromPlan, generateMesocycle, replaceExerciseInPlan, swapExerciseInPlan } from "@/domain/mesocycle";
 import { scheduleDates } from "@/domain/analytics";
-import { CURRENT_BACKUP_VERSION, validateBackup } from "@/db/backupSchema";
+import { CURRENT_BACKUP_VERSION, equipmentSchema, validateBackup } from "@/db/backupSchema";
 import { groupBySession, nextPrescription, sameProgressionTrack } from "@/domain/progression";
 import { suggestLoadFromHistory } from "@/domain/oneRepMax";
+import { roundToAvailable } from "@/domain/rounding";
+import { assessRirCalibration, calibratedRirCap } from "@/domain/rirCalibration";
 import { addProfile, editActiveEquipment, removeProfile, renameProfile, switchProfile } from "@/lib/equipmentProfiles";
 import { z } from "zod";
 import { getDb, type ActivityRow, type BaseWeekRow, type BugReportRow, type MeasurementRow, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
@@ -50,10 +52,12 @@ export async function ensureSeeded(): Promise<void> {
   const seededVersion = settings?.seedVersion ?? 0;
   if (count === 0 || seededVersion < SEED_VERSION) {
     await db.transaction("rw", db.exercises, db.settings, async () => {
-      // Preservar los ejercicios creados por el usuario al re-sembrar la biblioteca.
+      // Preservar los ejercicios creados por el usuario al re-sembrar la biblioteca,
+      // y los archivados (borrados con historial) siguen archivados.
       const custom = await db.exercises.filter((e) => e.custom === true).toArray();
+      const archived = new Set((await db.exercises.filter((e) => e.archived === true).toArray()).map((e) => e.id));
       await db.exercises.clear();
-      await db.exercises.bulkPut(seedExercises);
+      await db.exercises.bulkPut(seedExercises.map((e) => (archived.has(e.id) ? { ...e, archived: true } : e)));
       if (custom.length > 0) await db.exercises.bulkPut(custom);
       await db.settings.update("default", { seedVersion: SEED_VERSION });
     });
@@ -74,6 +78,10 @@ export const settingsRepo = {
   async update(patch: Partial<Omit<SettingsRow, "id">>): Promise<void> {
     const db = getDb();
     // A4.5: editar el inventario activo lo guarda también en su perfil.
+    if (patch.equipment) {
+      const ok = equipmentSchema.safeParse(patch.equipment);
+      if (!ok.success) throw new Error(`Inventario inválido: ${ok.error.issues[0]?.message ?? "valor fuera de rango"}.`);
+    }
     if (patch.equipment && !patch.equipmentProfiles) {
       const current = await settingsRepo.get();
       patch = { ...patch, ...editActiveEquipment(current, patch.equipment) };
@@ -97,8 +105,13 @@ export const settingsRepo = {
 // ---- Ejercicios ----
 
 export const exerciseRepo = {
+  /** Todos, incluidos los archivados (para resolver nombres del historial). */
   async all(): Promise<Exercise[]> {
     return getDb().exercises.toArray();
+  },
+  /** Los que se pueden elegir: sin archivados (listas, selectores, reemplazos). */
+  async selectable(): Promise<Exercise[]> {
+    return getDb().exercises.filter((e) => !e.archived).toArray();
   },
   async get(id: string): Promise<Exercise | undefined> {
     return getDb().exercises.get(id);
@@ -147,21 +160,33 @@ export const exerciseRepo = {
   async replaceAndRemove(id: string, replacementId: string): Promise<void> {
     const db = getDb();
     if (id === replacementId) throw new Error("El reemplazo debe ser otro ejercicio.");
-    await db.transaction("rw", db.exercises, db.baseWeek, db.mesocycles, async () => {
+    const loadFor = await loadEstimator(replacementId);
+    await db.transaction("rw", [db.exercises, db.baseWeek, db.mesocycles, db.sessions, db.setLogs], async () => {
       if (!(await db.exercises.get(replacementId))) throw new Error("Ejercicio de reemplazo no encontrado.");
       const mesos = await db.mesocycles.filter((m) => m.status !== "completed").toArray();
       for (const m of mesos) {
-        if (countExerciseInPlan(m.plan, id) > 0) await db.mesocycles.update(m.id, { plan: replaceExerciseInPlan(m.plan, id, replacementId) });
+        if (countExerciseInPlan(m.plan, id) === 0) continue;
+        // Solo desde la primera semana con sesiones pendientes: lo entrenado no se reescribe (M4).
+        const pending = await db.sessions.where("mesocycleId").equals(m.id).filter((s) => s.status === "pending").toArray();
+        const fromWeek = pending.length ? Math.min(...pending.map((s) => s.weekIndex)) : m.plan.weeks.length;
+        await db.mesocycles.update(m.id, {
+          plan: replaceExerciseInPlan(m.plan, id, replacementId, fromWeek, (sl) => loadFor(sl.repRange.min, sl.targetRir, sl.targetLoadKg)),
+        });
       }
       const bw = await db.baseWeek.get("default");
       if (bw) {
         await db.baseWeek.put({
           id: "default",
-          days: bw.days.map((d) => ({ ...d, slots: d.slots.map((s) => (s.exerciseId === id ? { ...s, exerciseId: replacementId } : s)) })),
+          days: bw.days.map((d) => ({
+            ...d,
+            slots: d.slots.map((s) =>
+              s.exerciseId === id ? { ...s, exerciseId: replacementId, startingLoadKg: loadFor(s.repRange.min, undefined, s.startingLoadKg) } : s,
+            ),
+          })),
         });
       }
+      await removeExerciseTx(id);
     });
-    await exerciseRepo.remove(id);
   },
 
   /**
@@ -171,23 +196,7 @@ export const exerciseRepo = {
    */
   async remove(id: string): Promise<void> {
     const db = getDb();
-    await db.transaction("rw", db.exercises, db.baseWeek, async () => {
-      await db.exercises.delete(id);
-      const others = await db.exercises.filter((e) => e.swapCandidates.includes(id)).toArray();
-      for (const o of others) {
-        await db.exercises.update(o.id, {
-          swapCandidates: o.swapCandidates.filter((c) => c !== id),
-        });
-      }
-      const bw = await db.baseWeek.get("default");
-      if (bw) {
-        const days = bw.days.map((d) => ({
-          ...d,
-          slots: d.slots.filter((s) => s.exerciseId !== id),
-        }));
-        await db.baseWeek.put({ id: "default", days });
-      }
-    });
+    await db.transaction("rw", [db.exercises, db.baseWeek, db.setLogs], () => removeExerciseTx(id));
   },
   /** Nota persistente y/o descanso propio de un ejercicio (también de biblioteca). */
   async setNoteAndRest(id: string, changes: { note?: string; restSec?: number | null }): Promise<void> {
@@ -199,6 +208,52 @@ export const exerciseRepo = {
 };
 
 // ---- Semana base ----
+
+/**
+ * Borrado de un ejercicio dentro de una transacción ya abierta (exercises,
+ * baseWeek, setLogs). Con historial se ARCHIVA (auditoría M4): el historial
+ * conserva nombre, músculos y volumen. Sin historial se borra.
+ */
+async function removeExerciseTx(id: string): Promise<void> {
+  const db = getDb();
+  const logged = await db.setLogs.where("exerciseId").equals(id).count();
+  if (logged > 0) await db.exercises.update(id, { archived: true, swapCandidates: [] });
+  else await db.exercises.delete(id);
+  const others = await db.exercises.filter((e) => e.swapCandidates.includes(id)).toArray();
+  for (const o of others) await db.exercises.update(o.id, { swapCandidates: o.swapCandidates.filter((c) => c !== id) });
+  const bw = await db.baseWeek.get("default");
+  if (bw) {
+    await db.baseWeek.put({ id: "default", days: bw.days.map((d) => ({ ...d, slots: d.slots.filter((s) => s.exerciseId !== id) })) });
+  }
+}
+
+/**
+ * Estimador de carga para un ejercicio que entra en lugar de otro (auditoría M3):
+ * con historial real (sin deload), Epley invertido para el piso del rango al RIR
+ * objetivo; sin historial, la carga inicial por defecto del config redondeada;
+ * en peso corporal, 0. Nunca hereda la carga del ejercicio anterior.
+ */
+export async function loadEstimator(
+  exerciseId: string,
+  excludeSessionId?: string,
+): Promise<(repMin: number, targetRir: number | undefined, previousLoadKg: number) => number> {
+  const db = getDb();
+  const rules = getRules();
+  const [ex, settings] = await Promise.all([db.exercises.get(exerciseId), settingsRepo.get()]);
+  const history = ex && ex.equipmentType !== "bodyweight" ? await setLogRepo.completedNonDeloadForExercise(exerciseId, excludeSessionId) : [];
+  return (repMin, targetRir, previousLoadKg) => {
+    if (!ex || ex.equipmentType === "bodyweight" || previousLoadKg === 0) return 0;
+    const ctx = { type: ex.equipmentType, equipment: settings.equipment };
+    const fromHistory = suggestLoadFromHistory({
+      history,
+      targetReps: repMin,
+      targetRir: targetRir ?? rules.dayIntensity.startingLoadReferenceRir,
+      rules,
+      ctx,
+    });
+    return fromHistory ?? roundToAvailable(rules.baseWeekDefaults.startingLoadKg, ctx);
+  };
+}
 
 /** Asigna id a los slots que no lo tienen (o lo tienen provisorio). Devuelve si cambió algo. */
 function withSlotIds(bw: BaseWeek): { week: BaseWeek; changed: boolean } {
@@ -455,15 +510,15 @@ export const mesocycleRepo = {
    */
   async schedule(id: string, startIso: string, weekdays: number[]): Promise<void> {
     const db = getDb();
-    const rows = (await db.sessions.where("mesocycleId").equals(id).toArray()).sort(
-      (a, b) => a.weekIndex - b.weekIndex || a.dayIndex - b.dayIndex,
-    );
-    const pending = rows.filter((s) => s.status === "pending");
-    const dates = scheduleDates(pending.length, startIso, weekdays);
-    await db.transaction("rw", db.sessions, async () => {
+    await db.transaction("rw", db.sessions, db.settings, async () => {
+      const rows = (await db.sessions.where("mesocycleId").equals(id).toArray()).sort(
+        (a, b) => a.weekIndex - b.weekIndex || a.dayIndex - b.dayIndex,
+      );
+      const pending = rows.filter((s) => s.status === "pending");
+      const dates = scheduleDates(pending.length, startIso, weekdays);
       for (let i = 0; i < pending.length; i++) await db.sessions.update(pending[i].id, { plannedDate: dates[i] });
+      await db.settings.update("default", { trainingWeekdays: [...weekdays].sort() });
     });
-    await settingsRepo.update({ trainingWeekdays: [...weekdays].sort() });
   },
 
   /**
@@ -490,7 +545,10 @@ export const mesocycleRepo = {
     const db = getDb();
     const meso = await db.mesocycles.get(id);
     if (!meso) throw new Error("Mesociclo no encontrado.");
-    await db.mesocycles.update(id, { plan: swapExerciseInPlan(meso.plan, dayIndex, slotIndex, exerciseId, fromWeekIndex) });
+    const loadFor = await loadEstimator(exerciseId);
+    await db.mesocycles.update(id, {
+      plan: swapExerciseInPlan(meso.plan, dayIndex, slotIndex, exerciseId, fromWeekIndex, (sl) => loadFor(sl.repRange.min, sl.targetRir, sl.targetLoadKg)),
+    });
   },
 
   /** Activa un meso (pausa al activo actual, o lo completa si no le quedan sesiones). */
@@ -544,6 +602,7 @@ export const mesocycleRepo = {
     ];
     const logs = await db.setLogs.where("sessionId").anyOf(eligible).toArray();
     const sessionById = new Map(sessions.map((x) => [x.id, x]));
+    const calibration = assessRirCalibration(logs, rules);
 
     // Carga heredada POR SLOT: prescripción siguiente del motor usando solo el
     // historial de la misma pista (un ejercicio en día fuerte y en día liviano
@@ -558,8 +617,13 @@ export const mesocycleRepo = {
           if (l.exerciseId !== slot.exerciseId) return false;
           const sess = sessionById.get(l.sessionId);
           const pday = sess ? source.plan.weeks[sess.weekIndex]?.days[sess.dayIndex] : undefined;
-          const pslot = pday?.slots.find((x) => x.exerciseId === slot.exerciseId);
-          return !!pday && !!pslot && sameProgressionTrack(current, { slot: pslot, intensity: pday.intensity }, source.progressionModel);
+          if (!pday) return false;
+          // Mismo slot si el ejercicio se repite en el día (auditoría S1).
+          const idx = pday.slots[slotIndex]?.exerciseId === slot.exerciseId ? slotIndex : pday.slots.findIndex((x) => x.exerciseId === slot.exerciseId);
+          const pslot = pday.slots[idx];
+          const repeated = pday.slots.filter((x) => x.exerciseId === slot.exerciseId).length > 1;
+          if (!pslot || (l.slotIndex === undefined ? repeated : l.slotIndex !== idx)) return false;
+          return sameProgressionTrack(current, { slot: pslot, intensity: pday.intensity }, source.progressionModel);
         });
         if (history.length === 0) return; // sin datos: conserva la carga del plan
         const ex = exercises.get(slot.exerciseId);
@@ -578,6 +642,9 @@ export const mesocycleRepo = {
           dayType: slot.dayType,
           weekIndex: 0,
           numAccumulationWeeks: source.plan.numAccumulationWeeks,
+          // Mismos parámetros que la sesión (auditoría M5): APRE y confianza en el RIR.
+          slotProgression: slot.progression,
+          rirCapOverride: calibratedRirCap(rules.progressionModels.double.rirAdjustmentCapReps, calibration, rules),
           rules,
         });
         overrides.set(`${dayIndex}:${slotIndex}`, slot.targetLoadKg === 0 ? 0 : p.nextLoadKg);
@@ -949,8 +1016,9 @@ export const backupRepo = {
   async import(raw: unknown): Promise<void> {
     const v = validateBackup(raw);
     if (!v.ok) throw new Error(v.error);
-    // El schema valida y conserva campos extra (passthrough); el tipo de fila es el de la app.
-    const d = (raw as BackupFile).data;
+    // Se importa la SALIDA validada (no el JSON crudo): Zod descarta claves como
+    // __proto__ y deja solo filas que pasaron los tipos y topes (auditoría S-01/S-07).
+    const d = v.backup.data as unknown as BackupFile["data"];
     const db = getDb();
     await db.transaction(
       "rw",

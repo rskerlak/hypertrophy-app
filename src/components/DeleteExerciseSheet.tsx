@@ -53,7 +53,8 @@ export function DeleteExerciseSheet({
     try {
       if (inUse) await exerciseRepo.replaceAndRemove(exercise.id, replacement!);
       else await exerciseRepo.remove(exercise.id);
-      showToast(inUse ? "Ejercicio reemplazado y eliminado." : "Ejercicio eliminado.", "success");
+      const verb = usage.loggedSets > 0 ? "archivado" : "eliminado";
+      showToast(inUse ? `Ejercicio reemplazado y ${verb}.` : `Ejercicio ${verb}.`, "success");
       onClose();
     } catch (e) {
       showToast(e instanceof Error ? e.message : "No se pudo eliminar.", "danger");
@@ -103,7 +104,8 @@ export function DeleteExerciseSheet({
       )}
       {usage.loggedSets > 0 && (
         <p className="mt-3 text-xs leading-relaxed text-[var(--muted)]">
-          Tu historial ({usage.loggedSets} series) se conserva y en Stats aparecerá como «(ejercicio eliminado)».
+          Tiene historial ({usage.loggedSets} series): se archiva en vez de borrarse, así tus estadísticas
+          conservan su nombre y su volumen. Deja de aparecer en las listas.
         </p>
       )}
       <div className="mt-4 flex gap-2">

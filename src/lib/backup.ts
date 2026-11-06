@@ -15,6 +15,8 @@ export async function downloadBackup(prefix = "myonoesis-respaldo"): Promise<voi
   const stamp = prefix === "myonoesis-respaldo" ? backup.exportedAt.slice(0, 10) : backup.exportedAt.slice(0, 19).replace(/[:T]/g, "-");
   a.download = `${prefix}-${stamp}.json`;
   a.click();
-  URL.revokeObjectURL(a.href);
+  // Revocar después: en algunos navegadores (iOS) la descarga arranca tarde.
+  const href = a.href;
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
   await settingsRepo.update({ lastBackupAt: backup.exportedAt });
 }

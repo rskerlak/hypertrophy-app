@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CURRENT_BACKUP_VERSION, validateBackup } from "../backupSchema";
+import backupV1 from "../__fixtures__/backup-v1.json";
 
 function valid() {
   return {
@@ -27,6 +28,11 @@ describe("validateBackup (A4.1)", () => {
   });
   it("acepta respaldos de la versión 1", () => {
     expect(validateBackup({ ...valid(), backupVersion: 1 }).ok).toBe(true);
+  });
+  it("acepta un respaldo v1 real (fixture: sin campos de A1–A4, sin bugReports)", () => {
+    const r = validateBackup(backupV1);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.backup.data.setLogs).toHaveLength(1);
   });
   it("rechaza una versión futura", () => {
     const r = validateBackup({ ...valid(), backupVersion: 99 });

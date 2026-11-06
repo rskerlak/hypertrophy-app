@@ -14,7 +14,8 @@ import type { Exercise } from "@/domain/types";
 export default function ExercisesPage() {
   const router = useRouter();
   const rules = getRules();
-  const exercises = useLiveQuery(() => exerciseRepo.all(), []);
+  // Archivados (borrados con historial) no se listan: viven solo para el historial.
+  const exercises = useLiveQuery(() => exerciseRepo.selectable(), []);
   const [q, setQ] = useState("");
   const [deleting, setDeleting] = useState<Exercise | null>(null);
   const [mode, setMode] = useState<{ kind: "list" } | { kind: "new" } | { kind: "edit"; ex: Exercise }>({

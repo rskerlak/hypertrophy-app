@@ -6,6 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { baseWeekRepo } from "@/db/repositories";
 import { ROUTINE_TEMPLATES } from "@/lib/templates";
 import { Button, cn } from "./ui";
+import { Sheet } from "./Dialog";
 import { askConfirm, showAlert } from "@/store/dialogs";
 
 /**
@@ -52,17 +53,7 @@ function NewMesoSheet({ onClose }: { onClose: () => void }) {
     askConfirm({ message: "Esto reemplaza tu semana base actual (tus mesos ya generados no cambian). ¿Seguir?", confirmLabel: "Reemplazar" });
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/30 p-3" role="dialog" aria-modal aria-label="Nuevo mesociclo" onClick={onClose}>
-      <div
-        className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--pop-shadow)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-1 flex items-center justify-between">
-          <p className="font-semibold">Nuevo mesociclo</p>
-          <button type="button" onClick={onClose} className="px-2 text-[var(--muted)]" aria-label="Cerrar">
-            ✕
-          </button>
-        </div>
+    <Sheet title={"Nuevo mesociclo"} onClose={onClose}>
         <p className="mb-3 text-xs text-[var(--muted)]">
           Elegí cómo arrancar. Después editás todo en el Plan y tocás «Generar mesociclo».
         </p>
@@ -110,8 +101,7 @@ function NewMesoSheet({ onClose }: { onClose: () => void }) {
             }}
           />
         ))}
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

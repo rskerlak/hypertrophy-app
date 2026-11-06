@@ -76,7 +76,7 @@ export default function PlanPage() {
 
   const addSlot = async (dayIdx: number, exercise: Exercise) => {
     const range = exercise.defaultRepRange ?? defaultRange(exercise, rules);
-    // A4.4: con historial, la carga inicial sale de tu 1RM real; sin historial, 20 kg.
+    // A4.4: con historial, la carga inicial sale de tu 1RM real; sin historial, el default del config.
     const fromHistory = await baseWeekRepo.suggestStartingLoad(exercise.id, range.min, baseWeek.days[dayIdx]?.intensity);
     const days = baseWeek.days.map((d, i) =>
       i === dayIdx
@@ -86,10 +86,10 @@ export default function PlanPage() {
               ...d.slots,
               {
                 exerciseId: exercise.id,
-                targetSets: 3,
+                targetSets: rules.baseWeekDefaults.slotSets,
                 repRange: range,
                 // Ejercicios de peso corporal arrancan en modo "Corporal" (carga 0).
-                startingLoadKg: exercise.equipmentType === "bodyweight" ? 0 : (fromHistory ?? 20),
+                startingLoadKg: exercise.equipmentType === "bodyweight" ? 0 : (fromHistory ?? rules.baseWeekDefaults.startingLoadKg),
               },
             ],
           }
@@ -388,7 +388,7 @@ export default function PlanPage() {
               })}
             </div>
 
-            <AddExercise exercises={exercises} onAdd={(ex) => addSlot(dayIdx, ex)} />
+            <AddExercise exercises={exercises.filter((e) => !e.archived)} onAdd={(ex) => addSlot(dayIdx, ex)} />
           </Card>
         ))}
       </div>

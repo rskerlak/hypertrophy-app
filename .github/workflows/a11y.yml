@@ -1,4 +1,4 @@
-name: Accesibilidad
+name: Accesibilidad y offline
 
 # A4.6: axe-core sobre las pantallas principales (tema claro y oscuro) y el
 # diálogo propio. Separado del deploy: un fallo acá avisa, no bloquea publicar.
@@ -8,12 +8,17 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   a11y:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -22,3 +27,4 @@ jobs:
       - name: Chromium para playwright-core
         run: npx playwright-core install --with-deps chromium
       - run: npm run test:a11y
+      - run: npm run test:offline

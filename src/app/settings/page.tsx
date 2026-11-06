@@ -13,7 +13,8 @@ import { EquipmentProfilePicker } from "@/components/EquipmentProfilePicker";
 import { applyTheme, type Theme } from "@/lib/theme";
 import { PROFILE_LABELS, muscleLabel } from "@/lib/format";
 import type { ExperienceProfileId } from "@/domain/types";
-import { fmtLoad, fromDisplay, unitLabel } from "@/lib/units";
+import { fmtLoad, fromDisplay, parseLoadList, unitLabel } from "@/lib/units";
+import { showToast } from "@/store/dialogs";
 
 /** Lista de pesos (guardados en kg) para editar en la unidad elegida. */
 const listText = (kgs: number[]) => kgs.map((k) => fmtLoad(k)).join(", ");
@@ -32,13 +33,12 @@ export default function SettingsPage() {
   };
 
   const editList = (key: "platesKg" | "dumbbellsKg" | "dumbbellPlatesKg", raw: string) => {
-    const nums = raw
-      .split(",")
-      .map((x) => parseFloat(x.trim()))
-      .filter((x) => !Number.isNaN(x) && x > 0)
-      .map((x) => fromDisplay(x))
-      .sort((a, b) => a - b);
-    settingsRepo.update({ equipment: { ...settings.equipment, [key]: nums } });
+    const original = settings.equipment[key] ?? [];
+    const nums = parseLoadList(raw, original);
+    if (nums.length === original.length && nums.every((n, i) => n === [...original].sort((a, b) => a - b)[i])) return;
+    settingsRepo.update({ equipment: { ...settings.equipment, [key]: nums } }).catch((e: unknown) =>
+      showToast(e instanceof Error ? e.message : "Inventario inválido.", "danger"),
+    );
   };
 
   // Mancuernas armables si el usuario declaró discos de mancuerna.

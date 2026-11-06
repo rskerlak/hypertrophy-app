@@ -12,8 +12,8 @@ import type {
   SetLog,
 } from "./types";
 import { nextAchievableLoad, roundToAvailable } from "./rounding";
-import { isRirReported, isWorkingSet } from "./types";
-import { estimate1RM } from "./oneRepMax";
+import { isProgressionSet, isRirReported } from "./types";
+import { estimate1RM, loadForTarget } from "./oneRepMax";
 
 export interface NextPrescriptionInput {
   /** Logs de sesiones previas de este slot (mismo ejercicio), cualquier orden. */
@@ -50,6 +50,10 @@ export type PrescriptionRule =
   | "linear-hit"
   | "linear-no-jump"
   | "linear-stalled"
+  | "linear-add-rep"
+  | "linear-hit-large-jump"
+  | "bodyweight-cap"
+  | "block-phase-reanchor"
   | "linear-miss"
   | "double-below-ceiling"
   | "double-consolidate"
@@ -210,8 +214,10 @@ export function nextPrescription(input: NextPrescriptionInput): Prescription {
     targetRir = input.targetRir + phase.rirBias;
   }
 
-  // Las series de aproximación no son estímulo medido: nunca deciden la progresión.
-  const sessions = groupBySession(input.exerciseHistory.filter(isWorkingSet));
+  // Deciden la progresión solo las series de trabajo/fallo hechas con la carga
+  // de trabajo de la sesión (la más alta). Calentamiento, drop, parciales y una
+  // bajada de carga dentro de la sesión no entran al mínimo de reps (H2).
+  const sessions = progressionSessions(input.exerciseHistory);
   if (sessions.length === 0) {
     return {
       nextLoadKg: input.currentLoadKg,
@@ -227,10 +233,27 @@ export function nextPrescription(input: NextPrescriptionInput): Prescription {
   if (input.slotProgression === "apre") {
     return apreProgression(input, sessions, repRange);
   }
+  if (model === "block") {
+    const reanchor = blockPhaseReanchor(input, sessions, repRange, targetRir);
+    if (reanchor) return reanchor;
+  }
   if (model === "linear") {
     return linearProgression(input, sessions, repRange);
   }
   return doubleProgression(input, sessions, repRange);
+}
+
+/**
+ * Sesiones (ordenadas) con las series que deciden la progresión: trabajo o
+ * fallo, y dentro de cada sesión solo las hechas con su carga de trabajo.
+ */
+export function progressionSessions(history: SetLog[]): SetLog[][] {
+  return groupBySession(history.filter(isProgressionSet))
+    .map((s) => {
+      const top = Math.max(...s.map((l) => l.actualLoadKg));
+      return s.filter((l) => l.actualLoadKg === top);
+    })
+    .filter((s) => s.length > 0);
 }
 
 function blockPhaseForWeek(rules: Rules, weekIndex: number, totalWeeks: number) {
@@ -255,27 +278,53 @@ function linearProgression(
   const last = sessions[sessions.length - 1];
 
   if (hitTarget(last)) {
+    const achieved = achievedReps(last);
     const target = input.currentLoadKg * (1 + cfg.loadIncrementPctPerSession / 100);
-    let next = roundToAvailable(target, ctx);
-    if (next <= input.currentLoadKg) {
-      next = nextAchievableLoad(input.currentLoadKg, ctx);
-    }
-    if (next <= input.currentLoadKg) {
-      // Sin salto de carga posible (bodyweight / tope de mancuernas): añadir una rep.
+    const rounded = roundToAvailable(target, ctx);
+    if (rounded > input.currentLoadKg) {
+      // El redondeo queda por debajo del objetivo: el salto es proporcional.
       return {
-        nextLoadKg: input.currentLoadKg,
-        nextReps: achievedReps(last) + 1,
-        rationale: "Sin incremento de carga disponible: añadir una rep.",
-        explain: { rule: "linear-no-jump", inputs: { repsLogradas: achievedReps(last), cargaKg: input.currentLoadKg } },
+        nextLoadKg: rounded,
+        nextReps: repRange.min,
+        rationale: "Objetivo cumplido: subir carga al incremento disponible.",
+        explain: {
+          rule: "linear-hit",
+          inputs: { cargaAnteriorKg: input.currentLoadKg, cargaNuevaKg: rounded, incrementoObjetivoPct: cfg.loadIncrementPctPerSession },
+        },
       };
     }
+    const next = nextAchievableLoad(input.currentLoadKg, ctx);
+    if (next <= input.currentLoadKg) {
+      // Sin salto de carga posible (peso corporal / inventario agotado): reps.
+      return bodyweightReps(input, achieved, repRange, "linear-no-jump");
+    }
+    // F6: si el salto mínimo excede el % objetivo, sumar reps (cada rep sobre el
+    // piso acredita el % por sesión) y saltar recién cuando el crédito alcanza
+    // o se llega al tope del rango, que es un límite duro (auditoría H1).
+    const minJumpPct = ((next - input.currentLoadKg) / input.currentLoadKg) * 100;
+    const creditPct = (Math.max(0, achieved - repRange.min) + 1) * cfg.loadIncrementPctPerSession;
+    if (creditPct < minJumpPct && achieved < repRange.max) {
+      const nextReps = Math.min(repRange.max, Math.max(repRange.min, achieved + 1));
+      return {
+        nextLoadKg: input.currentLoadKg,
+        nextReps,
+        rationale: `El salto mínimo de tu equipamiento (+${minJumpPct.toFixed(1)}%) supera el ${cfg.loadIncrementPctPerSession}% por sesión: sumar una rep antes de subir carga.`,
+        explain: {
+          rule: "linear-add-rep",
+          inputs: { repsLogradas: achieved, saltoMinimoPct: +minJumpPct.toFixed(1), incrementoObjetivoPct: cfg.loadIncrementPctPerSession, topeRango: repRange.max },
+        },
+      };
+    }
+    const large = creditPct < minJumpPct;
     return {
       nextLoadKg: next,
       nextReps: repRange.min,
-      rationale: "Objetivo cumplido: subir carga al incremento disponible.",
+      rationale: large
+        ? `Tope del rango alcanzado: subir carga. El salto mínimo de tu equipamiento es grande (+${minJumpPct.toFixed(1)}%): si no llegás a ${repRange.min} reps, repetí la carga.`
+        : "Objetivo cumplido con reps de sobra: subir carga al incremento disponible.",
       explain: {
-        rule: "linear-hit",
-        inputs: { cargaAnteriorKg: input.currentLoadKg, cargaNuevaKg: next, incrementoObjetivoPct: cfg.loadIncrementPctPerSession },
+        rule: large ? "linear-hit-large-jump" : "linear-hit",
+        inputs: { cargaAnteriorKg: input.currentLoadKg, cargaNuevaKg: next, saltoMinimoPct: +minJumpPct.toFixed(1), incrementoObjetivoPct: cfg.loadIncrementPctPerSession },
       },
     };
   }
@@ -350,12 +399,7 @@ function doubleProgression(
   // Tope alcanzado: evaluar si el salto mínimo de carga es proporcional al % objetivo.
   const nextLoad = nextAchievableLoad(input.currentLoadKg, ctx);
   if (nextLoad <= input.currentLoadKg) {
-    return {
-      nextLoadKg: input.currentLoadKg,
-      nextReps: reps + cfg.repStepWhenBelowCeiling,
-      rationale: "Sin incremento de carga disponible: seguir añadiendo reps.",
-      explain: { rule: "double-no-jump", inputs: { repsAjustadasPorRir: reps, topeRango: repRange.max, cargaKg: input.currentLoadKg } },
-    };
+    return bodyweightReps(input, reps, repRange, "double-no-jump");
   }
   const minJumpPct =
     ((nextLoad - input.currentLoadKg) / input.currentLoadKg) * 100;
@@ -399,6 +443,69 @@ function doubleProgression(
         saltoMinimoPct: +minJumpPct.toFixed(1),
         incrementoObjetivoPct: cfg.loadIncrementPctOnRepCeiling,
       },
+    },
+  };
+}
+
+/**
+ * Sin salto de carga posible (peso corporal o inventario agotado): la única
+ * progresión es sumar reps, hasta el máximo de reps con evidencia de
+ * hipertrofia (`repRanges.globalValid.max`, SCIENCE §3). Ahí se sugiere lastre
+ * o una variante más difícil en vez de seguir sumando (auditoría M6).
+ */
+function bodyweightReps(
+  input: NextPrescriptionInput,
+  achieved: number,
+  repRange: RepRange,
+  rule: "linear-no-jump" | "double-no-jump",
+): Prescription {
+  const cap = input.rules.repRanges.globalValid.max;
+  const step = input.rules.progressionModels.double.repStepWhenBelowCeiling;
+  if (achieved >= cap) {
+    return {
+      nextLoadKg: input.currentLoadKg,
+      nextReps: cap,
+      rationale: `Llegaste a ${cap} reps sin carga para sumar: más reps ya no aportan más estímulo. Agregá lastre o pasá a una variante más difícil.`,
+      explain: { rule: "bodyweight-cap", inputs: { repsLogradas: achieved, maxRepsEvidencia: cap, cargaKg: input.currentLoadKg } },
+    };
+  }
+  return {
+    nextLoadKg: input.currentLoadKg,
+    nextReps: Math.min(cap, Math.max(repRange.min, achieved + step)),
+    rationale: "Sin incremento de carga disponible: sumar reps.",
+    explain: { rule, inputs: { repsLogradas: achieved, topeRango: repRange.max, maxRepsEvidencia: cap, cargaKg: input.currentLoadKg } },
+  };
+}
+
+/**
+ * Bloques (auditoría M2): al cambiar de fase el rango cambia a propósito y el
+ * historial queda fuera del rango nuevo. Si las reps PRESCRITAS de la última
+ * sesión no caen en el rango de la fase actual, se re-ancla la carga: e1RM de
+ * la última sesión (Epley ajustado por RIR) invertido para el piso del rango
+ * nuevo al RIR objetivo, redondeado al equipamiento. null = misma fase.
+ */
+function blockPhaseReanchor(
+  input: NextPrescriptionInput,
+  sessions: SetLog[][],
+  repRange: RepRange,
+  targetRir: number,
+): Prescription | null {
+  const last = sessions[sessions.length - 1];
+  const prescribed = Math.max(...last.map((l) => l.targetReps));
+  if (prescribed >= repRange.min && prescribed <= repRange.max) return null;
+  const loaded = last.filter((l) => l.actualLoadKg > 0);
+  if (loaded.length === 0) return null; // peso corporal: no hay carga que re-anclar
+  const e1rm = Math.max(...loaded.map((l) => estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, input.rules)));
+  const ctx = { type: input.equipmentType, equipment: input.equipment };
+  const next = loadForTarget(e1rm, repRange.min, Math.max(0, targetRir), input.rules, ctx);
+  if (next <= 0) return null;
+  return {
+    nextLoadKg: next,
+    nextReps: repRange.min,
+    rationale: `Nueva fase del bloque (${repRange.min}–${repRange.max} reps): carga re-anclada desde tu 1RM estimado de la última sesión.`,
+    explain: {
+      rule: "block-phase-reanchor",
+      inputs: { repsPrescritasAntes: prescribed, pisoReps: repRange.min, topeRango: repRange.max, e1rmKg: +e1rm.toFixed(1), cargaAnteriorKg: input.currentLoadKg, cargaNuevaKg: next },
     },
   };
 }

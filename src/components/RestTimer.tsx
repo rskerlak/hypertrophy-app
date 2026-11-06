@@ -69,7 +69,7 @@ export function RestTimer({
   return (
     <div
       className={cn(
-        "rounded-xl border px-4 py-2 transition-colors",
+        "rounded-xl border px-4 py-1 shadow-[var(--pop-shadow)] transition-colors",
         done ? "border-[var(--success)]/40 bg-[var(--success)]/10" : "border-[var(--border)] bg-[var(--surface-2)]",
       )}
     >
@@ -83,7 +83,8 @@ export function RestTimer({
             type="button"
             disabled={!lastSetAt}
             onClick={() => setExtra((e) => e - 15)}
-            className="h-8 rounded-lg px-2 text-xs font-semibold text-[var(--muted)] disabled:opacity-40"
+            aria-label="Restar 15 segundos"
+            className="h-11 min-w-11 rounded-lg px-2 text-xs font-semibold text-[var(--muted)] disabled:opacity-40"
           >
             −15
           </button>
@@ -91,7 +92,8 @@ export function RestTimer({
             type="button"
             disabled={!lastSetAt}
             onClick={() => setExtra((e) => e + 15)}
-            className="h-8 rounded-lg px-2 text-xs font-semibold text-[var(--muted)] disabled:opacity-40"
+            aria-label="Sumar 15 segundos"
+            className="h-11 min-w-11 rounded-lg px-2 text-xs font-semibold text-[var(--muted)] disabled:opacity-40"
           >
             +15
           </button>

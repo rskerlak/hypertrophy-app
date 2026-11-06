@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { buildSessionView, type SessionView, type SlotPrescription } from "@/lib/sessionPlan";
@@ -12,6 +12,7 @@ import { fmtKg } from "@/lib/format";
 import { getRules } from "@/lib/rulesLoader";
 import { Badge, Button, Card, EditableNumber, HonestNote, PageHeader, cn } from "@/components/ui";
 import { EquipmentProfilePicker } from "@/components/EquipmentProfilePicker";
+import { Sheet } from "@/components/Dialog";
 import { RestTimer } from "@/components/RestTimer";
 import { CheckinSheet } from "@/components/CheckinSheet";
 import { nextAchievableLoad, plateBreakdown, roundToAvailable, type RoundingContext } from "@/domain/rounding";
@@ -72,7 +73,7 @@ function SessionRunner() {
     async () => (id ? ((await checkinRepo.forSession(id)) ?? null) : null),
     [id],
   );
-  const allExercises = useLiveQuery(() => exerciseRepo.all(), []);
+  const allExercises = useLiveQuery(() => exerciseRepo.selectable(), []);
 
   const refresh = useCallback(() => {
     if (id) buildSessionView(id).then(setView);
@@ -190,7 +191,7 @@ function SessionRunner() {
     if (!(await askConfirm({ title: "Finalizar sesión", message: msg, confirmLabel: "Finalizar" }))) return;
     await sessionRepo.complete(id);
     clearAllDrafts(id);
-    router.push(`/session/done?id=${id}`);
+    router.push(`/session/done?id=${encodeURIComponent(id)}`);
   };
 
   return (
@@ -210,7 +211,11 @@ function SessionRunner() {
       {!done && <EquipmentProfilePicker compact onChanged={refresh} />}
 
       {!done && (
-        <RestTimer lastSetAt={session.lastSetAt} targetSec={restTarget} minSec={rules.rest.minSec} nextLabel={nextLabel} />
+        // Pegado arriba (UX-03): tras registrar en el 5.º ejercicio el timer quedaba
+        // 1800 px fuera de pantalla, y en iPhone no hay vibración.
+        <div className="sticky top-2 z-30">
+          <RestTimer lastSetAt={session.lastSetAt} targetSec={restTarget} minSec={rules.rest.minSec} nextLabel={nextLabel} />
+        </div>
       )}
 
       {showCheckin && !done && (
@@ -319,8 +324,8 @@ function SessionRunner() {
       )}
 
       {toast && (
-        <div className="fixed inset-x-0 top-4 z-[65] flex justify-center px-6" role="status">
-          <div className="rounded-full border border-[var(--success)]/40 bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--success)] shadow-[var(--pop-shadow)]">
+        <div className="pointer-events-none fixed inset-x-0 bottom-28 z-[65] flex justify-center px-6" role="status">
+          <div className="pointer-events-auto rounded-full border border-[var(--success)]/40 bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--success)] shadow-[var(--pop-shadow)]">
             ★ {toast}
           </div>
         </div>
@@ -467,6 +472,15 @@ function ExerciseBlock({
   const working = logs.filter(isWorkingSet);
   const warmLogs = logs.filter((l) => !isWorkingSet(l));
   const byIndex = new Map(working.map((l) => [l.setIndex, l]));
+  /** Carga de la última serie de trabajo registrada HOY antes de `i`, si difiere de la sugerida (UX-07). */
+  const deviatedLoadBefore = (i: number): number | null => {
+    for (let k = i - 1; k >= 0; k--) {
+      const l = byIndex.get(k);
+      if (!l || l.kind === "drop" || l.kind === "partial") continue;
+      return l.actualLoadKg !== suggestedLoadKg ? l.actualLoadKg : null;
+    }
+    return null;
+  };
   const isBodyweight = planned.targetLoadKg === 0;
   const plates = !isBodyweight ? plateBreakdown(suggestedLoadKg, ctx) : null;
   const warmups = !isBodyweight ? warmupSets(suggestedLoadKg, ctx, rules) : [];
@@ -498,7 +512,7 @@ function ExerciseBlock({
             type="button"
             onClick={() => setWhyOpen((v) => !v)}
             className={cn(
-              "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+              "inline-flex min-h-11 items-center rounded-full border px-3 text-[11px] font-semibold",
               whyOpen ? "border-[var(--primary)]/50 text-[var(--primary-ink)]" : "border-[var(--border)] text-[var(--muted)]",
             )}
             aria-expanded={whyOpen}
@@ -581,7 +595,7 @@ function ExerciseBlock({
           <button
             type="button"
             onClick={() => setWarmOpen((v) => !v)}
-            className="text-[11px] font-semibold text-[var(--muted)]"
+            className="-my-2 inline-flex min-h-11 items-center text-[11px] font-semibold text-[var(--muted)]"
             aria-expanded={warmOpen}
           >
             {warmOpen ? "▾" : "▸"} Calentamiento · {warmups.length} series{warmLogs.length > 0 ? ` (${warmLogs.length} hechas)` : ""}
@@ -639,7 +653,9 @@ function ExerciseBlock({
             index={i}
             existing={byIndex.get(i)}
             previous={previousForIndex(previous?.sets ?? null, i)}
-            defaultLoad={isBodyweight ? bodyweightKg : suggestedLoadKg}
+            // UX-07: si la serie anterior de HOY se hizo con otra carga (no había
+            // discos, pesaba de más), las siguientes la proponen; el objetivo sigue visible.
+            defaultLoad={isBodyweight ? bodyweightKg : (deviatedLoadBefore(i) ?? suggestedLoadKg)}
             defaultReps={suggestedReps}
             defaultRir={setRir(i)}
             disabled={disabled}
@@ -705,7 +721,7 @@ function ExerciseBlock({
 }
 
 const chipBtn =
-  "rounded-full border border-[var(--border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--muted)] active:text-[var(--foreground)] disabled:opacity-40";
+  "inline-flex min-h-11 items-center rounded-full border border-[var(--border)] px-3.5 text-[11px] font-semibold text-[var(--muted)] active:text-[var(--foreground)] disabled:opacity-40";
 
 // ---------------- fila de serie ----------------
 
@@ -750,7 +766,7 @@ function SetRow({
   tag?: string;
   /** Ajuste sugerido para esta serie (A2.6). */
   hint?: IntraSessionHint | null;
-  onLog: (v: { load: number; reps: number; rir: number; rirReported: boolean; kind: SetKind; side?: "L" | "R"; note?: string }) => void;
+  onLog: (v: { load: number; reps: number; rir: number; rirReported: boolean; kind: SetKind; side?: "L" | "R"; note?: string }) => void | Promise<void>;
 }) {
   const draft = !existing ? readDraft(sessionId, slotIndex, index) : null;
   const [load, setLoadS] = useState(existing?.actualLoadKg ?? draft?.load ?? defaultLoad);
@@ -765,6 +781,15 @@ function SetRow({
   const [note, setNote] = useState(existing?.note ?? draft?.note ?? "");
   const [menu, setMenu] = useState(false);
   const [rirOpen, setRirOpen] = useState(false);
+  // UX-02: un rebote o doble toque no puede des-registrar la serie recién registrada.
+  const loggedAt = useRef(0);
+  const [busy, setBusy] = useState(false);
+  // UX-07: mientras no se toque la carga, sigue a la propuesta (que puede cambiar
+  // cuando la serie anterior se registra con otra carga).
+  const loadTouched = useRef(!!existing || draft?.load !== undefined);
+  useEffect(() => {
+    if (!existing && !loadTouched.current) setLoadS(defaultLoad);
+  }, [defaultLoad, existing]);
 
   const logged = !!existing;
   const locked = disabled || logged;
@@ -776,13 +801,16 @@ function SetRow({
       load, reps, rir, rirTouched, kind, side, note, ...patch,
     });
   };
-  const setLoad = (v: number) => (setLoadS(v), persist({ load: v }));
+  const setLoad = (v: number) => ((loadTouched.current = true), setLoadS(v), persist({ load: v }));
   const setReps = (v: number) => (setRepsS(v), persist({ reps: v }));
   const setRir = (v: number) => (setRirS(v), setRirTouched(true), persist({ rir: v, rirTouched: true }));
 
   const copyPrevious = () => {
     if (!previous) return;
-    if (!bodyweight) setLoadS(previous.loadKg);
+    if (!bodyweight) {
+      loadTouched.current = true;
+      setLoadS(previous.loadKg);
+    }
     setRepsS(previous.reps);
     persist({ load: bodyweight ? load : previous.loadKg, reps: previous.reps });
   };
@@ -805,7 +833,7 @@ function SetRow({
         <button
           type="button"
           onClick={() => !disabled && setMenu((v) => !v)}
-          className="w-5 shrink-0 text-center text-xs text-[var(--muted)]"
+          className="flex h-11 w-6 shrink-0 flex-col items-center justify-center text-center text-xs text-[var(--muted)]"
           aria-label={`Opciones de la serie ${index + 1}`}
           title="Tipo, lado y nota"
         >
@@ -841,7 +869,7 @@ function SetRow({
             disabled={locked}
             onClick={() => setRirOpen((v) => !v)}
             className={cn(
-              "h-8 w-full rounded-lg text-sm font-semibold tabular-nums disabled:opacity-40",
+              "h-11 w-full rounded-lg text-sm font-semibold tabular-nums disabled:opacity-40",
               needsRir ? "text-[var(--primary-ink)]" : "bg-[var(--surface)]",
               rirOpen && "ring-2 ring-[var(--primary)]/30",
             )}
@@ -853,22 +881,42 @@ function SetRow({
         <Button
           size="sm"
           variant={logged ? "secondary" : "primary"}
-          disabled={disabled || needsRir}
-          className="w-11 shrink-0 px-0"
-          title={logged ? "Des-loguear para editar" : needsRir ? "Elegí el RIR de esta serie" : "Registrar serie"}
-          onClick={() =>
-            logged
-              ? setLogRepo.remove(existing.id)
-              : onLog({
-                  load: bodyweight ? defaultLoad : load,
-                  reps,
-                  rir: rir ?? defaultRir,
-                  rirReported: requireRir || rirTouched,
-                  kind,
-                  side,
-                  note,
-                })
-          }
+          disabled={disabled || needsRir || busy}
+          className="h-11 w-12 shrink-0 px-0"
+          aria-label={logged ? `Serie ${index + 1} registrada: editar` : `Registrar serie ${index + 1}`}
+          title={logged ? "Editar esta serie" : needsRir ? "Elegí el RIR de esta serie" : "Registrar serie"}
+          onClick={async () => {
+            if (logged) {
+              // Toques dentro del segundo siguiente al registro son rebote: se ignoran.
+              if (Date.now() - loggedAt.current < 1200) return;
+              const ok = await askConfirm({
+                title: `Editar serie ${index + 1}`,
+                message: "La serie deja de estar registrada hasta que vuelvas a tocar Log. Los valores quedan cargados.",
+                confirmLabel: "Editar",
+              });
+              if (!ok) return;
+              // Al volver a registrar se conserva si el RIR ya estaba reportado.
+              if (existing.rirReported !== false) setRirTouched(true);
+              loadTouched.current = true;
+              await setLogRepo.remove(existing.id);
+              return;
+            }
+            setBusy(true);
+            loggedAt.current = Date.now();
+            try {
+              await onLog({
+                load: bodyweight ? defaultLoad : load,
+                reps,
+                rir: rir ?? defaultRir,
+                rirReported: requireRir || rirTouched,
+                kind,
+                side,
+                note,
+              });
+            } finally {
+              setBusy(false);
+            }
+          }}
         >
           {logged ? "✓" : "Log"}
         </Button>
@@ -908,12 +956,12 @@ function SetRow({
           )}
           <span className="flex items-center gap-2">
             {breakdown?.unreachable && (
-              <button type="button" className="text-[var(--warning)]" onClick={() => setLoad(breakdown.nearestBelow)}>
+              <button type="button" className="-my-3 py-3 text-[var(--warning)]" onClick={() => setLoad(breakdown.nearestBelow)}>
                 no se arma → usar {fmtLoad(breakdown.nearestBelow)}
               </button>
             )}
             {previous && (
-              <button type="button" className="font-semibold text-[var(--primary-ink)]" onClick={copyPrevious}>
+              <button type="button" className="-my-3 py-3 pl-3 font-semibold text-[var(--primary-ink)]" onClick={copyPrevious}>
                 copiar anterior
               </button>
             )}
@@ -1000,7 +1048,7 @@ function RirPicker({ onPick }: { onPick: (rir: number) => void }) {
             key={v}
             type="button"
             onClick={() => onPick(v)}
-            className="h-9 min-w-9 flex-1 rounded-lg border border-[var(--primary)]/35 bg-[var(--primary)]/10 text-sm font-semibold text-[var(--primary-ink)] active:scale-95"
+            className="h-11 min-w-9 flex-1 rounded-lg border border-[var(--primary)]/35 bg-[var(--primary)]/10 text-sm font-semibold text-[var(--primary-ink)] active:scale-95"
           >
             {v === 4 ? "4+" : v}
           </button>
@@ -1043,7 +1091,7 @@ function Field({
         <button
           type="button"
           disabled={disabled}
-          className="h-8 w-7 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"
+          className="h-11 w-7 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"
           onClick={() => onChange(+down(value).toFixed(3))}
           aria-label={`Bajar ${label}`}
         >
@@ -1058,7 +1106,7 @@ function Field({
           ariaLabel={isLoad ? "Carga" : label}
           disabled={disabled}
           className={cn(
-            "h-8 w-full min-w-[34px] text-sm",
+            "h-11 w-full min-w-[34px] text-sm",
             tone === "up" && "text-[var(--success)]",
             tone === "down" && "text-[var(--warning)]",
           )}
@@ -1066,7 +1114,7 @@ function Field({
         <button
           type="button"
           disabled={disabled}
-          className="h-8 w-7 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"
+          className="h-11 w-7 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"
           onClick={() => onChange(+up(value).toFixed(3))}
           aria-label={`Subir ${label}`}
         >
@@ -1102,17 +1150,7 @@ function SwapSheet({
   const [picked, setPicked] = useState<string | null>(null);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/30 p-3" role="dialog" aria-modal aria-label="Cambiar ejercicio" onClick={onClose}>
-      <div
-        className="max-h-[80dvh] w-full max-w-md overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--pop-shadow)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-2 flex items-center justify-between">
-          <p className="font-semibold">Cambiar {shortName(current.name)}</p>
-          <button type="button" onClick={onClose} className="px-2 text-[var(--muted)]" aria-label="Cerrar">
-            ✕
-          </button>
-        </div>
+    <Sheet title={`Cambiar ${shortName(current.name)}`} onClose={onClose}>
         <p className="mb-3 text-[11px] leading-relaxed text-[var(--muted)]">
           Mismo músculo principal. Se conservan series, rango y RIR. Preferí perfiles en estiramiento o
           medio: el trabajo en posición acortada es el menos respaldado (SCIENCE §8). No rotes por rotar.
@@ -1156,8 +1194,7 @@ function SwapSheet({
             En el plan
           </Button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

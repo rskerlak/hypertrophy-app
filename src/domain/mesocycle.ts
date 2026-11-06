@@ -507,16 +507,61 @@ function buildDeloadWeek(
  * Reemplaza un ejercicio por otro en TODO el plan (A4.2, al eliminar un
  * ejercicio en uso). Las series ya registradas no cambian: viven en setLogs.
  */
-export function replaceExerciseInPlan(plan: MesocyclePlan, fromId: string, toId: string): MesocyclePlan {
+export function replaceExerciseInPlan(
+  plan: MesocyclePlan,
+  fromId: string,
+  toId: string,
+  /** Semanas ANTERIORES quedan intactas: ya se entrenaron con el ejercicio viejo (M4). */
+  fromWeekIndex = 0,
+  /** Carga del ejercicio nuevo por slot (M3); sin esto se conserva la del plan. */
+  loadFor?: (slot: PlannedSlot) => number,
+): MesocyclePlan {
+  return withSlotChange(plan, fromWeekIndex, (_di, _si, sl) => sl.exerciseId === fromId, toId, loadFor);
+}
+
+/**
+ * Cambia el ejercicio de los slots que cumplen `match` desde `fromWeekIndex`.
+ * La carga se estima una vez por (día, slot) con la primera semana de
+ * acumulación afectada y se usa igual en el resto (deload incluido: su
+ * política parte de esa carga). Nunca hereda la carga del ejercicio anterior
+ * si se pasa `loadFor` (auditoría M3).
+ */
+function withSlotChange(
+  plan: MesocyclePlan,
+  fromWeekIndex: number,
+  match: (dayIndex: number, slotIndex: number, slot: PlannedSlot) => boolean,
+  exerciseId: string,
+  loadFor?: (slot: PlannedSlot) => number,
+): MesocyclePlan {
+  const loads = new Map<string, number>();
+  if (loadFor) {
+    for (const w of plan.weeks) {
+      if (w.weekIndex < fromWeekIndex || w.isDeload) continue;
+      w.days.forEach((d, di) =>
+        d.slots.forEach((sl, si) => {
+          const k = `${di}:${si}`;
+          if (match(di, si, sl) && !loads.has(k)) loads.set(k, loadFor(sl));
+        }),
+      );
+    }
+  }
   return {
     ...plan,
-    weeks: plan.weeks.map((w) => ({
-      ...w,
-      days: w.days.map((d) => ({
-        ...d,
-        slots: d.slots.map((sl) => (sl.exerciseId === fromId ? { ...sl, exerciseId: toId } : sl)),
-      })),
-    })),
+    weeks: plan.weeks.map((w) =>
+      w.weekIndex < fromWeekIndex
+        ? w
+        : {
+            ...w,
+            days: w.days.map((d, di) => ({
+              ...d,
+              slots: d.slots.map((sl, si) => {
+                if (!match(di, si, sl)) return sl;
+                const load = loads.get(`${di}:${si}`) ?? (loadFor ? loadFor(sl) : undefined);
+                return load === undefined ? { ...sl, exerciseId } : { ...sl, exerciseId, targetLoadKg: load };
+              }),
+            })),
+          },
+    ),
   };
 }
 
@@ -533,7 +578,9 @@ export function swapExerciseInPlan(
   slotIndex: number,
   exerciseId: string,
   fromWeekIndex: number,
+  loadFor?: (slot: PlannedSlot) => number,
 ): MesocyclePlan {
+  if (loadFor) return withSlotChange(plan, fromWeekIndex, (di, si) => di === dayIndex && si === slotIndex, exerciseId, loadFor);
   return {
     ...plan,
     weeks: plan.weeks.map((w) =>

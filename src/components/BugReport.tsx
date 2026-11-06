@@ -42,7 +42,7 @@ export function BugReportButton() {
         aria-label="Anotar un bug"
         title="Anotar un bug"
         onClick={() => setOpen(true)}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] active:text-[var(--foreground)]"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--muted)] active:text-[var(--foreground)]"
       >
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M8 2l1.9 1.9M16 2l-1.9 1.9M9 7.1V6a3 3 0 0 1 6 0v1.1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6zM12 20v-9M6.5 9C4.6 8.8 3 7.2 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M17.5 9C19.4 8.8 21 7.2 21 5M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4" />
@@ -168,7 +168,7 @@ export function BugListCard() {
           </div>
           <p className={cn("text-sm", b.status === "resolved" && "line-through")}>{b.text}</p>
           <p className="mt-1 text-[11px] text-[var(--muted)]">
-            {CATEGORY_LABELS[b.category]} · {b.context.sessionDayLabel ?? b.route} · v{b.buildSha}
+            {CATEGORY_LABELS[b.category] ?? b.category} · {b.context?.sessionDayLabel ?? b.route} · v{b.buildSha}
           </p>
           <div className="mt-2 flex gap-2">
             <Button

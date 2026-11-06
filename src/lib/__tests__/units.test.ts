@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayStep, fmtLoad, fromDisplay, toDisplay } from "../units";
+import { displayStep, fmtLoad, fromDisplay, parseLoadList, toDisplay } from "../units";
 
 describe("unidades de visualización (A4.7)", () => {
   it("ida y vuelta lb ↔ kg sin pérdida visible", () => {
@@ -15,5 +15,14 @@ describe("unidades de visualización (A4.7)", () => {
     expect(displayStep(2.5, "lb")).toBe(5);
     expect(displayStep(1, "lb")).toBe(2.5);
     expect(displayStep(2.5, "kg")).toBe(2.5);
+  });
+  it("M1: mostrar en lb y volver a guardar sin editar no altera los discos", () => {
+    const kg = [1.25, 2.5, 5, 10, 15, 20, 25];
+    const shown = kg.map((k) => fmtLoad(k, "lb")).join(", ");
+    expect(parseLoadList(shown, kg, "lb")).toEqual(kg);
+    // Un disco nuevo tipeado en lb sí se convierte.
+    const withNew = parseLoadList(shown + ", 45", kg, "lb");
+    expect(withNew).toHaveLength(8);
+    expect(withNew.some((k) => Math.abs(k - 20.41) < 0.01)).toBe(true);
   });
 });

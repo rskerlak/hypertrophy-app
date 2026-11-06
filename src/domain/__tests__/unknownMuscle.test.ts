@@ -47,3 +47,26 @@ describe("reemplazar un ejercicio en todo el plan (A4.2)", () => {
     expect(countExerciseInPlan(plan, "bench")).toBe(before); // puro: no muta
   });
 });
+
+describe("reemplazo desde una semana y con carga propia (auditoría M3/M4)", () => {
+  it("no toca semanas ya entrenadas y no hereda la carga del ejercicio anterior", async () => {
+    const { replaceExerciseInPlan, swapExerciseInPlan } = await import("../mesocycle");
+    const plan = generateMesocycle({ baseWeek, exercises, profile: "intermediate", progressionModel: "double", numAccumulationWeeks: 3, prioritizedMuscles: [], rules });
+    const next = replaceExerciseInPlan(plan, "bench", "fly", 1, () => 17.5);
+    const w0 = next.weeks[0].days.flatMap((d) => d.slots);
+    expect(w0.some((s) => s.exerciseId === "bench")).toBe(true); // semana 0 intacta
+    for (const w of next.weeks.slice(1)) {
+      for (const s of w.days.flatMap((d) => d.slots)) {
+        expect(s.exerciseId).not.toBe("bench");
+        if (s.exerciseId === "fly" && plan.weeks[w.weekIndex].days.some((d) => d.slots.some((x) => x.exerciseId === "bench"))) {
+          // los slots que eran press de banca llevan la carga estimada, deload incluido
+        }
+      }
+    }
+    const benchSlots = plan.weeks[2].days.flatMap((d, di) => d.slots.map((s, si) => ({ s, di, si }))).filter((x) => x.s.exerciseId === "bench");
+    for (const { di, si } of benchSlots) expect(next.weeks[2].days[di].slots[si].targetLoadKg).toBe(17.5);
+    const sw = swapExerciseInPlan(plan, benchSlots[0].di, benchSlots[0].si, "fly", 1, () => 12.5);
+    expect(sw.weeks[0].days[benchSlots[0].di].slots[benchSlots[0].si].exerciseId).toBe("bench");
+    expect(sw.weeks[1].days[benchSlots[0].di].slots[benchSlots[0].si]).toMatchObject({ exerciseId: "fly", targetLoadKg: 12.5 });
+  });
+});

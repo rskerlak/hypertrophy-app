@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { backupRepo } from "@/db/repositories";
 import { downloadBackup } from "@/lib/backup";
-import { validateBackup } from "@/db/backupSchema";
+import { DATA_LIMITS, validateBackup } from "@/db/backupSchema";
 import { Button, Card } from "@/components/ui";
 import { askConfirm, showAlert } from "@/store/dialogs";
 
@@ -22,6 +22,9 @@ export function BackupCard() {
 
   const doImport = async (file: File) => {
     try {
+      if (file.size > DATA_LIMITS.maxFileBytes) {
+        throw new Error(`El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)} MB: un respaldo real pesa pocos MB. No se importó nada.`);
+      }
       let raw: unknown;
       try {
         raw = JSON.parse(await file.text());
@@ -59,7 +62,8 @@ export function BackupCard() {
         <p className="font-medium">Respaldo de datos</p>
         <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
           Tus datos viven solo en este dispositivo. Exportá un respaldo para guardarlos o pasarlos
-          a otro dispositivo (importalo allá).
+          a otro dispositivo (importalo allá). El respaldo lleva TODO: entrenamientos, medidas,
+          check-ins, notas y bugs anotados; compartilo solo con quien quieras.
         </p>
       </div>
       <div className="flex gap-2">

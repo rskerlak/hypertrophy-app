@@ -245,8 +245,13 @@ describe("nextPrescription — lineal", () => {
       timestamp: "2026-01-05T10:00:00Z",
     });
     const p = nextPrescription({ ...base, model: "linear", exerciseHistory: history });
-    // 80 × 1.025 = 82 → redondeo hacia abajo da 80 → usar salto mínimo 82.5.
-    expect(p.nextLoadKg).toBe(82.5);
+    // 80 × 1.025 = 82 → redondeo da 80; el salto mínimo (82.5, +3.1 %) supera el
+    // 2.5 % objetivo: F6 → sumar una rep antes de subir (auditoría H1).
+    expect(p).toMatchObject({ nextLoadKg: 80, nextReps: 9, explain: { rule: "linear-add-rep" } });
+    // Con 9 reps el crédito (2 × 2.5 % = 5 %) cubre el salto: sube y vuelve al piso.
+    const s2 = sessionLogs({ sessionId: "s2", exerciseId: "bench", sets: 3, loadKg: 80, reps: 9, rir: 2, targetReps: 9, targetRir: 2, timestamp: "2026-01-08T10:00:00Z" });
+    const p2 = nextPrescription({ ...base, model: "linear", exerciseHistory: [...history, ...s2] });
+    expect(p2).toMatchObject({ nextLoadKg: 82.5, nextReps: 8, explain: { rule: "linear-hit" } });
   });
 
   it("sin progreso en el umbral de sesiones: mantiene carga", () => {

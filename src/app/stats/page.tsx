@@ -285,7 +285,7 @@ export default function StatsPage() {
             {visibleExercises.map((e) => (
               <Link
                 key={`${e.exerciseId}|${e.track ?? ""}`}
-                href={`/exercise?id=${e.exerciseId}`}
+                href={`/exercise?id=${encodeURIComponent(e.exerciseId)}`}
                 className="flex items-center justify-between text-sm"
               >
                 <span className="truncate">

@@ -167,13 +167,13 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
   // 4. Disposición/sueño pobres sostenidos (señal débil, cuenta junto a otras).
   const chronic = cfg.signals.chronicPoorReadiness;
   if (chronic.enabled) {
-    const window = input.recentSessions.slice(-chronic.windowSessions);
+    const recent = input.recentSessions.slice(-chronic.windowSessions);
     if (
-      window.length >= chronic.windowSessions &&
-      window.every(
+      recent.length >= chronic.windowSessions &&
+      recent.every(
         (s) =>
           s.sleptMinimum === false ||
-          (typeof s.readiness === "number" && s.readiness <= 2),
+          (typeof s.readiness === "number" && s.readiness <= chronic.readinessMax),
       )
     ) {
       add(chronic.weight, "Sueño bajo el mínimo o baja disposición sostenidos en el check-in");
@@ -184,8 +184,8 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
   const fat = cfg.signals.perceivedFatigue;
   if (fat.enabled) {
     const withValue = input.recentSessions.filter((s) => typeof s.perceivedFatigue === "number");
-    const window = withValue.slice(-fat.windowSessions);
-    if (window.length >= fat.windowSessions && window.every((s) => (s.perceivedFatigue ?? 0) >= fat.threshold)) {
+    const recent = withValue.slice(-fat.windowSessions);
+    if (recent.length >= fat.windowSessions && recent.every((s) => (s.perceivedFatigue ?? 0) >= fat.threshold)) {
       add(fat.weight, `Fatiga percibida ≥${fat.threshold}/5 en las últimas ${fat.windowSessions} sesiones con check-in`);
     }
   }
@@ -271,9 +271,9 @@ export function evaluateExerciseDeload(history: SetLog[], rules: Rules): Exercis
   const ordered = [...bySession.values()].sort((a, b) => a[0].timestamp.localeCompare(b[0].timestamp));
   if (ordered.length < cfg.sessions + 1) return { suggest: false };
   const best = (s: SetLog[]) => Math.max(...s.map((l) => estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, rules)));
-  const window = ordered.slice(-(cfg.sessions + 1)).map(best);
-  const monotone = window.every((v, i) => i === 0 || v < window[i - 1]);
-  const dropPct = ((window[0] - window[window.length - 1]) / window[0]) * 100;
+  const recent = ordered.slice(-(cfg.sessions + 1)).map(best);
+  const monotone = recent.every((v, i) => i === 0 || v < recent[i - 1]);
+  const dropPct = ((recent[0] - recent[recent.length - 1]) / recent[0]) * 100;
   if (!monotone || dropPct < cfg.e1rmDropPct) return { suggest: false };
   return {
     suggest: true,

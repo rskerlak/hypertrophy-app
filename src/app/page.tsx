@@ -131,7 +131,7 @@ export default function HomePage() {
             {next.isDeload && <Badge tone="warning">Deload</Badge>}
           </div>
           <p className="mb-4 text-xl font-semibold">{next.dayLabel}</p>
-          <Button className="w-full" size="lg" onClick={() => router.push(`/session?id=${next.id}`)}>
+          <Button className="w-full" size="lg" onClick={() => router.push(`/session?id=${encodeURIComponent(next.id)}`)}>
             {next.startedAt ? "Continuar sesión" : "Empezar entrenamiento"}
           </Button>
           {next.startedAt && (
@@ -157,7 +157,7 @@ export default function HomePage() {
             Continuar progresión →
           </Button>
           <div className="flex gap-2">
-            <Button variant="secondary" className="flex-1" onClick={() => router.push(`/stats?meso=${meso.id}`)}>
+            <Button variant="secondary" className="flex-1" onClick={() => router.push(`/stats?meso=${encodeURIComponent(meso.id)}`)}>
               Ver stats
             </Button>
             <NewMesoButton label="Nuevo meso" className="flex-1" size="md" />

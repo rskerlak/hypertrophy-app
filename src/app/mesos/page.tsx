@@ -103,7 +103,7 @@ export default function MesosPage() {
                       Continuar progresión →
                     </Button>
                   )}
-                  <Button size="sm" variant="secondary" onClick={() => router.push(`/stats?meso=${m.id}`)}>
+                  <Button size="sm" variant="secondary" onClick={() => router.push(`/stats?meso=${encodeURIComponent(m.id)}`)}>
                     Stats
                   </Button>
                   {(m.status === "active" || m.status === "paused") && (

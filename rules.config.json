@@ -89,6 +89,12 @@
     "_bandNote": "Limites de la banda de RIR que el usuario puede elegir por meso. Una banda 1-3 es defendible para hipertrofia: 1-2 RIR igualo al fallo en entrenados (Refalo 2024, J Sports Sci, RCT) y la curva RIR->hipertrofia se aplana cerca del fallo (Robinson 2024), asi que no llegar a 0 cuesta poco y reduce fatiga; mas de 3 RIR ya queda lejos del rango con buen estimulo por serie. Todo RIR planificado (deload incluido) se acota a la banda; el piso de barra sigue mandando por seguridad."
   },
 
+  "baseWeekDefaults": {
+    "slotSets": 3,
+    "startingLoadKg": 20,
+    "_note": "Valores iniciales de un ejercicio recien agregado a la semana base cuando no hay historial. 3 series por ejercicio deja el volumen semanal en zona de 'maxima eficiencia' por musculo con 2 ejercicios (Pelland 2026: 5-10 sets fraccionados/sem). La carga es solo un punto de partida editable: con historial se usa el 1RM real (suggestLoadFromHistory) y la doble progresion la corrige en 1-2 sesiones."
+  },
+
   "measurements": {
     "weightTrendAlpha": 0.1,
     "_note": "Tendencia del peso corporal por media movil exponencial (A3.5). MacroFactor y Dr. Muscle usan ~10%: heuristica de suavizado para leer tendencia por encima del ruido diario (agua, sal, glucogeno), no fisiologia."
@@ -225,7 +231,8 @@
         "enabled": false,
         "weight": 1,
         "windowSessions": 4,
-        "_desc": "Covariable: sueno bajo el minimo y baja disposicion sostenidos (del check-in). Deshabilitada por defecto (ver _weightNote)."
+        "readinessMax": 2,
+        "_desc": "Covariable: sueno bajo el minimo y baja disposicion sostenidos (del check-in). Deshabilitada por defecto (ver _weightNote). readinessMax: disposicion (1-5) que cuenta como baja; heuristica sin validez predictiva medida (Bell 2023: sin consenso)."
       },
       "perceivedFatigue": {
         "enabled": true,

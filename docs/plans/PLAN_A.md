@@ -254,6 +254,9 @@ Cada ítem lleva su cita a `SCIENCE.md` (actualizarla en el mismo commit). Lo qu
 
 ---
 
+## Auditoría (2026-11-05/06)
+Informes en `docs/audits/2026-11-05-planA-{ux,codigo,seguridad}.md`: las tres pistas dieron 4 Altos (H1, H2, UX-01, UX-02) y 20 Medios. Todos los Altos y Medios se corrigieron en el commit "Plan A audit fixes" (ver CHANGELOG); queda pendiente la re-auditoría de los hallazgos cerrados.
+
 ## Criterio de "Plan A terminado"
 - Todas las tareas con aceptación verde; `npm run test` ≥ 180 tests; `typecheck`, `lint`, `build` limpios.
 - Auditoría de `docs/plans/AUDITORIA.md` (pistas UX y código) sin hallazgos de severidad alta.

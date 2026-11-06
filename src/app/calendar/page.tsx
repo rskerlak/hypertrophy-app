@@ -92,7 +92,7 @@ export default function CalendarPage() {
         </Card>
       )}
 
-      {scheduled && <MonthGrid sessions={sessions} today={today} onOpen={(s) => router.push(`/session?id=${s.id}`)} />}
+      {scheduled && <MonthGrid sessions={sessions} today={today} onOpen={(s) => router.push(`/session?id=${encodeURIComponent(s.id)}`)} />}
 
       {scheduled && !editing && (
         <button type="button" className="mb-3 text-[11px] font-semibold text-[var(--primary-ink)]" onClick={() => setEditing(true)}>
@@ -120,7 +120,7 @@ export default function CalendarPage() {
                       session={s}
                       isNext={s.id === firstPending?.id}
                       today={today}
-                      onOpen={() => router.push(`/session?id=${s.id}`)}
+                      onOpen={() => router.push(`/session?id=${encodeURIComponent(s.id)}`)}
                       onSkip={async () => (await askSkip(s.dayLabel)) && sessionRepo.skip(s.id)}
                       onReopen={() => sessionRepo.reopen(s.id)}
                     />

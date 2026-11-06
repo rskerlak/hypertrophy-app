@@ -33,7 +33,10 @@ export function Sheet({
     (first ?? el)?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        e.stopPropagation();
+        // Solo la hoja de más arriba responde (una confirmación sobre otra hoja).
+        const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+        if (dialogs[dialogs.length - 1] !== el) return;
+        e.stopImmediatePropagation();
         closeRef.current();
         return;
       }

@@ -5,6 +5,25 @@ Cambios de MyoNoesis desde `4c43385`. Cada entrada nombra la tarea del plan
 en *Keep a Changelog*; la app no publica versiones numeradas (se despliega cada
 push a `main`), así que se agrupa por fase.
 
+## Correcciones de la auditoría de Plan A
+
+### Motor (prescripción)
+- **Lineal proporcional (H1):** si el salto mínimo del equipo supera el % por sesión, suma reps antes de subir carga (antes una polea de 5 kg saltaba +100 %).
+- **Drop y parciales (H2):** ya no congelan la carga; deciden la progresión solo las series de trabajo/fallo a la carga de trabajo.
+- Bloques re-anclan la carga al cambiar de fase (M2); peso corporal topea en 30 reps y sugiere lastre (M6); la continuación respeta APRE (M5); cambiar o reemplazar un ejercicio estima su propia carga (M3); el reemplazo no reescribe semanas entrenadas y un ejercicio con historial se archiva en vez de borrarse (M4); historial por slot cuando un ejercicio se repite en el día (S1).
+- Números que faltaban en el config: tope del calendario de RIR, umbral de disposición, series y carga por defecto de un ejercicio nuevo (M7).
+
+### Sesión y offline
+- **Offline real (UX-01):** las páginas se precachean y una sesión nunca abierta funciona sin red; `npm run test:offline` en CI.
+- **Doble toque (UX-02):** "Log" ignora el rebote y editar una serie registrada pide confirmación.
+- Timer siempre visible, toast que no tapa toques, controles de 44 px, "última vez" de la misma pista, la carga cambiada pasa a la serie siguiente, hojas con Escape y foco atrapado (UX-03…UX-08).
+- En libras, tocar un campo sin editarlo ya no altera cargas ni discos (M1).
+
+### Seguridad
+- Respaldo validado por completo con topes y límite de 25 MB; se importa la salida validada; pantalla de error con exportar/importar (S-01…S-03, S-07).
+- CSP por meta, Next 15.5.29, workflows con acciones fijadas por SHA y sin credenciales persistidas, `.gitignore` para temporales y respaldos, `serve` solo en localhost (S-04…S-06, S-09, S-12, S-13, S-14).
+- Pendiente del lado de la cuenta (no es código): verificar el dominio en GitHub Pages y proteger `main` (S-06, S-10).
+
 ## Plan A · A4 — Robustez, datos y pulido
 
 ### Agregado
