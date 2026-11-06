@@ -43,3 +43,34 @@ export function weeklyVolumeByMuscle(
   }
   return acc;
 }
+
+/**
+ * Series fraccionadas por músculo de UN día (A2.5). Sirve para avisar cuando
+ * un músculo pasa `softSessionCapFractionalSets` en una sola sesión (heurístico).
+ */
+export function sessionVolumeByMuscle(
+  day: { slots: Array<{ exerciseId: string; targetSets: number }> },
+  exercisesById: Map<string, Exercise>,
+  rules: Rules,
+): VolumeByMuscle {
+  const acc = emptyVolume(rules);
+  for (const slot of day.slots) {
+    const ex = exercisesById.get(slot.exerciseId);
+    if (ex) addExerciseVolume(acc, ex, slot.targetSets, rules);
+  }
+  return acc;
+}
+
+/** Músculos que superan el tope blando por sesión en un día (A2.5). */
+export function sessionCapWarnings(
+  day: { slots: Array<{ exerciseId: string; targetSets: number }> },
+  exercisesById: Map<string, Exercise>,
+  rules: Rules,
+): Array<{ muscle: string; sets: number }> {
+  const cap = rules.volumeCounting.softSessionCapFractionalSets;
+  const vol = sessionVolumeByMuscle(day, exercisesById, rules);
+  return Object.entries(vol)
+    .filter(([, v]) => v > cap)
+    .map(([muscle, v]) => ({ muscle, sets: Math.round(v * 10) / 10 }))
+    .sort((a, b) => b.sets - a.sets);
+}

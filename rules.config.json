@@ -9,6 +9,8 @@
   "volumeCounting": {
     "directSetWeight": 1.0,
     "synergistSetWeight": 0.5,
+    "softSessionCapFractionalSets": 11,
+    "_sessionCapNote": "Remmert 2025 (preprint SportRxiv, DOI 10.51224/SRXIV.537): punto de utilidad decreciente ~11 series fraccionadas por musculo por SESION, con pocos datos a volumenes altos. Pelland 2026: repartir en mas dias es neutral, no superior. HEURISTICO y provisional: solo un aviso en el Plan, nunca un bloqueo.",
     "_note": "Metodo de conteo fraccionado de Pelland et al. 2026 (Sports Med 56(2):481-505, DOI 10.1007/s40279-025-02344-w). Mejor apoyo meta-analitico que conteo 'total' o 'directo'."
   },
 
@@ -170,6 +172,9 @@
     "wellCalibratedMadReps": 1.5,
     "_thresholdNote": "1.5 reps: en entrenados el error basal de RIR ronda 1-1.5 reps y los autores lo consideran aceptable (Martikainen 2025, texto completo: sentadilla -1.5+-1.7, banca -1.1+-1.8 reps a 3-RIR), con sesgo sistematico a SUBESTIMAR la reserva. Un umbral de 1.0 seria mas estricto que el estado del arte.",
     "highRirDampenFrom": 4,
+    "lowLoadDampenBelowPctE1rm": 60,
+    "firstSetWeight": 0.5,
+    "_loadSetNote": "A2.7: el RIR es menos preciso con cargas livianas y en la primera serie de la sesion (Russo 2025 revision de 26 estudios; Casanova 2025; lo de la primera serie viene de tesis no revisadas, HEURISTICO). Por debajo de lowLoadDampenBelowPctE1rm% del e1RM el ajuste por RIR se atenua a la mitad; en la calibracion la serie 1 pesa firstSetWeight.",
     "_dampNote": "El RIR reportado LEJOS del fallo es de baja informacion (revision de 26 estudios 2025: la precision cae al alejarse del fallo, con mas reps y con menos carga relativa). A partir de highRirDampenFrom el ajuste se reduce a la mitad.",
     "capWhenUncalibrated": 1,
     "raiseFloorWhenUncalibrated": true,
@@ -262,7 +267,30 @@
   "oneRepMax": {
     "_note": "Estimacion de 1RM desde carga+reps+RIR para sugerir peso inicial de un ejercicio. Epley ajustado por RIR: repsEfectivas = reps + rir. Es aproximacion; degrada a reps altas.",
     "formula": "epley_rir_adjusted",
-    "epleyCoefficient": 0.0333
+    "epleyCoefficient": 0.0333,
+    "model": "epley",
+    "weightDependent": { "exponent": 0.85, "intercept": -2.55, "slope": 4.58 },
+    "_modelNote": "model 'weightDependent' (opcion, NO default): Marzagao 2026 (arXiv:2603.17495, 303k series casi al fallo): 1RM = w*(1 + (r-1)^exponent / (intercept + slope*ln w)), r = reps + RIR; 17-22% menos inconsistencia interna que Epley, pero es preprint, sin 1RM medidos y sin RIR. Solo afecta estimaciones (stats, cargas iniciales, records, deload por ejercicio), nunca la doble progresion."
+  },
+
+  "anchorSet": {
+    "rirDelta": 1,
+    "_note": "Serie ancla opcional por ejercicio (A2.4): la serie 1 se planifica rirDelta reps mas cerca del fallo (respetando banda y piso de barra) como ancla de calibracion del RIR. Patron de MacroFactor Workouts; coherente con Martikainen 2025 (variar la proximidad al fallo mejora la precision) y Russo 2025 (el RIR es mas preciso cerca del fallo). Sin RCT del patron en si: opcional."
+  },
+
+  "intraSession": {
+    "rirShortfall": 2,
+    "loadDropPct": 5,
+    "_note": "Ajuste SUGERIDO entre series (A2.6): si una serie salio con RIR reportado >= rirShortfall por debajo del objetivo, se sugiere bajar loadDropPct% la carga de la siguiente (o 1 rep si no hay salto menor). Evidencia indirecta: la perdida de rendimiento crece linealmente con la proximidad al fallo (Refalo 2023, Sports Med Open). Solo un boton 'usar'; nunca cambia el objetivo guardado."
+  },
+
+  "apre": {
+    "_note": "Modo APRE opcional por ejercicio (A2.8): la ultima serie es AMRAP (al fallo) y sus reps deciden la carga de la proxima sesion. Huang 2025 (J Exerc Sci Fit, red-meta): APRE con la mejor senal para FUERZA (banca SMD -0.83 vs % fijo), estudios chicos en universitarios; RIR/RPE sin ventaja clara. Implica una serie al fallo por ejercicio (mas fatiga, Refalo 2023). Opcional, no default, y prohibido en barra libre salvo que el usuario declare seguros/spotter.",
+    "belowMinPct": -5,
+    "inRangePct": 0,
+    "aboveMaxPct": 2.5,
+    "wellAboveMaxReps": 3,
+    "wellAboveMaxPct": 5
   },
 
   "exerciseRotation": {

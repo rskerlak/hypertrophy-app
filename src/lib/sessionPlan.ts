@@ -156,6 +156,7 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
           equipmentType: planned.targetLoadKg === 0 ? "bodyweight" : exercise.equipmentType,
           equipment: settings.equipment,
           dayType: planned.dayType,
+          slotProgression: planned.progression,
           weekIndex: session.weekIndex,
           numAccumulationWeeks: meso.numAccumulationWeeks,
           rirCapOverride: calibratedRirCap(

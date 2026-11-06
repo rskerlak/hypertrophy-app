@@ -16,6 +16,7 @@ import { CheckinSheet } from "@/components/CheckinSheet";
 import { nextAchievableLoad, plateBreakdown, roundToAvailable, type RoundingContext } from "@/domain/rounding";
 import { warmupSets } from "@/domain/warmup";
 import { compareToPrevious, previousForIndex, type PreviousSet } from "@/domain/history";
+import { intraSessionAdjust, type IntraSessionHint } from "@/domain/intraSession";
 import type { PR } from "@/domain/records";
 import { isWorkingSet, type Exercise, type SetKind, type SetLog } from "@/domain/types";
 
@@ -62,7 +63,12 @@ function SessionRunner() {
   const sessionRow = useLiveQuery(() => (id ? sessionRepo.get(id) : Promise.resolve(undefined)), [id]);
   const logsQuery = useLiveQuery(() => (id ? setLogRepo.forSession(id) : Promise.resolve([])), [id]);
   const logs = useMemo(() => logsQuery ?? [], [logsQuery]);
-  const existingCheckin = useLiveQuery(() => (id ? checkinRepo.forSession(id) : Promise.resolve(null)), [id]);
+  // undefined = cargando; null = no hay check-in (forSession devuelve undefined
+  // cuando no existe: sin este mapeo el check-in no aparecía nunca).
+  const existingCheckin = useLiveQuery(
+    async () => (id ? ((await checkinRepo.forSession(id)) ?? null) : null),
+    [id],
+  );
   const allExercises = useLiveQuery(() => exerciseRepo.all(), []);
 
   const refresh = useCallback(() => {
@@ -459,6 +465,17 @@ function ExerciseBlock({
   const plates = !isBodyweight ? plateBreakdown(suggestedLoadKg, ctx) : null;
   const warmups = !isBodyweight ? warmupSets(suggestedLoadKg, ctx, rules) : [];
   const lastIndexLogged = byIndex.has(slot.sets - 1);
+  // RIR objetivo por serie (serie ancla / AMRAP de APRE) o el general.
+  const setRir = (i: number) => planned.setTargets?.[i]?.targetRir ?? targetRir;
+  const isAmrap = (i: number) => !!planned.setTargets?.[i]?.amrap;
+  const isAnchor = (i: number) => i === 0 && !!planned.setTargets && planned.setTargets.length > 1 && !planned.setTargets[0].amrap && planned.setTargets[0].targetRir < targetRir;
+  // Ajuste sugerido entre series (A2.6): sobre la siguiente sin registrar.
+  const lastLogged = [...working].sort((a, b) => b.setIndex - a.setIndex)[0];
+  const hintIndex = lastLogged && lastLogged.setIndex + 1 < slot.sets && !byIndex.has(lastLogged.setIndex + 1) ? lastLogged.setIndex + 1 : -1;
+  const hint: IntraSessionHint | null =
+    hintIndex >= 0 && !disabled
+      ? intraSessionAdjust(lastLogged, { loadKg: isBodyweight ? 0 : suggestedLoadKg, reps: suggestedReps }, ctx, rules)
+      : null;
   const daysAgo = previous?.completedAt ? Math.round((Date.now() - Date.parse(previous.completedAt)) / 86400000) : null;
 
   return (
@@ -618,13 +635,15 @@ function ExerciseBlock({
             previous={previousForIndex(previous?.sets ?? null, i)}
             defaultLoad={isBodyweight ? bodyweightKg : suggestedLoadKg}
             defaultReps={suggestedReps}
-            defaultRir={targetRir}
+            defaultRir={setRir(i)}
             disabled={disabled}
             bodyweight={isBodyweight}
             ctx={ctx}
-            // La ÚLTIMA serie de cada ejercicio pide el RIR explícito (A1.11):
-            // la más cercana al fallo y la más precisa (Russo 2025).
-            requireRir={i === slot.sets - 1}
+            // RIR explícito en la ÚLTIMA serie (A1.11), en la serie ancla y en
+            // la AMRAP: son las más cercanas al fallo y las más informativas.
+            requireRir={i === slot.sets - 1 || isAnchor(i) || isAmrap(i)}
+            tag={isAmrap(i) ? "AMRAP al fallo" : isAnchor(i) ? "ancla" : undefined}
+            hint={i === hintIndex ? hint : null}
             onLog={(v) =>
               onLog({
                 slotIndex: slot.slotIndex,
@@ -636,9 +655,9 @@ function ExerciseBlock({
                 // Lo que pidió el motor, no lo que se levantó (A0.1).
                 targetLoadKg: isBodyweight ? 0 : suggestedLoadKg,
                 targetReps: suggestedReps,
-                targetRir,
+                targetRir: setRir(i),
                 rirReported: v.rirReported,
-                kind: v.kind,
+                kind: isAmrap(i) && v.kind === "working" ? "failure" : v.kind,
                 side: v.side,
                 note: v.note,
               })
@@ -705,6 +724,8 @@ function SetRow({
   bodyweight,
   ctx,
   requireRir,
+  tag,
+  hint,
   onLog,
 }: {
   sessionId: string;
@@ -719,6 +740,10 @@ function SetRow({
   bodyweight: boolean;
   ctx: RoundingContext;
   requireRir: boolean;
+  /** Etiqueta de la serie ("ancla", "AMRAP al fallo"). */
+  tag?: string;
+  /** Ajuste sugerido para esta serie (A2.6). */
+  hint?: IntraSessionHint | null;
   onLog: (v: { load: number; reps: number; rir: number; rirReported: boolean; kind: SetKind; side?: "L" | "R"; note?: string }) => void;
 }) {
   const draft = !existing ? readDraft(sessionId, slotIndex, index) : null;
@@ -842,6 +867,28 @@ function SetRow({
           {logged ? "✓" : "Log"}
         </Button>
       </div>
+
+      {tag && !logged && (
+        <p className="mt-0.5 pl-6 text-[10px] font-semibold uppercase tracking-wide text-[var(--primary)]">
+          {tag} · RIR objetivo {defaultRir}
+        </p>
+      )}
+
+      {hint && !logged && (
+        <div className="mt-1 flex items-center justify-between gap-2 rounded-lg bg-[var(--warning)]/10 px-2 py-1.5 pl-6 text-[11px] text-[var(--warning)]">
+          <span>{hint.text}</span>
+          <button
+            type="button"
+            className="shrink-0 font-semibold underline"
+            onClick={() => {
+              if (!bodyweight) setLoad(hint.loadKg);
+              setReps(hint.reps);
+            }}
+          >
+            usar
+          </button>
+        </div>
+      )}
 
       {!logged && !disabled && (previous || breakdown?.unreachable) && (
         <div className="mt-0.5 flex items-center justify-between gap-2 pl-6 text-[10px] text-[var(--muted)]">

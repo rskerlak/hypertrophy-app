@@ -271,6 +271,20 @@ export default function SettingsPage() {
         />
       </Card>
 
+      <Card className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="font-medium">Seguros o spotter en barra libre</p>
+          <p className="text-xs text-[var(--muted)]">
+            Habilita el modo APRE (última serie al fallo) en sentadilla, banca y otros con barra. Sin
+            esto, en barra el RIR mínimo es 1 por seguridad.
+          </p>
+        </div>
+        <Toggle
+          on={!!settings.barbellFailureAllowed}
+          onChange={(v) => settingsRepo.update({ barbellFailureAllowed: v })}
+        />
+      </Card>
+
       <NotificationCard />
 
       <Card className="mb-4">

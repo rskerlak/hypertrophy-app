@@ -118,6 +118,10 @@ export function deriveBaseWeekFromPlan(
       slots: day.slots.map((slot, slotIndex) => ({
         exerciseId: slot.exerciseId,
         ...(slot.supersetGroup ? { supersetGroup: slot.supersetGroup } : {}),
+        ...(slot.setTargets && slot.setTargets.length > 1 && !slot.setTargets[0].amrap && slot.setTargets[0].targetRir < slot.targetRir
+          ? { anchorSet: true }
+          : {}),
+        ...(slot.progression === "apre" ? { progression: "apre" as const } : {}),
         targetSets: slot.sets,
         repRange: { ...slot.repRange },
         startingLoadKg:
@@ -286,10 +290,33 @@ function buildAccumulationWeek(args: {
         rules,
       });
 
+      // RIR por serie: ancla (serie 1 más cerca del fallo) y AMRAP de APRE
+      // (última serie al fallo). Sin ancla ni APRE, todas iguales.
+      const totalSets = slot.targetSets + extra;
+      const isApre = slot.progression === "apre";
+      let setTargets: PlannedSlot["setTargets"];
+      if (slot.anchorSet || isApre) {
+        setTargets = Array.from({ length: totalSets }, () => ({ targetRir: rir }));
+        if (slot.anchorSet && totalSets > 1) {
+          setTargets[0] = {
+            targetRir: plannedRir({
+              baseRir,
+              intensity: day.intensity,
+              modelOffset: modelOffset - rules.anchorSet.rirDelta,
+              band: rirBand,
+              isBarbell: ex?.equipmentType === "barbell",
+              rules,
+            }),
+          };
+        }
+        if (isApre) setTargets[totalSets - 1] = { targetRir: 0, amrap: true };
+      }
       return {
         exerciseId: slot.exerciseId,
         ...(slot.supersetGroup ? { supersetGroup: slot.supersetGroup } : {}),
-        sets: slot.targetSets + extra,
+        ...(setTargets ? { setTargets } : {}),
+        ...(isApre ? { progression: "apre" as const } : {}),
+        sets: totalSets,
         repRange,
         targetRir: rir,
         targetLoadKg: slot.startingLoadKg,

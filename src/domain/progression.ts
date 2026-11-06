@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { nextAchievableLoad, roundToAvailable } from "./rounding";
 import { isRirReported, isWorkingSet } from "./types";
+import { estimate1RM } from "./oneRepMax";
 
 export interface NextPrescriptionInput {
   /** Logs de sesiones previas de este slot (mismo ejercicio), cualquier orden. */
@@ -34,6 +35,8 @@ export interface NextPrescriptionInput {
    * (ver rirCalibration). Si se omite, se usa el del config por rango de reps.
    */
   rirCapOverride?: number;
+  /** "apre": la carga sale de las reps de la serie AMRAP (A2.8). */
+  slotProgression?: "default" | "apre";
   rules: Rules;
 }
 
@@ -55,7 +58,8 @@ export type PrescriptionRule =
   | "double-ceiling"
   | "double-ceiling-large-jump"
   | "deload-first-half"
-  | "deload-second-half";
+  | "deload-second-half"
+  | "apre";
 
 export interface PrescriptionExplain {
   rule: PrescriptionRule;
@@ -159,6 +163,8 @@ function rirAdjustedReps(
   sessionLogs: SetLog[],
   capReps: number,
   dampenFrom: number,
+  /** e1RM de referencia y umbral (%) para atenuar con cargas livianas (A2.7). */
+  lowLoad?: { e1rmKg: number; belowPct: number },
 ): number {
   return Math.min(
     ...sessionLogs.map((l) => {
@@ -167,6 +173,10 @@ function rirAdjustedReps(
       let adj = Math.max(-capReps, Math.min(capReps, l.actualRir - l.targetRir));
       // Un RIR reportado lejos del fallo es de baja información: se atenúa.
       if (l.actualRir >= dampenFrom) adj = Math.trunc(adj / 2);
+      // Con carga liviana relativa al e1RM el RIR es menos preciso (Russo 2025).
+      if (lowLoad && lowLoad.e1rmKg > 0 && l.actualLoadKg / lowLoad.e1rmKg < lowLoad.belowPct / 100) {
+        adj = Math.trunc(adj / 2);
+      }
       return l.actualReps + adj;
     }),
   );
@@ -214,6 +224,9 @@ export function nextPrescription(input: NextPrescriptionInput): Prescription {
   // targetRir queda aplicado en los targets de la sesión; la progresión de
   // carga/reps se rige por reps logradas y el rango, no por el RIR en sí.
   void targetRir;
+  if (input.slotProgression === "apre") {
+    return apreProgression(input, sessions, repRange);
+  }
   if (model === "linear") {
     return linearProgression(input, sessions, repRange);
   }
@@ -295,10 +308,15 @@ function doubleProgression(
   const ctx = { type: input.equipmentType, equipment: input.equipment };
   const last = sessions[sessions.length - 1];
   const rangeCap = rirCapForRepRange(repRange, cfg);
+  const reported = sessions.flat().filter((l) => isRirReported(l) && l.actualLoadKg > 0);
+  const e1rmRef = reported.length
+    ? Math.max(...reported.map((l) => estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, input.rules)))
+    : 0;
   const reps = rirAdjustedReps(
     last,
     input.rirCapOverride !== undefined ? Math.min(rangeCap, input.rirCapOverride) : rangeCap,
     input.rules.rirCalibration.highRirDampenFrom,
+    { e1rmKg: e1rmRef, belowPct: input.rules.rirCalibration.lowLoadDampenBelowPctE1rm },
   );
 
   if (reps < repRange.max) {
@@ -381,6 +399,45 @@ function doubleProgression(
         saltoMinimoPct: +minJumpPct.toFixed(1),
         incrementoObjetivoPct: cfg.loadIncrementPctOnRepCeiling,
       },
+    },
+  };
+}
+
+/**
+ * APRE (A2.8): la última serie de la sesión anterior es AMRAP y sus reps
+ * deciden la carga: debajo del piso baja, dentro del rango se mantiene, sobre
+ * el tope sube (más si lo superó por mucho). Porcentajes desde config `apre`.
+ * Todas las series siguientes apuntan al piso del rango; la última vuelve a ser
+ * AMRAP (la marca el plan).
+ */
+function apreProgression(input: NextPrescriptionInput, sessions: SetLog[][], repRange: RepRange): Prescription {
+  const cfg = input.rules.apre;
+  const ctx = { type: input.equipmentType, equipment: input.equipment };
+  const last = sessions[sessions.length - 1];
+  const amrap = [...last].sort((a, b) => a.setIndex - b.setIndex).at(-1)!;
+  const r = amrap.actualReps;
+  const pct =
+    r < repRange.min
+      ? cfg.belowMinPct
+      : r <= repRange.max
+        ? cfg.inRangePct
+        : r >= repRange.max + cfg.wellAboveMaxReps
+          ? cfg.wellAboveMaxPct
+          : cfg.aboveMaxPct;
+  let next = pct === 0 ? input.currentLoadKg : roundToAvailable(input.currentLoadKg * (1 + pct / 100), ctx);
+  if (pct > 0 && next <= input.currentLoadKg) next = nextAchievableLoad(input.currentLoadKg, ctx);
+  return {
+    nextLoadKg: next,
+    nextReps: repRange.min,
+    rationale:
+      pct > 0
+        ? `APRE: la serie AMRAP llegó a ${r} reps (tope ${repRange.max}): subir carga.`
+        : pct < 0
+          ? `APRE: la serie AMRAP quedó en ${r} reps (piso ${repRange.min}): bajar carga.`
+          : `APRE: la serie AMRAP quedó dentro del rango (${r} reps): mantener carga.`,
+    explain: {
+      rule: "apre",
+      inputs: { repsAmrap: r, pisoReps: repRange.min, topeRango: repRange.max, ajustePct: pct, cargaAnteriorKg: input.currentLoadKg, cargaNuevaKg: next },
     },
   };
 }

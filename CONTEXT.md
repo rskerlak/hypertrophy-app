@@ -216,6 +216,8 @@ Despacha a la progresión:
 - **dup:** elegir `dayType` según el día; aplicar su `repRange` y `targetRirOffset`; dentro de eso, doble progresión.
 - **block:** determinar la fase por `week / totalWeeks` vs `fractionOfMeso`; aplicar `repRange` y `rirBias` de la fase; dentro, doble progresión.
 
+**A2 en el plan y la sesión:** `BaseWeekSlot.anchorSet` y `progression: "apre"` generan `PlannedSlot.setTargets` (RIR por serie: serie 1 ancla `rirDelta` más cerca del fallo dentro de banda y piso de barra; en APRE la última serie es `{ targetRir: 0, amrap: true }`, se registra como `failure` y su reps deciden la carga siguiente con `apre.*Pct`). En sesión, la serie ancla y la AMRAP también exigen RIR elegido. `intraSessionAdjust` sugiere (nunca impone) la siguiente serie tras un RIR reportado ≥ `intraSession.rirShortfall` por debajo del objetivo. `evaluateDeloadTrigger` suma pesos; `evaluateExerciseDeload` sugiere `overrides.exerciseDeload` para la próxima sesión del mismo día. `settings.barbellFailureAllowed` habilita APRE en barra libre.
+
 **`Prescription.explain`** (chip "¿por qué?", A1.10): `{ rule, inputs }`. Reglas: `no-history`, `linear-hit`, `linear-no-jump`, `linear-stalled`, `linear-miss`, `double-below-ceiling`, `double-consolidate` (llegó a las reps más cerca del fallo que el objetivo), `double-no-jump`, `double-cushion`, `double-ceiling`, `double-ceiling-large-jump`, `deload-first-half`, `deload-second-half`. `inputs` son los números que decidieron la regla, en unidades legibles.
 
 ### `roundToAvailable`

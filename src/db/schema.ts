@@ -22,6 +22,8 @@ export interface SettingsRow {
   prioritizedMuscles: string[];
   equipment: Equipment;
   wakeLockEnabled: boolean;
+  /** El usuario declara seguros/spotter en barra libre: habilita APRE (serie al fallo) en barra. */
+  barbellFailureAllowed?: boolean;
   onboarded: boolean;
   /** Versión de la biblioteca de ejercicios sembrada; dispara re-seed al cambiar. */
   seedVersion?: number;

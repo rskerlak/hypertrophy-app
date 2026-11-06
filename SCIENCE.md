@@ -55,6 +55,17 @@ Constructos de Israetel/RP, **no medidos como umbrales fisiológicos**. Los valo
 - **Moesgaard 2022 (*Sports Med*, volumen igualado): periodización sin efecto claro sobre hipertrofia (ES 0.13; IC −0.10 a 0.36; p=0.27).**
 - → Los 4 modelos deben **igualar volumen y esfuerzo**; la elección es preferencia del usuario, no optimización. La UI no debe vender un modelo como superior para hipertrofia.
 
+## 6 bis. Reglas de motor agregadas en A2 (cada una con su nivel de evidencia)
+- **Disparadores de deload con peso** (`deloadTriggers.signals.*.weight`): la caída sostenida de reps a carga fija pesa 2 y sola sugiere descargar: es el único marcador establecido de fatiga acumulada (Grandou 2020, *Sports Med*). RIR creep, MRV y fatiga percibida pesan 1. **Sólido** para el marcador; los pesos son heurística de diseño.
+- **Fatiga física + mental percibida** (check-in 1–5): único disparador subjetivo con consenso de expertos (Bell 2023 Delphi, *Sports Med Open*: 100 %), sin validez predictiva medida → peso 1. La **baja disposición crónica por sueño** queda deshabilitada por defecto: no hubo consenso para usar sueño o motivación como disparadores. Nunca modifican la sesión.
+- **Deload por ejercicio** (`exerciseDeload`): práctica de Dr. Muscle, **sin RCT** → solo sugerencia.
+- **Serie ancla** (`anchorSet`): patrón de MacroFactor Workouts, coherente con Martikainen 2025 y Russo 2025 (más precisión cerca del fallo); **sin RCT del patrón** → opcional.
+- **Tope blando por sesión** (`softSessionCapFractionalSets: 11`): Remmert 2025, **preprint** → solo aviso.
+- **Ajuste entre series** (`intraSession`): evidencia **indirecta** (Refalo 2023, pérdida de rendimiento lineal con la proximidad al fallo) → solo botón "usar".
+- **Confianza en el RIR** con carga liviana (< 60 % e1RM) y en la serie 1: Russo 2025 (**revisión**) para la carga; lo de la serie 1 viene de tesis → **heurístico**.
+- **APRE** (`apre`): la mejor señal para **fuerza** en la red-meta Huang 2025 (SMD −0.83 banca), estudios chicos; implica una serie al fallo → opcional y bloqueado en barra libre sin seguros declarados.
+- **1RM dependiente de la carga** (`oneRepMax.model: "weightDependent"`): Marzagão 2026, **preprint** sin 1RM medidos → opción, no default; solo estimaciones.
+
 ## 7 bis. Día fuerte / día liviano y banda de RIR
 - **Alternar días fuertes y livianos del mismo patrón** (empuje fuerte → tracción liviano → piernas → empuje liviano → tracción fuerte) es una forma simple de ondulación semanal. Con volumen igualado es **equivalente** para hipertrofia (Grgic 2017, d = −0.02; Moesgaard 2022): la app lo ofrece como gestión de fatiga/preferencia, no como optimización, y lo implementa como un offset de RIR por día (`dayIntensity`) sobre el calendario semanal, con los rangos de reps que elija el usuario.
 - **Banda de RIR 1–3 como default:** 1–2 RIR igualó al fallo en entrenados (Refalo 2024b, RCT) y la curva RIR→hipertrofia se aplana cerca del fallo (Robinson 2024), así que renunciar al RIR 0 cuesta poco estímulo y ahorra fatiga; por encima de 3 RIR el estímulo por serie cae y el RIR reportado es más ruidoso (§4). Por eso la banda acota **todo** RIR planificado (deload incluido); el piso de barra sigue mandando por seguridad.

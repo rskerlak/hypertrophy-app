@@ -75,6 +75,10 @@ export interface BaseWeekSlot {
   startingLoadKg: number;
   /** Slots con el mismo grupo se hacen en superserie (descanso al cerrar el último). */
   supersetGroup?: string;
+  /** Serie 1 más cerca del fallo como ancla de calibración (A2.4). */
+  anchorSet?: boolean;
+  /** "apre": la última serie es AMRAP y decide la carga siguiente (A2.8). */
+  progression?: "default" | "apre";
 }
 
 export interface BaseWeekDay {
@@ -143,6 +147,9 @@ export interface PlannedSlot {
   exerciseId: string;
   /** Superserie heredada de la semana base. */
   supersetGroup?: string;
+  /** RIR objetivo por serie cuando difiere del general (serie ancla, AMRAP de APRE). */
+  setTargets?: Array<{ targetRir: number; amrap?: boolean }>;
+  progression?: "default" | "apre";
   sets: number;
   repRange: RepRange;
   targetRir: number;

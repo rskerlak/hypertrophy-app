@@ -12,8 +12,16 @@ export function estimate1RM(
   rir: number,
   rules: Rules,
 ): number {
-  const c = rules.oneRepMax.epleyCoefficient;
-  return loadKg * (1 + c * (reps + rir));
+  const cfg = rules.oneRepMax;
+  const r = reps + rir;
+  if (cfg.model === "weightDependent" && loadKg > 0 && r >= 1) {
+    // Marzagão 2026 (preprint): coeficiente que depende de la carga absoluta.
+    const { exponent, intercept, slope } = cfg.weightDependent;
+    const denom = intercept + slope * Math.log(loadKg);
+    // Cargas muy livianas dejan el denominador ≤ 0 o casi: el modelo no aplica.
+    if (denom > 0.5) return loadKg * (1 + Math.pow(r - 1, exponent) / denom);
+  }
+  return loadKg * (1 + cfg.epleyCoefficient * r);
 }
 
 /**
@@ -27,6 +35,17 @@ export function loadForTarget(
   rules: Rules,
   ctx: RoundingContext,
 ): number {
+  if (rules.oneRepMax.model === "weightDependent") {
+    // Inversa numérica (bisección): la carga w tal que estimate1RM(w) = 1RM.
+    let lo = 0;
+    let hi = oneRmKg;
+    for (let i = 0; i < 50; i++) {
+      const mid = (lo + hi) / 2;
+      if (estimate1RM(mid, targetReps, targetRir, rules) > oneRmKg) hi = mid;
+      else lo = mid;
+    }
+    return roundToAvailable(lo, ctx);
+  }
   const c = rules.oneRepMax.epleyCoefficient;
   const raw = oneRmKg / (1 + c * (targetReps + targetRir));
   return roundToAvailable(raw, ctx);

@@ -67,11 +67,16 @@ export function assessRirCalibration(allLogs: SetLog[], rules: Rules): RirCalibr
   }
 
   const deviations: number[] = [];
+  const weights: number[] = [];
   for (const arr of groups.values()) {
     if (arr.length < 2) continue;
     const implied = arr.map((l) => l.actualReps + l.actualRir);
     const mean = implied.reduce((a, b) => a + b, 0) / implied.length;
-    for (const v of implied) deviations.push(Math.abs(v - mean));
+    arr.forEach((l, k) => {
+      deviations.push(Math.abs(implied[k] - mean));
+      // La serie 1 de la sesión es menos precisa (heurístico, A2.7).
+      weights.push(l.setIndex === 0 ? cfg.firstSetWeight : 1);
+    });
   }
 
   const biases = logs.map((l) => l.actualRir - l.targetRir);
@@ -91,7 +96,8 @@ export function assessRirCalibration(allLogs: SetLog[], rules: Rules): RirCalibr
     };
   }
 
-  const mad = mean(deviations);
+  const wsum = weights.reduce((a, b) => a + b, 0);
+  const mad = wsum > 0 ? deviations.reduce((a, d, k) => a + d * weights[k], 0) / wsum : mean(deviations);
   return {
     meanAbsDeviationReps: round2(mad),
     meanSignedBiasReps: round2(mean(biases)),

@@ -6,7 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { baseWeekRepo, exerciseRepo, mesocycleRepo, settingsRepo } from "@/db/repositories";
 import { getRules } from "@/lib/rulesLoader";
 import { effectiveLandmarks } from "@/domain/rules";
-import { weeklyVolumeByMuscle } from "@/domain/volume";
+import { sessionCapWarnings, weeklyVolumeByMuscle } from "@/domain/volume";
 import { suggestVolumeTrim, trimRoleBySlot } from "@/domain/volumeTrim";
 import type { BaseWeek, DayIntensity, Exercise, ProgressionModel, RirBand } from "@/domain/types";
 import { Badge, Button, Card, EditableNumber, EmptyState, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
@@ -157,7 +157,7 @@ export default function PlanPage() {
                   {trimmable > 1 ? "s" : ""}
                 </span>{" "}
                 (repiten un perfil de resistencia ya cubierto). Las anclas cubren el aporte directo y
-                la posición estirada, que es la que más respaldo tiene. Solo señalo ejercicios cuyo
+                la posición estirada (iguala al recorrido completo; la acortada es la menos respaldada). Solo señalo ejercicios cuyo
                 músculo PRINCIPAL está excedido: si el exceso viene del aporte sinergista, sacar el
                 ejercicio te costaría su trabajo directo — ahí conviene bajar series. Vos decidís:
                 los landmarks son heurísticos, no umbrales medidos.
@@ -217,6 +217,17 @@ export default function PlanPage() {
               }}
             />
 
+            {sessionCapWarnings(day, exById, rules).length > 0 && (
+              <p className="mb-2 rounded-lg bg-[var(--warning)]/10 px-3 py-2 text-[11px] leading-relaxed text-[var(--warning)]">
+                {sessionCapWarnings(day, exById, rules)
+                  .map((w) => `${muscleLabel(w.muscle)} ${fmtKg(w.sets)}`)
+                  .join(" · ")}{" "}
+                series fraccionadas en este día. Por encima de ~{rules.volumeCounting.softSessionCapFractionalSets} por músculo y
+                sesión el rendimiento por serie cae (estimación provisional, Remmert 2025); repartir en otro día es
+                neutral, no superior.
+              </p>
+            )}
+
             <div className="space-y-2">
               {day.slots.map((slot, slotIdx) => {
                 const ex = exById.get(slot.exerciseId);
@@ -251,6 +262,35 @@ export default function PlanPage() {
                           ✕
                         </button>
                       </div>
+                    </div>
+                    <div className="mb-2 flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        title="La serie 1 se planifica más cerca del fallo como ancla para calibrar tu RIR"
+                        onClick={() => updateSlot(dayIdx, slotIdx, { anchorSet: !slot.anchorSet || undefined })}
+                        className={
+                          "rounded-full border px-2.5 py-1 text-[11px] font-semibold " +
+                          (slot.anchorSet ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]" : "border-[var(--border)] text-[var(--muted)]")
+                        }
+                      >
+                        ⚓ serie ancla
+                      </button>
+                      <button
+                        type="button"
+                        disabled={ex.equipmentType === "barbell" && !settings.barbellFailureAllowed}
+                        title={
+                          ex.equipmentType === "barbell" && !settings.barbellFailureAllowed
+                            ? "En barra libre requiere declarar seguros o spotter en Ajustes"
+                            : "APRE: la última serie es AMRAP (al fallo) y decide la carga siguiente"
+                        }
+                        onClick={() => updateSlot(dayIdx, slotIdx, { progression: slot.progression === "apre" ? undefined : "apre" })}
+                        className={
+                          "rounded-full border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-40 " +
+                          (slot.progression === "apre" ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]" : "border-[var(--border)] text-[var(--muted)]")
+                        }
+                      >
+                        APRE (AMRAP)
+                      </button>
                     </div>
                     {slotIdx < day.slots.length - 1 && (
                       <button

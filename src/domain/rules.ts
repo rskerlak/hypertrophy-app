@@ -34,6 +34,7 @@ export const rulesSchema = z
       .object({
         directSetWeight: z.number(),
         synergistSetWeight: z.number(),
+        softSessionCapFractionalSets: z.number().min(0).default(11),
       })
       .passthrough(),
     muscles: z.array(z.string()).nonempty(),
@@ -146,6 +147,8 @@ export const rulesSchema = z
         raiseFloorWhenUncalibrated: z.boolean(),
         rirFloorWhenUncalibrated: z.number().int().min(0),
         highRirDampenFrom: z.number().int().min(1).default(4),
+        lowLoadDampenBelowPctE1rm: z.number().min(0).max(100).default(60),
+        firstSetWeight: z.number().min(0).max(1).default(0.5),
       })
       .passthrough()
       .default({
@@ -240,8 +243,27 @@ export const rulesSchema = z
       .object({
         formula: z.string(),
         epleyCoefficient: z.number(),
+        model: z.enum(["epley", "weightDependent"]).default("epley"),
+        weightDependent: z
+          .object({ exponent: z.number(), intercept: z.number(), slope: z.number() })
+          .default({ exponent: 0.85, intercept: -2.55, slope: 4.58 }),
       })
       .passthrough(),
+    anchorSet: z.object({ rirDelta: z.number().int().min(0) }).passthrough().default({ rirDelta: 1 }),
+    intraSession: z
+      .object({ rirShortfall: z.number().int().min(1), loadDropPct: z.number().min(0).max(50) })
+      .passthrough()
+      .default({ rirShortfall: 2, loadDropPct: 5 }),
+    apre: z
+      .object({
+        belowMinPct: z.number(),
+        inRangePct: z.number(),
+        aboveMaxPct: z.number(),
+        wellAboveMaxReps: z.number().int().min(1),
+        wellAboveMaxPct: z.number(),
+      })
+      .passthrough()
+      .default({ belowMinPct: -5, inRangePct: 0, aboveMaxPct: 2.5, wellAboveMaxReps: 3, wellAboveMaxPct: 5 }),
     exerciseRotation: z
       .object({
         suggestSwapWhen: z
