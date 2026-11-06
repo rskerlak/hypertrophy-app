@@ -10,7 +10,9 @@
 //      puede ser hasta contraproducente → los duplicados del mismo perfil se
 //      recortan primero. Maeo 2022 (tríceps overhead 1.4–1.5× vs neutro a igual
 //      volumen) y Pedrosa 2022 (parciales a longitud larga > ROM completo en
-//      varias regiones) sostienen preferir longitudes largas.
+//      varias regiones; estudio aislado: la lectura conjunta 2025 — Wolf 2025,
+//      Gschneidner 2025 n=297 — es que los alargados IGUALAN al ROM completo)
+//      sostienen preferir longitudes largas frente a las acortadas.
 //      OJO: la posición ACORTADA no recibe slot protegido — Pedrosa halló que
 //      el parcial corto no se distinguió del control en varias regiones, y un
 //      ensayo 2025 en flexores de codo no encontró ventaja de MEZCLAR perfiles
