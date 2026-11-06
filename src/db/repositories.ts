@@ -17,7 +17,7 @@ import { uuid } from "@/lib/id";
 import { countExerciseInPlan, deriveBaseWeekFromPlan, generateMesocycle, replaceExerciseInPlan, swapExerciseInPlan } from "@/domain/mesocycle";
 import { scheduleDates } from "@/domain/analytics";
 import { CURRENT_BACKUP_VERSION, equipmentSchema, validateActivity, validateBackup } from "@/db/backupSchema";
-import { groupBySession, holdExitDetected, nextPrescription } from "@/domain/progression";
+import { groupBySession, holdExitCandidates, holdExitDetected, nextPrescription } from "@/domain/progression";
 import { trackHistory } from "@/domain/history";
 import { suggestLoadFromHistory } from "@/domain/oneRepMax";
 import { roundToAvailable } from "@/domain/rounding";
@@ -751,11 +751,12 @@ export const sessionRepo = {
         ...(session?.overrides?.painAdjust ?? []).filter((x) => x.loadFactor < 1).map((x) => x.slotIndex),
       ]);
       const holdExits: string[] = [];
-      if (session && !session.isDeload) {
-        for (const exerciseId of new Set(logs.map((l) => l.exerciseId))) {
+      const candidates = session ? holdExitCandidates(logs, { isDeload: session.isDeload, reducedSlots: [...reducedSlots] }) : [];
+      if (candidates.length > 0) {
+        for (const exerciseId of new Set(candidates.map((l) => l.exerciseId))) {
           const ex = await db.exercises.get(exerciseId);
           if (!ex?.holdLoad) continue;
-          const exLogs = logs.filter((l) => l.exerciseId === exerciseId && (l.slotIndex === undefined || !reducedSlots.has(l.slotIndex)));
+          const exLogs = candidates.filter((l) => l.exerciseId === exerciseId);
           if (holdExitDetected(exLogs, { type: ex.equipmentType, equipment: settings.equipment })) {
             await db.exercises.update(exerciseId, { holdLoad: false, holdSince: undefined });
             holdExits.push(exerciseId);

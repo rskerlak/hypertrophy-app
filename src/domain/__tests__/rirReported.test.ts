@@ -85,3 +85,14 @@ describe("stats: e1RM prefiere la serie con RIR reportado", () => {
     expect(bench.deltaPct).toBe(0);
   });
 });
+
+describe("re-auditoría A5-11: la deriva de RIR no cuenta la serie del test AMRAP", () => {
+  it("un test al fallo (RIR 0 a propósito) no mueve la deriva", () => {
+    const plan = generateMesocycle({ baseWeek, exercises, profile: "intermediate", progressionModel: "double", numAccumulationWeeks: 3, prioritizedMuscles: [], rules });
+    const sessions = [{ id: "a", weekIndex: 0, status: "completed" as const }];
+    const normal = reported(sessionLogs({ sessionId: "a", exerciseId: "bench", sets: 2, loadKg: 80, reps: 8, rir: 2, targetRir: 2, timestamp: "2026-01-01T10:00:00Z" }));
+    const test = { ...normal[0], id: "t", setIndex: 2, kind: "failure" as const, actualRir: 0, actualReps: 12, amrapTest: { predictedRir: 2, repsAtPrediction: 8 } };
+    const s = computeMesoStats({ plan, sessions, setLogs: [...normal, test], checkins: [], exercises, rules });
+    expect(s.rirDrift.every((w) => w.meanDiff === 0)).toBe(true);
+  });
+});

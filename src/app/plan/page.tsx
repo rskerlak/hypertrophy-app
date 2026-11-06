@@ -561,7 +561,7 @@ function GenerateForm({
         <p className="mt-1.5 text-xs text-[var(--muted)]">
           Todo RIR planificado (días fuertes/livianos y deload incluidos) se acota a esta banda.
           1–3 es lo recomendado: 1–2 RIR iguala al fallo en entrenados (Refalo 2024) y más de 3
-          queda lejos del estímulo. El piso de 1 en barra libre se mantiene por seguridad.
+          queda lejos del estímulo. El piso de {getRules().rirSchedule.barbellRiskFloor} en barra libre se mantiene por seguridad.
         </p>
       </div>
       <div>

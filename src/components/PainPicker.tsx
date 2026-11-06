@@ -8,6 +8,21 @@ import { cn } from "./ui";
 export type PainAnswer = Array<{ zone: PainZone; score: number }> | null;
 
 /**
+ * A5R-02: lo que se guarda. Una zona tildada sin intensidad (0) no es "sin
+ * dolor": se descarta, y si no queda ninguna la respuesta vuelve a "sin responder".
+ */
+export function painToSave(v: PainAnswer): PainAnswer {
+  if (v === null || v.length === 0) return v;
+  const scored = v.filter((p) => p.score > 0);
+  return scored.length > 0 ? scored : null;
+}
+
+/** Hay zonas tildadas sin intensidad elegida. */
+export function painMissingScore(v: PainAnswer): boolean {
+  return !!v && v.some((p) => p.score === 0);
+}
+
+/**
  * Pregunta de dolor articular/tendinoso (A5.5). null = sin responder,
  * [] = "no me duele nada". Tono neutral: registra un lugar y una intensidad,
  * nunca una lesión. No es el dolor muscular post-entreno.
@@ -49,6 +64,9 @@ export function PainPicker({ value, onChange }: { value: PainAnswer; onChange: (
           Sí
         </Chip>
       </div>
+      {open && painMissingScore(value) && (
+        <p className="mt-2 text-[11px] text-[var(--primary-ink)]">Elegí la intensidad de cada zona; una zona sin intensidad no se guarda.</p>
+      )}
       {open && (
         <div className="mt-3 space-y-3">
           <div className="flex flex-wrap gap-1.5">

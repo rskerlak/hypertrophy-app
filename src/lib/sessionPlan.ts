@@ -245,6 +245,14 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
     // una rep menos por cada punto de RIR (parar antes, no hacer lo mismo).
     const painRange = painAdj && painAdj.loadFactor < 1 ? painLoadDownAdjust(planned.repRange, rules).repRange : null;
     if (painRange) planned = { ...planned, repRange: painRange };
+    // A5R-01: el RIR +1 aceptado llega también a las series con objetivo propio
+    // (ancla, APRE), y con dolor ninguna serie va al fallo.
+    if (painAdj && painAdj.rirDelta > 0 && planned.setTargets) {
+      planned = {
+        ...planned,
+        setTargets: planned.setTargets.map((t) => ({ ...t, targetRir: t.targetRir + painAdj.rirDelta, amrap: false })),
+      };
+    }
     const painReps = !painAdj
       ? p.nextReps
       : painAdj.loadFactor < 1

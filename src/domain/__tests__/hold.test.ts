@@ -78,3 +78,22 @@ describe("holdExitDetected (A5.4)", () => {
     expect(holdExitDetected(logs([80, 80], 0), ctx)).toBe(false);
   });
 });
+
+// ---------------- Re-auditoría A5 (A5-11) ----------------
+import { holdExitCandidates } from "../progression";
+
+describe("re-auditoría A5-11: Mantener con re-estimaciones y salidas", () => {
+  it("gap-reanchor y block-phase-reanchor se respetan con Mantener", () => {
+    const gap = nextPrescription({ ...base, exerciseHistory: [], anchor: { logs: at(10, 110), reason: "gap", ageDays: 40 }, holdLoad: true });
+    expect(gap.explain.rule).toBe("gap-reanchor");
+    const h = sessionLogs({ sessionId: "blk", exerciseId: "bench", sets: 3, loadKg: 62.5, reps: 11, rir: 3, targetReps: 11, targetRir: 3, timestamp: "2026-11-01T10:00:00Z" });
+    const blk = nextPrescription({ ...base, model: "block", repRange: { min: 5, max: 10 }, currentLoadKg: 62.5, exerciseHistory: h, weekIndex: 3, historyWeekIndex: 2, numAccumulationWeeks: 5, holdLoad: true });
+    expect(blk.explain.rule).toBe("block-phase-reanchor");
+  });
+  it("A5-02: en deload o en slots con carga reducida no hay candidatos a salir de Mantener", () => {
+    const logs = [0, 1].map((slotIndex) => ({ ...at(8)[0], id: `c${slotIndex}`, slotIndex, targetLoadKg: 90, actualLoadKg: 100 }));
+    expect(holdExitCandidates(logs, { isDeload: true, reducedSlots: [] })).toEqual([]);
+    expect(holdExitCandidates(logs, { isDeload: false, reducedSlots: [0] }).map((l) => l.slotIndex)).toEqual([1]);
+    expect(holdExitCandidates(logs, { isDeload: false, reducedSlots: [] })).toHaveLength(2);
+  });
+});

@@ -5,7 +5,7 @@ import { checkinRepo } from "@/db/repositories";
 import { uuid } from "@/lib/id";
 import { Button, Card } from "./ui";
 import type { Checkin } from "@/domain/types";
-import { PainPicker, type PainAnswer } from "./PainPicker";
+import { PainPicker, painToSave, type PainAnswer } from "./PainPicker";
 
 /**
  * Check-in neutral opcional (F7). NUNCA modifica la sesión ni la bloquea;
@@ -29,7 +29,7 @@ export function CheckinSheet({ sessionId, onDone }: { sessionId: string; onDone:
       energyBalance: energy,
       readiness,
       perceivedFatigue: fatigue,
-      ...(pain !== null ? { pain } : {}),
+      ...(painToSave(pain) !== null ? { pain: painToSave(pain)! } : {}),
     };
     await checkinRepo.put(c);
     onDone();

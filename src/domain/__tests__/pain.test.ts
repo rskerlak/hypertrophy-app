@@ -80,3 +80,10 @@ describe("ajustes y pregunta periódica", () => {
     expect(shouldAskPain(rules.pain.askEverySessions, rules)).toBe(true);
   });
 });
+
+describe("re-auditoría A5-11: tendencia que baja", () => {
+  it("6 → 4 → 3 en tres semanas → falling", () => {
+    const s = ev([r(0, [["knee", 6]]), r(7, [["knee", 4]]), r(14, [["knee", 3]])]);
+    expect(s.zones[0].trend).toBe("falling");
+  });
+});

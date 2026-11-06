@@ -261,7 +261,7 @@ function SessionRunner() {
           <div className="mt-4">
             <HonestNote>
               Tu RIR reportado viene variando ±{view.rirCalibration.meanAbsDeviationReps} reps a carga
-              fija, así que el motor mantiene un piso de 1 RIR y ajusta con más cautela. Se recalibra
+              fija, así que el motor mantiene un piso de {rules.rirCalibration.rirFloorWhenUncalibrated} RIR y ajusta con más cautela. Se recalibra
               solo a medida que registrás.
             </HonestNote>
           </div>
@@ -1228,7 +1228,7 @@ function SetRow({
         </div>
       )}
 
-      {(needsRir || rirOpen) && !locked && (
+      {!amrapTest && (needsRir || rirOpen) && !locked && (
         <RirPicker
           onPick={(v) => {
             setRir(v);

@@ -82,7 +82,7 @@ function ExerciseHistory() {
         action={
           ex.equipmentType !== "bodyweight" ? (
             <Button
-              size="sm"
+              size="md"
               variant="secondary"
               aria-pressed={!!ex.holdLoad}
               onClick={async () => {

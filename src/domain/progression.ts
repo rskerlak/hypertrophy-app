@@ -250,6 +250,16 @@ function applyHold(input: NextPrescriptionInput, p: Prescription): Prescription 
  * la sesión la carga real superó la prescrita (`targetLoadKg`, A0.1) en al
  * menos un paso del equipamiento. Una sola serie más pesada no alcanza.
  */
+/**
+ * A5-02: series de una sesión que pueden sacar de Mantener: ninguna en deload
+ * ni en slots con carga reducida a propósito (deload del ejercicio, dolor).
+ */
+export function holdExitCandidates(sessionLogs: SetLog[], ctx: { isDeload: boolean; reducedSlots: number[] }): SetLog[] {
+  if (ctx.isDeload) return [];
+  const reduced = new Set(ctx.reducedSlots);
+  return sessionLogs.filter((l) => l.slotIndex === undefined || !reduced.has(l.slotIndex));
+}
+
 export function holdExitDetected(sessionLogs: SetLog[], ctx: { type: EquipmentType; equipment: Equipment }): boolean {
   const sets = sessionLogs.filter((l) => isProgressionSet(l) && l.targetLoadKg > 0);
   if (sets.length === 0) return false;

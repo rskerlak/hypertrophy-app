@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { checkinRepo } from "@/db/repositories";
 import { Button, Card } from "./ui";
-import { PainPicker, type PainAnswer } from "./PainPicker";
+import { PainPicker, painMissingScore, painToSave, type PainAnswer } from "./PainPicker";
 
 /** Pregunta periódica de dolor (A5.5): un toque para "No". Nunca bloquea la sesión. */
 export function PainAskCard({ sessionId, onDone }: { sessionId: string; onDone: () => void }) {
@@ -20,7 +20,15 @@ export function PainAskCard({ sessionId, onDone }: { sessionId: string; onDone: 
           <Button variant="secondary" className="flex-1" onClick={onDone}>
             Ahora no
           </Button>
-          <Button className="flex-1" onClick={() => save(pain)}>
+          <Button
+            className="flex-1"
+            disabled={painMissingScore(pain)}
+            title={painMissingScore(pain) ? "Elegí la intensidad de cada zona" : undefined}
+            onClick={() => {
+              const v = painToSave(pain);
+              if (v) void save(v);
+            }}
+          >
             Guardar
           </Button>
         </div>

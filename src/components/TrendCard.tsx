@@ -40,7 +40,7 @@ export function TrendCard({
   if (compact) {
     return (
       <Card className="py-3">
-        {href ? <Link href={href}>{header}</Link> : header}
+        {href ? <Link href={href} className="block min-h-11">{header}</Link> : header}
         <p className="mt-1 text-xs tabular-nums text-[var(--muted)]">
           {trend.points.map((p) => `${r(p.e1rmKg)}${p.countable && p.reliable ? "" : "*"}`).join(" → ")} {unitLabel()} (1RM est. por meso)
         </p>
