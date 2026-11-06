@@ -95,7 +95,8 @@ function SessionRunner() {
   const [askPain, setAskPain] = useState(false);
   useEffect(() => {
     if (existingCheckin === undefined || showCheckin || logs.length > 0) return;
-    if (existingCheckin && Array.isArray(existingCheckin.pain)) return;
+    // UX-A5-08: si el check-in ya se guardó (con o sin dolor), no se vuelve a preguntar.
+    if (existingCheckin) return;
     painQuestionDue().then(setAskPain);
   }, [existingCheckin, showCheckin, logs.length]);
 
@@ -415,6 +416,9 @@ interface Draft {
   kind: SetKind;
   side?: "L" | "R";
   note?: string;
+  /** A5.8: datos del test a medio completar. */
+  predRir?: number | null;
+  repsAt?: number;
 }
 const draftKey = (sid: string, slot: number, set: number) => `mn-draft:${sid}:${slot}:${set}`;
 function readDraft(sid: string, slot: number, set: number): Draft | null {
@@ -515,8 +519,26 @@ function ExerciseBlock({
   const byIndex = new Map(working.map((l) => [l.setIndex, l]));
   // A5.8: test de precisión del RIR en la última serie (opcional).
   const lastExisting = byIndex.get(slot.sets - 1);
-  const [testOn, setTestOn] = useState(false);
-  const [testDismissed, setTestDismissed] = useState(false);
+  const testKey = `mn-draft:${sessionId}:amrap:${slot.slotIndex}`;
+  const readTest = (): { on?: boolean; dismissed?: boolean } => {
+    try {
+      return JSON.parse(sessionStorage.getItem(testKey) ?? "{}");
+    } catch {
+      return {};
+    }
+  };
+  // UX-A5-01: aceptar o saltar el test sobrevive a una recarga (borrador de sesión).
+  const [testOn, setTestOnS] = useState(() => !!readTest().on);
+  const [testDismissed, setTestDismissedS] = useState(() => !!readTest().dismissed);
+  const saveTest = (v: { on: boolean; dismissed: boolean }) => {
+    try {
+      sessionStorage.setItem(testKey, JSON.stringify(v));
+    } catch {
+      /* almacenamiento no disponible */
+    }
+  };
+  const setTestOn = (on: boolean) => (setTestOnS(on), saveTest({ on, dismissed: testDismissed }));
+  const setTestDismissed = (dismissed: boolean) => (setTestDismissedS(dismissed), saveTest({ on: testOn, dismissed }));
   const testActive = testOn || !!lastExisting?.amrapTest;
   /** Carga de la última serie de trabajo registrada HOY antes de `i`, si difiere de la sugerida (UX-07). */
   const deviatedLoadBefore = (i: number): number | null => {
@@ -565,6 +587,7 @@ function ExerciseBlock({
           >
             ¿por qué?
           </button>
+          {slot.painAdjusted && <Badge tone="warning">ajuste por dolor</Badge>}
           <Badge tone="primary">RIR {targetRir}</Badge>
         </div>
       </div>
@@ -603,6 +626,9 @@ function ExerciseBlock({
         >
           {exercise.holdLoad ? "Manteniendo" : "Mantener"}
         </button>
+        {exercise.holdLoad && (
+          <p className="mt-1 text-[11px] text-[var(--muted)]">El motor no sube la carga. Si cargás más en todas las series, sale solo.</p>
+        )}
         </div>
       )}
       {whyOpen && (
@@ -715,10 +741,10 @@ function ExerciseBlock({
             próxima sesión.
           </p>
           <div className="mt-2 flex gap-2">
-            <Button size="sm" className="flex-1" onClick={() => setTestOn(true)}>
+            <Button size="md" className="flex-1" onClick={() => setTestOn(true)}>
               Hacer el test
             </Button>
-            <Button size="sm" variant="secondary" className="flex-1" onClick={() => setTestDismissed(true)}>
+            <Button size="md" variant="secondary" className="flex-1" onClick={() => setTestDismissed(true)}>
               Ahora no
             </Button>
           </div>
@@ -897,20 +923,22 @@ function SetRow({
   const logged = !!existing;
   const locked = disabled || logged;
   // A5.8: en el test el RIR registrado es 0 (fallo) y lo que se pide es el RIR predicho.
-  const [predRir, setPredRir] = useState<number | null>(existing?.amrapTest?.predictedRir ?? null);
-  const [repsAt, setRepsAt] = useState(existing?.amrapTest?.repsAtPrediction ?? defaultReps);
+  const [predRir, setPredRirS] = useState<number | null>(existing?.amrapTest?.predictedRir ?? draft?.predRir ?? null);
+  const [repsAt, setRepsAtS] = useState(existing?.amrapTest?.repsAtPrediction ?? draft?.repsAt ?? defaultReps);
   const testIncomplete = amrapTest && !logged && (predRir === null || reps < repsAt);
   const needsRir = (amrapTest ? false : requireRir && rir === null && !logged) || testIncomplete;
 
   const persist = (patch: Partial<Draft>) => {
     if (logged) return;
     writeDraft(sessionId, slotIndex, index, {
-      load, reps, rir, rirTouched, loadTouched: loadTouched.current, repsTouched: repsTouched.current, kind, side, note, ...patch,
+      load, reps, rir, rirTouched, loadTouched: loadTouched.current, repsTouched: repsTouched.current, kind, side, note, predRir, repsAt, ...patch,
     });
   };
   const setLoad = (v: number) => ((loadTouched.current = true), setLoadS(v), persist({ load: v, loadTouched: true }));
   const setReps = (v: number) => ((repsTouched.current = true), setRepsS(v), persist({ reps: v, repsTouched: true }));
   const setRir = (v: number) => (setRirS(v), setRirTouched(true), persist({ rir: v, rirTouched: true }));
+  const setPredRir = (v: number) => (setPredRirS(v), persist({ predRir: v }));
+  const setRepsAt = (v: number) => (setRepsAtS(v), persist({ repsAt: v }));
 
   const copyPrevious = () => {
     if (!previous) return;
@@ -969,9 +997,14 @@ function SetRow({
         {/* RIR: celda compacta que abre el selector 0·1·2·3·4+ (la fila no
             entra con tres pares de −/+ en 360–390 px y los botones se pisaban). */}
         <div className="w-10 shrink-0">
-          <p className={cn("mb-0.5 text-center text-[10px] uppercase", needsRir ? "text-[var(--primary-ink)]" : "text-[var(--muted)]")}>
-            RIR{needsRir ? " ↓" : ""}
+          <p className={cn("mb-0.5 text-center text-[10px] uppercase", needsRir && !amrapTest ? "text-[var(--primary-ink)]" : "text-[var(--muted)]")}>
+            RIR{needsRir && !amrapTest ? " ↓" : ""}
           </p>
+          {amrapTest ? (
+            <p className="flex h-11 w-full items-center justify-center text-sm font-semibold tabular-nums text-[var(--muted)]" title="Al fallo: RIR 0">
+              0
+            </p>
+          ) : (
           <button
             type="button"
             disabled={locked || amrapTest}
@@ -983,8 +1016,9 @@ function SetRow({
             )}
             aria-label="Elegir RIR"
           >
-            {amrapTest ? "0" : rir === null ? "?" : rir >= 4 ? "4+" : rir}
+            {rir === null ? "?" : rir >= 4 ? "4+" : rir}
           </button>
+          )}
         </div>
         <Button
           size="sm"
@@ -1079,7 +1113,12 @@ function SetRow({
             </div>
           </fieldset>
           <p className="font-medium">2 · Seguí hasta el fallo y anotá arriba las reps totales</p>
+          {predRir === null && <p className="text-[var(--primary-ink)]">Para registrar, elegí cuántas creés que te quedan.</p>}
           {reps < repsAt && <p className="text-[var(--warning)]">Las reps totales no pueden ser menos que las que llevabas.</p>}
+          {/* UX-A5-10: aviso (no bloqueo) si no se subieron las reps totales. */}
+          {predRir !== null && reps === repsAt && (
+            <p className="text-[var(--warning)]">¿Seguiste hasta el fallo? Con reps totales iguales a las que llevabas queda &quot;te quedaban 0&quot;.</p>
+          )}
           {onCancelTest && (
             <button type="button" className="min-h-11 text-[11px] font-semibold text-[var(--muted)] underline" onClick={onCancelTest}>
               No hacer el test hoy

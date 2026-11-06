@@ -141,8 +141,8 @@ function ActivityForm({ initial, initialDate, onDone }: { initial?: ActivityRow;
   return (
     <Card className="space-y-3.5">
       <div>
-        <Label>Actividad</Label>
-        <Select value={type} onChange={(e) => setType(e.target.value as ActivityRow["type"])}>
+        <Label htmlFor="act-type">Actividad</Label>
+        <Select id="act-type" value={type} onChange={(e) => setType(e.target.value as ActivityRow["type"])}>
           {(initial?.type === "strength_external" ? [...MANUAL_TYPES, "strength_external"] : MANUAL_TYPES).map((k) => (
             <option key={k} value={k}>{ACTIVITY_LABELS[k]}</option>
           ))}
@@ -150,12 +150,12 @@ function ActivityForm({ initial, initialDate, onDone }: { initial?: ActivityRow;
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label>Fecha</Label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Label htmlFor="act-date">Fecha</Label>
+          <Input id="act-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
         <div>
-          <Label>Duración (min)</Label>
-          <Input inputMode="decimal" placeholder="ej: 30" value={duration} onChange={(e) => setDuration(e.target.value)} />
+          <Label htmlFor="act-dur">Duración (min)</Label>
+          <Input id="act-dur" inputMode="decimal" placeholder="ej: 30" value={duration} onChange={(e) => setDuration(e.target.value)} />
           {durTooLong && <p className="mt-1 text-[11px] text-[var(--danger-ink)]">Máximo {DATA_LIMITS.maxActivityMin} min.</p>}
         </div>
       </div>
@@ -169,7 +169,7 @@ function ActivityForm({ initial, initialDate, onDone }: { initial?: ActivityRow;
               aria-pressed={intensity === i}
               onClick={() => setIntensity(i)}
               className={
-                "rounded-2xl border py-2 text-sm font-medium transition " +
+                "min-h-11 rounded-2xl border py-2 text-sm font-medium transition " +
                 (intensity === i
                   ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary-ink)]"
                   : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]")
@@ -181,8 +181,8 @@ function ActivityForm({ initial, initialDate, onDone }: { initial?: ActivityRow;
         </div>
       </div>
       <div>
-        <Label>Nota (opcional)</Label>
-        <Input placeholder="ej: 5 km por el parque" maxLength={DATA_LIMITS.maxTextChars} value={note} onChange={(e) => setNote(e.target.value)} />
+        <Label htmlFor="act-note">Nota (opcional)</Label>
+        <Input id="act-note" placeholder="ej: 5 km por el parque" maxLength={DATA_LIMITS.maxTextChars} value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
       {initial?.source && initial.source !== "manual" && (
         <p className="text-[11px] text-[var(--muted)]">

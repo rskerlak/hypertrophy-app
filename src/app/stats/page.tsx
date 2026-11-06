@@ -198,7 +198,7 @@ export default function StatsPage() {
 
       {mesos.length > 1 && (
         <div className="mb-4">
-          <Select value={mesoId ?? ""} onChange={(e) => setMesoId(e.target.value)}>
+          <Select aria-label="Mesociclo" value={mesoId ?? ""} onChange={(e) => setMesoId(e.target.value)}>
             {mesos.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}

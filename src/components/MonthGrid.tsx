@@ -111,7 +111,7 @@ export function MonthGrid({
               onClick={() => (s ? onOpen(s) : onPickDay?.(key))}
               aria-label={label}
               className={cn(
-                "flex h-10 flex-col items-center justify-center rounded-lg text-xs leading-none tabular-nums",
+                "flex h-11 flex-col items-center justify-center rounded-lg text-xs leading-none tabular-nums",
                 tone,
                 key === today && "ring-1 ring-[var(--foreground)]/40",
                 // Tocable (alta de actividad) exige contraste AA; deshabilitado puede ir atenuado.

@@ -110,7 +110,6 @@ export default function HomePage() {
 
       <MeasurementPrompt />
       <BackupPrompt />
-      <PainSuggestions mesocycleId={meso.id} />
 
       <Card className="mb-4">
         <div className="mb-3 flex items-center justify-between text-sm text-[var(--muted)]">
@@ -147,7 +146,9 @@ export default function HomePage() {
             </p>
           )}
         </Card>
-      ) : (
+      ) : null}
+      <PainSuggestions mesocycleId={meso.id} collapsed />
+      {next ? null : (
         <Card className="mb-4">
           <p className="mb-3 font-medium">Mesociclo completado 🎉</p>
           <p className="mb-4 text-sm text-[var(--muted)]">

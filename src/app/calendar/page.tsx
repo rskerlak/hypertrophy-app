@@ -97,7 +97,8 @@ export default function CalendarPage() {
         </Card>
       )}
 
-      {scheduled && (
+      {/* UX-A5-05: la grilla siempre, aunque el meso no tenga fechas: se pueden registrar actividades igual. */}
+      {(
         <MonthGrid
           sessions={sessions}
           activities={activities}
@@ -106,9 +107,7 @@ export default function CalendarPage() {
           onPickDay={(date) => router.push(`/activities?date=${date}`)}
         />
       )}
-      {scheduled && (
-        <p className="-mt-2 mb-3 text-[11px] text-[var(--muted)]">Tocá un día sin sesión para registrar una actividad (natación, running…).</p>
-      )}
+      <p className="-mt-2 mb-3 text-[11px] text-[var(--muted)]">Tocá un día sin sesión para registrar una actividad (natación, running…).</p>
 
       {scheduled && !editing && (
         <button type="button" className="mb-3 text-[11px] font-semibold text-[var(--primary-ink)]" onClick={() => setEditing(true)}>

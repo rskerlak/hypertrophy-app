@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { PAIN_ZONES, type PainZone } from "@/domain/types";
 import { PAIN_ZONE_LABELS } from "@/lib/format";
-import { getRules } from "@/lib/rulesLoader";
 import { cn } from "./ui";
 
 export type PainAnswer = Array<{ zone: PainZone; score: number }> | null;
@@ -20,8 +19,8 @@ export function PainPicker({ value, onChange }: { value: PainAnswer; onChange: (
   const said = value !== null && value.length === 0 && !open;
   const toggleZone = (z: PainZone) => {
     const cur = value ?? [];
-    // Puntaje inicial = umbral de "a vigilar" del config: tildar la zona ya es reportar algo (ajustable).
-    const next = cur.some((p) => p.zone === z) ? cur.filter((p) => p.zone !== z) : [...cur, { zone: z, score: getRules().pain.watchFrom }];
+    // UX-A5-09: sin puntaje preelegido (0 = todavía sin elegir; no cuenta como señal).
+    const next = cur.some((p) => p.zone === z) ? cur.filter((p) => p.zone !== z) : [...cur, { zone: z, score: 0 }];
     onChange(next.length ? next : null);
   };
   const setScore = (z: PainZone, score: number) => onChange((value ?? []).map((p) => (p.zone === z ? { ...p, score } : p)));
@@ -62,9 +61,9 @@ export function PainPicker({ value, onChange }: { value: PainAnswer; onChange: (
           {(value ?? []).map((p) => (
             <div key={p.zone}>
               <p className="mb-1 text-xs text-[var(--muted)]">
-                {PAIN_ZONE_LABELS[p.zone]}: {p.score}/10
+                {PAIN_ZONE_LABELS[p.zone]}: {p.score > 0 ? `${p.score}/10` : "elegí la intensidad"}
               </p>
-              <div className="grid grid-cols-10 gap-1">
+              <div className="grid grid-cols-5 gap-1">
                 {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                   <button
                     key={n}

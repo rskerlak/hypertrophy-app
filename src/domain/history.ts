@@ -5,7 +5,6 @@ import { groupBySession, progressionSessions, progressionTrackKey } from "./prog
 import type { Rules } from "./rules";
 import {
   isComparableSet,
-  isWorkingSet,
   type DayIntensity,
   type MesocyclePlan,
   type PlannedSlot,

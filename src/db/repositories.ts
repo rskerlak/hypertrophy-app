@@ -878,10 +878,12 @@ export const sessionRepo = {
       .sort((a, b) => a.weekIndex - b.weekIndex || a.dayIndex - b.dayIndex);
     const nextByDay = new Map<number, SessionRow>();
     for (const s of pending) if (!nextByDay.has(s.dayIndex)) nextByDay.set(s.dayIndex, s);
+    // UX-A5-03: se cuentan sesiones (no slots) para el aviso.
     let touched = 0;
     for (const [dayIndex, s] of nextByDay) {
       const day = meso.plan.weeks[s.weekIndex]?.days[dayIndex];
       const slots = (day?.slots ?? []).flatMap((x, i) => (x.exerciseId === exerciseId ? [i] : []));
+      if (slots.length > 0) touched++;
       for (const slotIndex of slots) {
         if (option === "swap-candidate") {
           if (!swapCandidateId) continue;
@@ -898,7 +900,6 @@ export const sessionRepo = {
               : { slotIndex, loadFactor: 1, repsUp: 0, rirDelta: rules.pain.rirPlusOne, zone };
           await db.sessions.update(s.id, { overrides: { ...fresh?.overrides, painAdjust: [...list, adj] } });
         }
-        touched++;
       }
     }
     return touched;

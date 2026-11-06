@@ -80,7 +80,7 @@ export default function MesosPage() {
                   Intención
                   <select
                     aria-label={`Intención de ${m.name}`}
-                    className="h-9 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--foreground)]"
+                    className="h-11 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--foreground)]"
                     value={m.intent ?? "hypertrophy"}
                     onChange={(e) => mesocycleRepo.setIntent(m.id, e.target.value as MesoIntent)}
                   >
