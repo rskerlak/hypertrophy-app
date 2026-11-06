@@ -1,6 +1,6 @@
 # Protocolo de auditoría — UX, código y seguridad
 
-Para agentes auditores (Claude Opus 5.5 u otro). Se ejecuta **después** de cada fase de `PLAN_A.md` / `PLAN_B.md` y al cierre de cada plan. El auditor **no corrige**: reporta. Un agente implementador distinto corrige y vuelve a pedir auditoría de los hallazgos cerrados.
+Para agentes auditores (Claude Opus 5.5 u otro). Se ejecuta **después** de cada fase de `PLAN_A.md` / `PLAN_A5.md` y al cierre de cada plan. El auditor **no corrige**: reporta. Un agente implementador distinto corrige y vuelve a pedir auditoría de los hallazgos cerrados.
 
 ## Reglas del auditor
 1. Trabajar en un worktree de solo lectura del commit a auditar. No modificar archivos del repo (los scripts de verificación van al scratchpad o a `*.tmp.mjs` borrados al final).

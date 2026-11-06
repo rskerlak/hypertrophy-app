@@ -1,6 +1,8 @@
 # Plan A5 — "Memoria": historial entre mesos, mantener, dolor, actividad externa, AMRAP y respaldo
 
-Objetivo: que la app deje de tratar cada mesociclo como un universo aparte y empiece a usar **toda** la historia del usuario (fuerza, dolor, actividad fuera del gym, precisión del RIR) sin backend ni IA. Todo lo que se agrega al motor tiene cita en `SCIENCE.md`; lo que no la tiene se etiqueta "heurístico" o se deja como sugerencia. Este plan deja el terreno listo para el Plan B: la IA del Plan B necesita leer tendencia larga, dolor y actividad externa, y hoy nada de eso existe.
+> **Alcance recortado el 2026-11-06:** A5.7, A5.9 y A5.10 quedan fuera de este plan (se retoman en una planificación posterior). Queda por hacer: A5.6, A5.8, A5.11 y la auditoría.
+
+Objetivo: que la app deje de tratar cada mesociclo como un universo aparte y empiece a usar **toda** la historia del usuario (fuerza, dolor, actividad fuera del gym, precisión del RIR) sin depender de la IA. Todo lo que se agrega al motor tiene cita en `SCIENCE.md`; lo que no la tiene se etiqueta "heurístico" o se deja como sugerencia. Este plan deja el terreno listo para el Plan B: la IA del Plan B necesita leer tendencia larga, dolor y actividad externa, y hoy nada de eso existe.
 
 Prerrequisito: Plan A cerrado (commit `057cb17`, 287 tests). Leer primero `docs/plans/README.md` (reglas 1–10 siguen vigentes, en especial la 2: ningún número científico fuera de `rules.config.json`; la 5: el check-in nunca modifica una prescripción; y la 7: el motor sugiere, el usuario decide).
 
@@ -136,9 +138,11 @@ type PainOption = "load-down-reps-up" | "rir-plus-one" | "swap-candidate" | "exe
 
 ---
 
-## A5.7 — Importar Garmin (sin API)
+## A5.7 — Importar Garmin → fuera de este plan
 
-### A5.7.1 Importadores puros (`src/lib/importers/`, con fixtures y tests en `src/lib/__tests__/`)
+Los hallazgos con la exportación real (rutas de `DI_CONNECT/`, unidades, fecha local, GPS nunca) y las reglas de fusión quedan abajo como referencia; El texto original queda abajo como referencia hasta que C2 lo absorba.
+
+### A5.7.1 (referencia) Importadores puros (`src/lib/importers/`, con fixtures y tests en `src/lib/__tests__/`)
 - `garminActivitiesCsv.ts`: parsea el CSV de "Actividades → Exportar CSV" de Garmin Connect. Encabezados en español **e inglés** (fixtures de ambos; el usuario aporta uno real, se anonimiza antes de commitear). Salida: `Array<{ externalId?; date; type; durationMin; distanceKm?; avgHr?; maxHr?; title }>`; tipos mapeados a `ActivityRow.type` + `"strength"` (fuerza, que se trata aparte). Filas que no parsean se devuelven en `rejected` con el número de línea.
 - `garminAccountExport.ts`: lee el ZIP de la exportación completa de la cuenta (JSON de sueño, pasos, FC en reposo, HRV, Body Battery por día). Detectar cada archivo por **contenido** (claves), no por nombre; fixtures reales anonimizadas. Salida: `DailyMetric[]`. Descompresión con una librería ya instalada o `DecompressionStream` del navegador (verificar soporte; si no, el usuario sube los JSON sueltos).
 - Nunca se importa nada sin la vista previa: *"N actividades nuevas, M ya existentes (por `externalId`), K entrenamientos de fuerza (ver regla)"*.
@@ -177,7 +181,8 @@ type PainOption = "load-down-reps-up" | "rir-plus-one" | "swap-candidate" | "exe
 
 ---
 
-## A5.9 — Respaldo a Drive/iCloud sin servidor
+## A5.9 — Respaldo a Drive/iCloud → fuera de este plan
+Queda la exportación JSON/Excel como portabilidad y el recordatorio de respaldo existente (`BackupPrompt`) hasta que el sync lo reemplace. Texto original, solo referencia:
 
 - `settings.lastBackupAt?`. Botón "Guardar respaldo en…" en `/settings` y en el aviso de Home: usa `navigator.share({ files: [File] })` cuando `navigator.canShare?.({ files })` es true (Android Chrome e iOS ≥ 15 abren el menú del sistema: Drive, iCloud, etc.); si no, cae en la descarga actual. Al compartir o descargar con éxito, se guarda `lastBackupAt`.
 - Recordatorio: Home muestra *"Último respaldo hace N días"* a partir de `BACKUP_REMINDER_DAYS = 7` (constante en `src/lib/backup.ts`, no es un número científico), con "Guardar ahora" y "Recordar en una semana".
@@ -186,7 +191,8 @@ type PainOption = "load-down-reps-up" | "rir-plus-one" | "swap-candidate" | "exe
 
 ---
 
-## A5.10 — Macro plan (opcional, último)
+## A5.10 — Macro plan → fuera de este plan
+Texto original, solo referencia:
 
 - `macroPlans` (Dexie v5, misma versión que A5.7): `{ id; name; blocks: Array<{ intent; numAccumulationWeeks; progressionModel; rirBand?; note? }>; currentBlockIndex; createdAt }`. Un solo macro activo.
 - Al terminar un meso, "Nuevo meso" propone el siguiente bloque del macro (intención, semanas, modelo), con cargas re-ancladas por A5.1.2; el usuario puede editar o ignorar. La memoria larga lee la intención de cada bloque (ya la tiene el meso).
@@ -197,17 +203,17 @@ type PainOption = "load-down-reps-up" | "rir-plus-one" | "swap-candidate" | "exe
 
 ## A5.11 — Documentación
 
-- `CONTEXT.md`: §4 (campos `intent`, `holdLoad`, `loadedZones`, `pain`, `external`, `source/externalId`, tabla `dailyMetrics`, `macroPlans`), §5 (F11 memoria entre mesos, F12 mantener, F13 dolor, F14 actividad externa e importadores, F15 test AMRAP, F16 respaldo compartido), §6 (firmas de `trackHistory`, `longTermTrend`, `evaluatePainSignal`, `mergeGarminImport`, `rirAccuracyFromTests`), y una sección "Reglas fijadas por A5" con la separación memoria corta/larga.
+- `CONTEXT.md`: §4 (campos `intent`, `holdLoad`, `loadedZones`, `pain`, `external`, `source/externalId`), §5 (F11 memoria entre mesos, F12 mantener, F13 dolor, F14 actividad externa, F15 test AMRAP), §6 (firmas de `trackHistory`, `longTermTrend`, `evaluatePainSignal`, `rirAccuracyFromTests`), y una sección "Reglas fijadas por A5" con la separación memoria corta/larga.
 - `SCIENCE.md`: §12 Continuidad entre mesos y techo (Latella 2020; por qué el e1RM es la moneda común y dónde se degrada), §13 Dolor articular/tendinoso (Silbernagel 2007; umbrales como heurística clínica; distinción con DOMS), §14 Actividad externa (Schumann 2022, Petré 2021: interferencia solo misma sesión/< 3 h), §15 Test AMRAP (ampliación de §4). Cada número de config citado.
 - `rules.config.json`: notas `_` en cada clave nueva. `docs/plans/README.md`: fila `PLAN_A5.md`. `docs/ROADMAP.md` y `CHANGELOG.md`.
 
 ---
 
 ## Auditoría
-Al cerrar A5.9, correr el protocolo de `docs/plans/AUDITORIA.md` en las tres pistas, con énfasis en: (1) que ningún camino de Garmin, dolor o intención llegue a `nextPrescription` fuera de lo especificado (grep de `pain`, `dailyMetrics`, `intent` dentro de `src/domain/progression.ts` debe dar 0; solo `holdLoad` y `continuity` entran); (2) importadores contra archivos malformados (CSV gigante, ZIP con rutas raras, JSON con tipos cambiados) sin colgar la UI ni romper el respaldo; (3) textos de dolor sin lenguaje diagnóstico ni culpabilizador.
+Al cerrar A5.8, correr el protocolo de `docs/plans/AUDITORIA.md` en las tres pistas, con énfasis en: (1) que ningún camino de actividad externa, dolor o intención llegue a `nextPrescription` fuera de lo especificado (grep de `pain`, `activities`, `intent` dentro de `src/domain/progression.ts` debe dar 0; solo `holdLoad` y `continuity` entran); (2) textos de dolor sin lenguaje diagnóstico ni culpabilizador; (3) el test AMRAP nunca se ofrece en barra sin seguros, en deload ni con dolor activo.
 
 ## Criterio de "Plan A5 terminado"
 - Todas las tareas con aceptación verde; `npm run test` ≥ 360 tests; `typecheck`, `lint`, `build`, `test:a11y`, `test:offline` limpios.
-- E2E final con el respaldo real: crear un meso nuevo con dos pistas repetidas y una cambiada → la repetida hereda, la cambiada re-ancla; marcar Mantener y salir cargando más; registrar dolor dos sesiones y aceptar una opción; importar un CSV de Garmin con una natación y una fuerza del mismo día que una sesión; hacer un test AMRAP; compartir un respaldo. Exportar e importar sin pérdida (`backupVersion` 3, y un respaldo v2 sigue importando).
+- E2E final con el respaldo real: crear un meso nuevo con dos pistas repetidas y una cambiada → la repetida hereda, la cambiada re-ancla; marcar Mantener y salir cargando más; registrar dolor dos sesiones y aceptar una opción; editar una actividad y crear una en un día pasado desde la Agenda; hacer un test AMRAP. Exportar e importar sin pérdida (la migración Dexie v5 y `backupVersion` 3 se hacen una sola vez en un plan posterior; hasta entonces los campos nuevos de A5 son opcionales dentro de v2).
 - Auditoría sin hallazgos altos ni medios abiertos.
 - La app sigue funcionando íntegra sin ninguna de las funciones nuevas usadas (sin dolor, sin Garmin, sin intención declarada): regresión del Plan A completa.
