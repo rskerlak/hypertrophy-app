@@ -182,6 +182,7 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
           equipment: settings.equipment,
           dayType: planned.dayType,
           slotProgression: planned.progression,
+          holdLoad: exercise.holdLoad,
           weekIndex: session.weekIndex,
           historyWeekIndex: track.result.last?.weekIndex,
           historyNumAccumulationWeeks: track.result.last

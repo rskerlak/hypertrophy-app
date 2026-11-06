@@ -51,6 +51,8 @@ export interface NextPrescriptionInput {
   rirCapOverride?: number;
   /** "apre": la carga sale de las reps de la serie AMRAP (A2.8). */
   slotProgression?: "default" | "apre";
+  /** A5.4: "Mantener" — nunca subir la carga; las reps siguen dentro del rango. */
+  holdLoad?: boolean;
   rules: Rules;
 }
 
@@ -79,7 +81,9 @@ export type PrescriptionRule =
   | "double-ceiling-large-jump"
   | "deload-first-half"
   | "deload-second-half"
-  | "apre";
+  | "apre"
+  | "hold"
+  | "hold-at-ceiling";
 
 export interface PrescriptionExplain {
   rule: PrescriptionRule;
@@ -210,6 +214,52 @@ function hitTarget(sessionLogs: SetLog[]): boolean {
 }
 
 export function nextPrescription(input: NextPrescriptionInput): Prescription {
+  const p = prescribe(input);
+  return input.holdLoad ? applyHold(input, p) : p;
+}
+
+/**
+ * A5.4: con "Mantener" la carga no sube. Las re-estimaciones (cambio de pista,
+ * pausa, fase de bloque) no son progresión y se respetan; cualquier otra regla
+ * que suba la carga se convierte en repetir carga con reps dentro del rango (en
+ * el tope si ya se llegó).
+ */
+function applyHold(input: NextPrescriptionInput, p: Prescription): Prescription {
+  const reestimate = ["track-reanchor", "gap-reanchor", "block-phase-reanchor", "no-history"];
+  if (reestimate.includes(p.explain.rule) || p.nextLoadKg <= input.currentLoadKg) return p;
+  const sessions = progressionSessions(input.exerciseHistory);
+  const last = sessions[sessions.length - 1];
+  const achieved = last ? achievedReps(last) : input.repRange.min;
+  const atCeiling = achieved >= input.repRange.max;
+  const reps = Math.min(input.repRange.max, Math.max(input.repRange.min, achieved));
+  return {
+    nextLoadKg: input.currentLoadKg,
+    nextReps: reps,
+    rationale: atCeiling
+      ? "Mantener activo: repetir la carga en el tope del rango (el motor habría subido carga)."
+      : "Mantener activo: repetir la carga (el motor habría subido carga).",
+    explain: {
+      rule: atCeiling ? "hold-at-ceiling" : "hold",
+      inputs: { cargaKg: input.currentLoadKg, cargaQueHabriaSubidoKg: p.nextLoadKg, repsLogradas: achieved, topeRango: input.repRange.max },
+    },
+  };
+}
+
+/**
+ * A5.4: ¿salió del modo Mantener? Sí si en TODAS las series de progresión de
+ * la sesión la carga real superó la prescrita (`targetLoadKg`, A0.1) en al
+ * menos un paso del equipamiento. Una sola serie más pesada no alcanza.
+ */
+export function holdExitDetected(sessionLogs: SetLog[], ctx: { type: EquipmentType; equipment: Equipment }): boolean {
+  const sets = sessionLogs.filter((l) => isProgressionSet(l) && l.targetLoadKg > 0);
+  if (sets.length === 0) return false;
+  return sets.every((l) => {
+    const step = nextAchievableLoad(l.targetLoadKg, ctx);
+    return step > l.targetLoadKg && l.actualLoadKg >= step - 1e-9;
+  });
+}
+
+function prescribe(input: NextPrescriptionInput): Prescription {
   const { model, rules } = input;
   let repRange = input.repRange;
   let targetRir = input.targetRir;

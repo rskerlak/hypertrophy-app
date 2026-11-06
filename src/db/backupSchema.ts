@@ -111,6 +111,8 @@ const exerciseRow = z
     defaultRepRange: repRange.optional(),
     custom: z.boolean().optional(),
     archived: z.boolean().optional(),
+    holdLoad: z.boolean().optional(),
+    holdSince: isoDate.optional(),
     note: longText.optional(),
     restSec: z.number().finite().min(0).max(DATA_LIMITS.maxRestSec).optional(),
   })
@@ -173,6 +175,7 @@ const sessionRow = z
     completedAt: isoDate.optional(),
     startedAt: isoDate.optional(),
     lastSetAt: isoDate.optional(),
+    holdExits: list(id, DATA_LIMITS.maxSlotsPerDay).optional(),
     // Cambios "solo hoy" (A1): sin validar, un factor de 1e9 rompe el redondeo (R-01).
     overrides: z
       .object({

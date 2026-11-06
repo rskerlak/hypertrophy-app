@@ -17,7 +17,7 @@ import { uuid } from "@/lib/id";
 import { countExerciseInPlan, deriveBaseWeekFromPlan, generateMesocycle, replaceExerciseInPlan, swapExerciseInPlan } from "@/domain/mesocycle";
 import { scheduleDates } from "@/domain/analytics";
 import { CURRENT_BACKUP_VERSION, equipmentSchema, validateBackup } from "@/db/backupSchema";
-import { groupBySession, nextPrescription } from "@/domain/progression";
+import { groupBySession, holdExitDetected, nextPrescription } from "@/domain/progression";
 import { trackHistory } from "@/domain/history";
 import { suggestLoadFromHistory } from "@/domain/oneRepMax";
 import { roundToAvailable } from "@/domain/rounding";
@@ -133,6 +133,10 @@ export const exerciseRepo = {
   },
   async update(id: string, patch: Partial<Exercise>): Promise<void> {
     await getDb().exercises.update(id, patch);
+  },
+  /** A5.4: activa/desactiva "Mantener" (el motor no sube la carga de este ejercicio). */
+  async setHold(id: string, on: boolean): Promise<void> {
+    await getDb().exercises.update(id, on ? { holdLoad: true, holdSince: new Date().toISOString() } : { holdLoad: false, holdSince: undefined });
   },
   /**
    * Dónde se usa un ejercicio (A4.2): mesos no terminados cuyo plan lo tiene,
@@ -718,9 +722,24 @@ export const sessionRepo = {
     return rows.find((s) => s.status === "pending");
   },
   async complete(id: string): Promise<void> {
-    await getDb().sessions.update(id, {
+    const db = getDb();
+    // A5.4: si en un ejercicio en "Mantener" cargaste más que lo prescrito en
+    // todas las series, sale de Mantener (lo avisa la pantalla de cierre).
+    const [logs, settings] = await Promise.all([db.setLogs.where("sessionId").equals(id).toArray(), settingsRepo.get()]);
+    const holdExits: string[] = [];
+    for (const exerciseId of new Set(logs.map((l) => l.exerciseId))) {
+      const ex = await db.exercises.get(exerciseId);
+      if (!ex?.holdLoad) continue;
+      const exLogs = logs.filter((l) => l.exerciseId === exerciseId);
+      if (holdExitDetected(exLogs, { type: ex.equipmentType, equipment: settings.equipment })) {
+        await db.exercises.update(exerciseId, { holdLoad: false, holdSince: undefined });
+        holdExits.push(exerciseId);
+      }
+    }
+    await db.sessions.update(id, {
       status: "completed",
       completedAt: new Date().toISOString(),
+      ...(holdExits.length ? { holdExits } : {}),
     });
     await finalizeMesoIfDone(id);
   },

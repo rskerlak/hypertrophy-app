@@ -76,7 +76,30 @@ function ExerciseHistory() {
 
   return (
     <>
-      <PageHeader title={ex.name.replace(/\s*\(.*\)$/, "")} subtitle={muscleLabel(ex.primaryMuscle)} />
+      <PageHeader
+        title={ex.name.replace(/\s*\(.*\)$/, "")}
+        subtitle={muscleLabel(ex.primaryMuscle)}
+        action={
+          ex.equipmentType !== "bodyweight" ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-pressed={!!ex.holdLoad}
+              onClick={async () => {
+                await exerciseRepo.setHold(ex.id, !ex.holdLoad);
+                setData({ ...data, ex: { ...ex, holdLoad: !ex.holdLoad } });
+              }}
+            >
+              {ex.holdLoad ? "Manteniendo ✓" : "Mantener"}
+            </Button>
+          ) : undefined
+        }
+      />
+      {ex.holdLoad && (
+        <p className="-mt-3 mb-4 text-xs text-[var(--muted)]">
+          Mantener activo: el motor no sube la carga de este ejercicio. Tocalo de nuevo o cargá más en todas las series para salir.
+        </p>
+      )}
       {ex.note && <p className="-mt-3 mb-4 text-sm">📝 {ex.note}</p>}
 
       {points.length === 0 ? (

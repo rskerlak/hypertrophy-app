@@ -278,6 +278,10 @@ function SessionRunner() {
                     await sessionRepo.changeSetsToday(id, slot.slotIndex, d);
                     refresh();
                   }}
+                  onToggleHold={async () => {
+                    await exerciseRepo.setHold(slot.exercise.id, !slot.exercise.holdLoad);
+                    refresh();
+                  }}
                 />
               ))}
             </div>
@@ -294,6 +298,10 @@ function SessionRunner() {
               onSwap={() => setSwapFor(grp[0])}
               onChangeSets={async (d) => {
                 await sessionRepo.changeSetsToday(id, grp[0].slotIndex, d);
+                refresh();
+              }}
+              onToggleHold={async () => {
+                await exerciseRepo.setHold(grp[0].exercise.id, !grp[0].exercise.holdLoad);
                 refresh();
               }}
             />
@@ -383,6 +391,8 @@ interface Draft {
   rirTouched: boolean;
   /** Se cambió la carga a mano (UX-R2): solo entonces deja de seguir a la propuesta. */
   loadTouched?: boolean;
+  /** Se cambiaron las reps a mano: solo entonces dejan de seguir a la propuesta. */
+  repsTouched?: boolean;
   kind: SetKind;
   side?: "L" | "R";
   note?: string;
@@ -422,6 +432,14 @@ function clearAllDrafts(sid: string) {
 
 const RULE_INPUT_LABELS: Record<string, string> = {
   repsLogradas: "Reps logradas (mínimo entre series)",
+  cargaQueHabriaSubidoKg: "Carga a la que habría subido (kg)",
+  cargaOrigenKg: "Carga de la última sesión real (kg)",
+  repsOrigen: "Reps de esa sesión",
+  rirOrigen: "RIR de esa sesión",
+  e1rmKg: "1RM estimado (kg)",
+  factor: "Factor por pausa",
+  rirObjetivo: "RIR objetivo",
+  diasDesdeLaUltima: "Días desde la última vez",
   repsAjustadasPorRir: "Reps ajustadas por RIR",
   topeRango: "Tope del rango",
   pisoReps: "Piso del rango",
@@ -452,6 +470,7 @@ function ExerciseBlock({
   onLog,
   onSwap,
   onChangeSets,
+  onToggleHold,
 }: {
   sessionId: string;
   slot: SlotPrescription;
@@ -462,6 +481,7 @@ function ExerciseBlock({
   onLog: (a: LogArgs) => Promise<void>;
   onSwap: () => void;
   onChangeSets: (delta: number) => Promise<void>;
+  onToggleHold: () => Promise<void>;
 }) {
   const rules = getRules();
   const { exercise, planned, suggestedLoadKg, suggestedReps, targetRir, rationale, explain, previous } = slot;
@@ -545,6 +565,22 @@ function ExerciseBlock({
         </p>
       )}
 
+      {!disabled && !isBodyweight && (
+        <div className="mt-1.5">
+        <button
+          type="button"
+          onClick={onToggleHold}
+          aria-pressed={!!exercise.holdLoad}
+          title="Mantener: el motor no sube la carga de este ejercicio. Si cargás más en todas las series, sale solo."
+          className={cn(
+            "inline-flex min-h-11 items-center rounded-full border px-3 text-[11px] font-semibold",
+            exercise.holdLoad ? "border-[var(--warning)]/60 text-[var(--warning)]" : "border-[var(--border)] text-[var(--muted)]",
+          )}
+        >
+          {exercise.holdLoad ? "Manteniendo" : "Mantener"}
+        </button>
+        </div>
+      )}
       {whyOpen && (
         <div className="mt-2 rounded-xl bg-[var(--surface-2)] p-3 text-xs">
           <p className="mb-2 leading-relaxed">{rationale}</p>
@@ -792,6 +828,11 @@ function SetRow({
   useEffect(() => {
     if (!existing && !loadTouched.current) setLoadS(defaultLoad);
   }, [defaultLoad, existing]);
+  // Igual con las reps: si la propuesta cambia (p. ej. al activar Mantener), la siguen.
+  const repsTouched = useRef(!!existing || !!draft?.repsTouched);
+  useEffect(() => {
+    if (!existing && !repsTouched.current) setRepsS(defaultReps);
+  }, [defaultReps, existing]);
 
   const logged = !!existing;
   const locked = disabled || logged;
@@ -800,11 +841,11 @@ function SetRow({
   const persist = (patch: Partial<Draft>) => {
     if (logged) return;
     writeDraft(sessionId, slotIndex, index, {
-      load, reps, rir, rirTouched, loadTouched: loadTouched.current, kind, side, note, ...patch,
+      load, reps, rir, rirTouched, loadTouched: loadTouched.current, repsTouched: repsTouched.current, kind, side, note, ...patch,
     });
   };
   const setLoad = (v: number) => ((loadTouched.current = true), setLoadS(v), persist({ load: v, loadTouched: true }));
-  const setReps = (v: number) => (setRepsS(v), persist({ reps: v }));
+  const setReps = (v: number) => ((repsTouched.current = true), setRepsS(v), persist({ reps: v, repsTouched: true }));
   const setRir = (v: number) => (setRirS(v), setRirTouched(true), persist({ rir: v, rirTouched: true }));
 
   const copyPrevious = () => {
@@ -813,6 +854,7 @@ function SetRow({
       loadTouched.current = true;
       setLoadS(previous.loadKg);
     }
+    repsTouched.current = true;
     setRepsS(previous.reps);
     persist({ load: bodyweight ? load : previous.loadKg, reps: previous.reps });
   };

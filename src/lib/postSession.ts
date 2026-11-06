@@ -133,7 +133,8 @@ export async function analyzePostSession(sessionId: string): Promise<PostSession
           reason: ed.reason!,
         });
       }
-      if (!exercise.isSwappable) continue;
+      // En "Mantener" (A5.4) la carga plana es a propósito: no es estancamiento.
+      if (!exercise.isSwappable || exercise.holdLoad) continue;
       const candidates = exercise.swapCandidates
         .map((cid) => exById.get(cid))
         .filter((e): e is NonNullable<typeof e> => !!e);

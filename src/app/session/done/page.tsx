@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { analyzePostSession, type PostSessionAnalysis } from "@/lib/postSession";
 import { sessionSummary, type SessionSummary } from "@/lib/sessionExtras";
-import { mesocycleRepo, sessionRepo } from "@/db/repositories";
+import { exerciseRepo, mesocycleRepo, sessionRepo } from "@/db/repositories";
 import { muscleLabel } from "@/lib/format";
 import { Badge, Button, Card, HonestNote, PageHeader } from "@/components/ui";
 import { askConfirm } from "@/store/dialogs";
@@ -28,11 +28,18 @@ function SessionDone() {
   const [applied, setApplied] = useState<Set<number>>(new Set());
   const [appliedDeload, setAppliedDeload] = useState<Set<number>>(new Set());
   const [msg, setMsg] = useState<string | null>(null);
+  const [holdExits, setHoldExits] = useState<string[]>([]);
 
   useEffect(() => {
     if (!id) return;
     analyzePostSession(id).then(setAnalysis);
     sessionSummary(id).then(setSummary);
+    (async () => {
+      const s = await sessionRepo.get(id);
+      if (!s?.holdExits?.length) return;
+      const ex = await exerciseRepo.byId();
+      setHoldExits(s.holdExits.map((x) => (ex.get(x)?.name ?? "un ejercicio").replace(/\s*\(.*\)$/, "")));
+    })();
   }, [id]);
 
   const prLine = (p: SessionSummary["prs"][number]) =>
@@ -80,6 +87,15 @@ function SessionDone() {
           <p className="mt-3 text-[11px] text-[var(--muted)]">
             Tus series quedaron registradas; el motor las usa para autorregular la próxima sesión de
             este día.
+          </p>
+        </Card>
+      )}
+
+      {holdExits.length > 0 && (
+        <Card className="mb-4">
+          <p className="text-sm">
+            Saliste de <span className="font-semibold">Mantener</span> en {holdExits.join(", ")} porque cargaste más en
+            todas las series. La próxima sesión parte de esa carga.
           </p>
         </Card>
       )}

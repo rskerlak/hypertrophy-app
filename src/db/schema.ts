@@ -134,6 +134,8 @@ export interface SessionRow {
   startedAt?: string;
   /** Última serie registrada; el timer de descanso sobrevive recargas. */
   lastSetAt?: string;
+  /** A5.4: ejercicios que salieron de "Mantener" al completar esta sesión (cargaste más). */
+  holdExits?: string[];
   /** Cambios SOLO para esta sesión (no tocan el plan). */
   overrides?: {
     /** Ejercicio reemplazado hoy en un slot. */

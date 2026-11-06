@@ -54,3 +54,7 @@ myonoesis-*.json
 # Notas de investigación (se publica solo el informe en docs/research)
 research_notes/
 reports/
+
+# Exportaciones personales (Garmin, etc.): nunca al repo público
+*.zip
+garmin-export/
