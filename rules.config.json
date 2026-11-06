@@ -380,6 +380,11 @@
     "_note": "A5.5. Manejo de sintomas, NO diagnostico. Dolor ARTICULAR/TENDINOSO por zona (0-10), distinto del dolor muscular post-entreno (DOMS), que sigue sin usarse como senal (statsPolicy). Con tendinopatia, seguir cargando bajo un modelo de monitoreo del dolor no tuvo efectos negativos frente a reposo (Silbernagel 2007, Aquiles, n=38). Umbrales tomados de guias clinicas, no de RCTs (HEURISTICOS): hasta 5/10 durante el ejercicio es aceptable, debe calmar en ~24 h y no empeorar semana a semana. 'act' = score > acceptableMax, o la zona en persistSessions sesiones seguidas, o la media semanal subiendo risePoints en dos semanas. Opciones: bajar carga loadDownPct% y subir reps (5-30 reps crecen igual con esfuerzo equiparado, SCIENCE 3), RIR +1, variante que no cargue la zona, deload del ejercicio. zonesByMuscle: mapeo heuristico editable por ejercicio (Exercise.loadedZones). La app nunca nombra una lesion y sugiere consultar a un profesional si persiste."
   },
 
+  "externalActivity": {
+    "_note": "A5.6. Actividad fuera del plan (natacion, running, bici). NUNCA modifica una prescripcion: con sesiones en dias distintos la interferencia cardio-fuerza sobre hipertrofia y fuerza maxima es ~nula (Schumann 2022, SMD -0.06 / -0.01); el riesgo aparece en la misma sesion o con < 3 h (Petre 2021). Solo anota, como contexto, si hubo actividad intensa el dia anterior cuando el disparador de deload por caida de rendimiento se activa. intenseMinIntensity: intensidad minima (escala 1-3 del registro) para considerarla 'intensa'. Heuristico de presentacion, no umbral fisiologico.",
+    "intenseMinIntensity": 3,
+    "prevDayWindowDays": 1
+  },
   "checkin": {
     "_note": "Neutral y no culpabilizador para evitar efecto nocebo. Opcional. Nunca bloquea el inicio de la sesion.",
     "optional": true,

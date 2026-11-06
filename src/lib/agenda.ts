@@ -9,6 +9,12 @@ export function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Fecha local (YYYY-MM-DD) de un instante ISO (UTC). La UI puede usar la zona del dispositivo; el dominio no. */
+export function localDateOf(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** Días de entrenamiento por defecto según cuántos días tiene el split (0 = domingo). */
 export function defaultWeekdays(daysPerWeek: number): number[] {
   if (daysPerWeek >= 6) return [1, 2, 3, 4, 5, 6];

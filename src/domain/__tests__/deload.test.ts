@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deloadLoadForDay, evaluateDeloadTrigger, summarizeRecentSessions, summarizeSessionPair } from "../deload";
+import { deloadLoadForDay, evaluateDeloadTrigger, hasIntenseActivityPrevDay, summarizeRecentSessions, summarizeSessionPair } from "../deload";
 import type { SessionSummary } from "../types";
 import { equipment, rules, sessionLogs } from "./fixtures";
 
@@ -47,6 +47,19 @@ describe("evaluateDeloadTrigger", () => {
     expect(r.reasons.length).toBe(1);
     expect(r.score).toBe(rules.deloadTriggers.signals.performanceDropSessions.weight);
     expect(r.shouldSuggest).toBe(true);
+  });
+
+  it("A5.6: la actividad intensa del día anterior solo agrega una nota; no cambia la decisión ni el peso", () => {
+    const without = evaluateDeloadTrigger({ ...baseInput, recentSessions: [droppedSession("a"), droppedSession("b")] });
+    const withAct = evaluateDeloadTrigger({
+      ...baseInput,
+      recentSessions: [{ ...droppedSession("a"), intenseActivityPrevDay: true }, droppedSession("b")],
+    });
+    expect(withAct.shouldSuggest).toBe(without.shouldSuggest);
+    expect(withAct.score).toBe(without.score);
+    expect(withAct.reasons).toHaveLength(1);
+    expect(withAct.reasons[0]).toMatch(/actividad intensa el día anterior en 1/);
+    expect(without.reasons[0]).not.toMatch(/actividad/);
   });
 
   it("A2.1: una señal de peso 1 sola no alcanza (RIR creep)", () => {
@@ -247,5 +260,29 @@ describe("chronicPoorReadiness con readinessMax del config (auditoría N5)", () 
     const recent = Array.from({ length: cfg.windowSessions }, (_, i) => sess(`r${i}`, cfg.readinessMax + 1));
     const r = evaluateDeloadTrigger({ ...baseInput, rules: on, recentSessions: recent });
     expect(r.reasons.some((x) => /disposición/.test(x))).toBe(false);
+  });
+});
+
+describe("hasIntenseActivityPrevDay (A5.6)", () => {
+  const act = (date: string, intensity?: number) => ({ date: `${date}T12:00:00.000Z`, intensity });
+  it("detecta una actividad intensa el día anterior y no una moderada ni una del mismo día", () => {
+    expect(hasIntenseActivityPrevDay({ sessionLocalDate: "2026-11-06", activities: [act("2026-11-05", 3)], rules })).toBe(true);
+    expect(hasIntenseActivityPrevDay({ sessionLocalDate: "2026-11-06", activities: [act("2026-11-05", 2)], rules })).toBe(false);
+    expect(hasIntenseActivityPrevDay({ sessionLocalDate: "2026-11-06", activities: [act("2026-11-06", 3)], rules })).toBe(false);
+    expect(hasIntenseActivityPrevDay({ sessionLocalDate: "2026-11-06", activities: [act("2026-11-04", 3)], rules })).toBe(false);
+  });
+  it("respeta la ventana de días del config y el cambio de mes", () => {
+    const wide = { ...rules, externalActivity: { ...rules.externalActivity, prevDayWindowDays: 2 } };
+    expect(hasIntenseActivityPrevDay({ sessionLocalDate: "2026-11-01", activities: [act("2026-10-30", 3)], rules: wide })).toBe(true);
+    expect(hasIntenseActivityPrevDay({ sessionLocalDate: "2026-11-01", activities: [act("2026-10-31", 3)], rules })).toBe(true);
+    expect(hasIntenseActivityPrevDay({ sessionLocalDate: "2026-11-01", activities: [], rules })).toBe(false);
+  });
+  it("summarizeRecentSessions conserva la marca", () => {
+    const sums = summarizeRecentSessions([
+      { sessionId: "a", logs: [], intenseActivityPrevDay: true },
+      { sessionId: "b", logs: [] },
+    ]);
+    expect(sums[0].intenseActivityPrevDay).toBe(true);
+    expect(sums[1].intenseActivityPrevDay).toBeUndefined();
   });
 });

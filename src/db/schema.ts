@@ -50,11 +50,18 @@ export interface ActivityRow {
   id: string;
   /** ISO date de la actividad. */
   date: string;
-  type: "running" | "swimming" | "cycling" | "walking" | "sport" | "other";
+  type: "running" | "swimming" | "cycling" | "walking" | "sport" | "other" | "strength_external";
   durationMin?: number;
   /** 1 = suave · 2 = moderada · 3 = intensa */
   intensity?: 1 | 2 | 3;
   note?: string;
+  /** A5.6: origen. Ausente = manual. `strava`/`garmin` quedan para importadores futuros. */
+  source?: "manual" | "strava" | "garmin";
+  /** Id del proveedor (`strava:123`), para no duplicar al re-importar. */
+  externalId?: string;
+  distanceKm?: number;
+  avgHr?: number;
+  maxHr?: number;
 }
 
 /** Registro de medidas corporales (circunferencias en cm, peso en kg). */

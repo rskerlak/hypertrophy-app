@@ -130,6 +130,12 @@ Campos agregados en A1. **`sessions`**: `startedAt?` (primera serie de trabajo; 
 - `id`, `createdAt` (índice), `status: "open" | "resolved"`, `category: "engine" | "ui" | "data" | "other"`, `text`, `route`, `buildSha`, `context { activeMesocycleId?, sessionId?, sessionWeekIndex?, sessionDayLabel?, viewport?, visualViewport?, standalone?, userAgent? }`
 - Anotado por el usuario desde el botón del encabezado de cualquier pantalla; viaja en el respaldo JSON para reproducirlo después con los mismos datos. `NEXT_PUBLIC_BUILD_SHA` se inyecta en build (GITHUB_SHA o `git rev-parse`).
 
+**`activities`** (actividad fuera del plan; A5.6)
+- `id`, `date` (índice), `type`: `"running" | "swimming" | "cycling" | "walking" | "sport" | "other" | "strength_external"`, `durationMin?`, `intensity?` (1–3), `note?`
+- `source?` (`"manual" | "strava" | "garmin"`; ausente = manual), `externalId?` (dedupe al importar), `distanceKm?`, `avgHr?`, `maxHr?`. Nunca coordenadas GPS.
+- Se editan en `/activities` y se dan de alta desde la Agenda tocando un día sin sesión (`/activities?date=`), también sin meso activo. Se ven en la grilla mensual con un icono por tipo.
+- **Nunca modifican una prescripción.** Solo `SessionSummary.intenseActivityPrevDay` (`hasIntenseActivityPrevDay`, pura, ventana e intensidad en `externalActivity`) agrega una nota al motivo de deload por caída de rendimiento, sin cambiar la decisión ni el peso (Schumann 2022, Petré 2021).
+
 **`checkins`**
 - `id`, `sessionId` (índice), `date`
 - `sleptMinimum`: boolean | null

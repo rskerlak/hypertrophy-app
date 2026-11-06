@@ -21,6 +21,9 @@ export const DATA_LIMITS = {
   maxDumbbellKg: 200,
   maxInventoryItems: 200,
   maxRestSec: 3600,
+  maxActivityMin: 24 * 60,
+  maxDistanceKm: 1000,
+  maxHeartRate: 250,
   maxNameChars: 200,
   maxTextChars: 4000,
   maxRows: 1_000_000,
@@ -245,6 +248,23 @@ const checkinRow = z
 
 const datedRow = z.object({ id, date: isoDate, note: longText.optional() }).passthrough();
 
+const hr = z.number().finite().min(0).max(DATA_LIMITS.maxHeartRate, "frecuencia cardíaca fuera de rango");
+const activityRow = z
+  .object({
+    id,
+    date: isoDate,
+    type: z.enum(["running", "swimming", "cycling", "walking", "sport", "other", "strength_external"]),
+    durationMin: z.number().finite().min(0).max(DATA_LIMITS.maxActivityMin, "duración fuera de rango").optional(),
+    intensity: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
+    note: longText.optional(),
+    source: z.enum(["manual", "strava", "garmin"]).optional(),
+    externalId: shortText.optional(),
+    distanceKm: z.number().finite().min(0).max(DATA_LIMITS.maxDistanceKm, "distancia fuera de rango").optional(),
+    avgHr: hr.optional(),
+    maxHr: hr.optional(),
+  })
+  .passthrough();
+
 const bugReportRow = z
   .object({
     id,
@@ -285,7 +305,7 @@ export const backupFileSchema = z.object({
     setLogs: list(setLogRow),
     checkins: list(checkinRow),
     measurements: list(datedRow).optional(),
-    activities: list(datedRow).optional(),
+    activities: list(activityRow).optional(),
     bugReports: list(bugReportRow, 10_000).optional(),
   }),
 });
@@ -307,7 +327,7 @@ const TABLES = {
   setLogs: { row: setLogRow, max: DATA_LIMITS.maxRows, required: true },
   checkins: { row: checkinRow, max: DATA_LIMITS.maxRows, required: true },
   measurements: { row: datedRow, max: DATA_LIMITS.maxRows, required: false },
-  activities: { row: datedRow, max: DATA_LIMITS.maxRows, required: false },
+  activities: { row: activityRow, max: DATA_LIMITS.maxRows, required: false },
   bugReports: { row: bugReportRow, max: 10_000, required: false },
 } as const;
 

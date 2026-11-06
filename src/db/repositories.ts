@@ -987,8 +987,15 @@ export const activityRepo = {
   async inRange(fromIso: string, toIso: string): Promise<ActivityRow[]> {
     return getDb().activities.where("date").between(fromIso, toIso, true, true).toArray();
   },
+  async get(id: string): Promise<ActivityRow | undefined> {
+    return getDb().activities.get(id);
+  },
   async add(a: Omit<ActivityRow, "id">): Promise<void> {
     await getDb().activities.put({ ...a, id: uuid() });
+  },
+  /** A5.6: editar tipo, fecha, minutos, intensidad o nota. Los campos del proveedor no se tocan. */
+  async update(id: string, patch: Partial<Pick<ActivityRow, "date" | "type" | "durationMin" | "intensity" | "note">>): Promise<void> {
+    await getDb().activities.update(id, patch);
   },
   async remove(id: string): Promise<void> {
     await getDb().activities.delete(id);

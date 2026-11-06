@@ -235,6 +235,12 @@ export interface SessionSummary {
   readiness?: number | null;
   sleptMinimum?: boolean | null;
   perceivedFatigue?: number | null;
+  /**
+   * A5.6: hubo actividad externa intensa (natación, running…) en los días
+   * previos a la sesión. Se calcula fuera del dominio y entra como dato. Solo
+   * agrega una nota al motivo de deload; nunca cambia la decisión.
+   */
+  intenseActivityPrevDay?: boolean;
 }
 
 export interface DeloadEvaluation {

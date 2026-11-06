@@ -76,7 +76,21 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   walking: "Caminata",
   sport: "Deporte",
   other: "Otra",
+  strength_external: "Fuerza (reloj)",
 };
+
+/** A5.6: icono por tipo para la Agenda. */
+export const ACTIVITY_ICONS: Record<string, string> = {
+  running: "🏃",
+  swimming: "🏊",
+  cycling: "🚴",
+  walking: "🚶",
+  sport: "⚽",
+  other: "✦",
+  strength_external: "🏋️",
+};
+
+export const ACTIVITY_SOURCE_LABELS: Record<string, string> = { strava: "Strava", garmin: "Garmin" };
 
 export const CORRELATION_LABELS: Record<string, string> = {
   d1rmPct: "Δ 1RM %",

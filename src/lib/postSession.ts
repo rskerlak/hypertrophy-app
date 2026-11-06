@@ -1,13 +1,14 @@
 // Análisis post-sesión: compone los disparadores de deload (F8) y las
 // sugerencias de swap (F9) leyendo de los repos. El cálculo vive en src/domain.
 
-import { evaluateDeloadTrigger, evaluateExerciseDeload, summarizeRecentSessions } from "@/domain/deload";
+import { evaluateDeloadTrigger, evaluateExerciseDeload, hasIntenseActivityPrevDay, summarizeRecentSessions } from "@/domain/deload";
 import { suggestExerciseSwap } from "@/domain/swap";
 import { getRules } from "@/lib/rulesLoader";
 import { slotTrackHistory, trackMesoRefs } from "@/lib/sessionPlan";
 import { plateausFor } from "@/lib/trends";
 import type { Checkin, DeloadEvaluation } from "@/domain/types";
 import {
+  activityRepo,
   checkinRepo,
   exerciseRepo,
   mesocycleRepo,
@@ -15,6 +16,7 @@ import {
   setLogRepo,
   settingsRepo,
 } from "@/db/repositories";
+import { localDateOf } from "@/lib/agenda";
 
 export interface SwapHint {
   /** Posición del slot en el día (para aplicar el cambio en el plan). */
@@ -66,12 +68,18 @@ export async function analyzePostSession(sessionId: string): Promise<PostSession
   const completed = sessions
     .filter((s) => s.status === "completed" && !s.isDeload)
     .sort((a, b) => order(a) - order(b));
+  // A5.6: actividad externa intensa el día anterior, como nota de contexto
+  // del disparador (nunca modifica la decisión ni la prescripción).
+  const activities = await activityRepo.all();
   const logsBySession = await Promise.all(
     completed.map(async (s) => ({
       sessionId: s.id,
       dayKey: String(s.dayIndex),
       logs: await setLogRepo.forSession(s.id),
       checkin: (await checkinRepo.forSession(s.id)) as Checkin | null,
+      intenseActivityPrevDay: s.completedAt
+        ? hasIntenseActivityPrevDay({ sessionLocalDate: localDateOf(s.completedAt), activities, rules })
+        : false,
     })),
   );
   const daysPerWeek = meso.plan.weeks.find((w) => !w.isDeload)?.days.length ?? 1;

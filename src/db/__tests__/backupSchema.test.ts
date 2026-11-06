@@ -91,6 +91,21 @@ describe("validateBackup (A4.1)", () => {
     b.data.sessions[0].overrides = { painAdjust: [{ slotIndex: 0, loadFactor: 0.1, repsUp: 3, rirDelta: 0, zone: "elbow" }] };
     expect(validateBackup(b).ok).toBe(false);
   });
+  it("A5.6: actividades con origen, distancia y FC validadas con topes de cordura", () => {
+    const withActivity = (row: Record<string, unknown>) => {
+      const b = valid() as unknown as { data: { activities?: Array<Record<string, unknown>> } };
+      b.data.activities = [{ id: "a1", date: "2026-11-05T12:00:00.000Z", type: "running", ...row }];
+      return validateBackup(b).ok;
+    };
+    expect(withActivity({ type: "swimming", durationMin: 40, intensity: 3, source: "strava", externalId: "strava:1", distanceKm: 1.5, avgHr: 140, maxHr: 165 })).toBe(true);
+    expect(withActivity({})).toBe(true);
+    expect(withActivity({ type: "yoga" })).toBe(false);
+    expect(withActivity({ durationMin: -1 })).toBe(false);
+    expect(withActivity({ intensity: 4 })).toBe(false);
+    expect(withActivity({ source: "fitbit" })).toBe(false);
+    expect(withActivity({ avgHr: 400 })).toBe(false);
+    expect(withActivity({ distanceKm: 2000 })).toBe(false);
+  });
   it("R-01: overrides de sesión con factores imposibles se rechazan", () => {
     const b = valid() as unknown as { data: { sessions: Array<Record<string, unknown>> } };
     b.data.sessions[0].overrides = { exerciseDeload: [{ slotIndex: 0, setsFactor: 0.5, loadFactor: 1e9 }] };

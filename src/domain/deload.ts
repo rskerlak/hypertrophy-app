@@ -125,9 +125,13 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
       );
     });
     if (hit) {
+      // A5.6: nota de contexto, nunca descuenta la señal (la evidencia con
+      // sesiones en días distintos no justifica un descuento; SCIENCE §14).
+      const withActivity = input.recentSessions.filter((s) => s.intenseActivityPrevDay).length;
+      const note = withActivity > 0 ? `; hubo actividad intensa el día anterior en ${withActivity} de las sesiones recientes` : "";
       add(
         perf.weight,
-        `Caída de reps a carga fija en ${perf.exercisesAffected}+ ejercicios durante ${perf.consecutiveSessions} sesiones seguidas del mismo día`,
+        `Caída de reps a carga fija en ${perf.exercisesAffected}+ ejercicios durante ${perf.consecutiveSessions} sesiones seguidas del mismo día${note}`,
       );
     }
   }
@@ -207,7 +211,7 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
  * día del split (A0.4); sin `dayKey`, con la inmediatamente anterior (legado).
  */
 export function summarizeRecentSessions(
-  logsBySession: Array<{ sessionId: string; logs: SetLog[]; checkin?: Checkin | null; dayKey?: string }>,
+  logsBySession: Array<{ sessionId: string; logs: SetLog[]; checkin?: Checkin | null; dayKey?: string; intenseActivityPrevDay?: boolean }>,
 ): SessionSummary[] {
   const out: SessionSummary[] = [];
   const lastByDay = new Map<string, SetLog[]>();
@@ -220,7 +224,8 @@ export function summarizeRecentSessions(
           ? logsBySession[i - 1].logs
           : [];
     const summary = summarizeSessionPair(prev, cur.logs, cur.sessionId, cur.checkin);
-    out.push(cur.dayKey !== undefined ? { ...summary, dayKey: cur.dayKey } : summary);
+    const withDay = cur.dayKey !== undefined ? { ...summary, dayKey: cur.dayKey } : summary;
+    out.push(cur.intenseActivityPrevDay ? { ...withDay, intenseActivityPrevDay: true } : withDay);
     if (cur.dayKey !== undefined) lastByDay.set(cur.dayKey, cur.logs);
   }
   return out;
@@ -282,4 +287,30 @@ export function evaluateExerciseDeload(history: SetLog[], rules: Rules): Exercis
     loadFactor: cfg.loadFactor,
     reason: `El 1RM estimado de este ejercicio cayó ${dropPct.toFixed(1)}% en ${cfg.sessions} sesiones seguidas. Sugerencia: la próxima vez ${Math.round(cfg.setsFactor * 100)}% de las series y ${Math.round(cfg.loadFactor * 100)}% de la carga. Heurística sin ensayo clínico; vos decidís.`,
   };
+}
+
+/** Suma días a una fecha local YYYY-MM-DD sin tocar el reloj del sistema. */
+function addDays(localDate: string, delta: number): string {
+  const d = new Date(`${localDate.slice(0, 10)}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * A5.6: ¿hubo actividad externa intensa en los `prevDayWindowDays` días
+ * previos a una sesión? Compara fechas locales (YYYY-MM-DD). Solo informa: la
+ * prescripción nunca cambia por esto (Schumann 2022, Petré 2021; SCIENCE §14).
+ */
+export function hasIntenseActivityPrevDay(input: {
+  sessionLocalDate: string;
+  activities: Array<{ date: string; intensity?: number }>;
+  rules: Rules;
+}): boolean {
+  const cfg = input.rules.externalActivity;
+  const day = input.sessionLocalDate.slice(0, 10);
+  const from = addDays(day, -cfg.prevDayWindowDays);
+  return input.activities.some((a) => {
+    const d = a.date.slice(0, 10);
+    return d >= from && d < day && (a.intensity ?? 0) >= cfg.intenseMinIntensity;
+  });
 }

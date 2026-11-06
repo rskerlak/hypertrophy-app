@@ -354,6 +354,13 @@ export const rulesSchema = z
         modifiesSession: z.boolean(),
       })
       .passthrough(),
+    externalActivity: z
+      .object({
+        intenseMinIntensity: z.number().int().min(1).max(3),
+        prevDayWindowDays: z.number().int().min(1).max(7),
+      })
+      .passthrough()
+      .default({ intenseMinIntensity: 3, prevDayWindowDays: 1 }),
     checkin: z
       .object({
         optional: z.boolean(),

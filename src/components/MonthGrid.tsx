@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { cn } from "@/components/ui";
-import type { SessionRow } from "@/db/schema";
+import type { ActivityRow, SessionRow } from "@/db/schema";
+import { ACTIVITY_ICONS, ACTIVITY_LABELS } from "@/lib/format";
 
 const HEAD = ["L", "M", "X", "J", "V", "S", "D"];
 
@@ -17,22 +18,33 @@ export function sessionDate(s: SessionRow): string | undefined {
 
 /**
  * Vista mensual de la agenda (A3.2). Solo visualización: tocar un día con
- * sesión la abre. La progresión no depende de las fechas.
+ * sesión la abre; un día sin sesión permite registrar una actividad (A5.6).
+ * La progresión no depende de las fechas.
  */
 export function MonthGrid({
   sessions,
+  activities = [],
   today,
   onOpen,
+  onPickDay,
 }: {
   sessions: SessionRow[];
+  activities?: ActivityRow[];
   today: string;
   onOpen: (s: SessionRow) => void;
+  /** A5.6: tocar un día sin sesión (pasado o futuro) para registrar una actividad. */
+  onPickDay?: (date: string) => void;
 }) {
   const [cursor, setCursor] = useState(() => ({ y: +today.slice(0, 4), m: +today.slice(5, 7) - 1 }));
   const byDate = new Map<string, SessionRow[]>();
   for (const s of sessions) {
     const d = sessionDate(s);
     if (d) byDate.set(d, [...(byDate.get(d) ?? []), s]);
+  }
+  const actsByDate = new Map<string, ActivityRow[]>();
+  for (const a of activities) {
+    const d = a.date.slice(0, 10);
+    actsByDate.set(d, [...(actsByDate.get(d) ?? []), a]);
   }
   const first = new Date(cursor.y, cursor.m, 1);
   const offset = (first.getDay() + 6) % 7; // lunes primero
@@ -66,6 +78,7 @@ export function MonthGrid({
           if (d === null) return <span key={`e${i}`} />;
           const key = iso(cursor.y, cursor.m, d);
           const list = byDate.get(key) ?? [];
+          const acts = actsByDate.get(key) ?? [];
           const s = list[0];
           const tone = !s
             ? ""
@@ -76,21 +89,35 @@ export function MonthGrid({
                 : s.isDeload
                   ? "bg-[var(--warning)]/15 text-[var(--warning)]"
                   : "bg-[var(--primary)]/12 text-[var(--primary-ink)]";
+          const label = [
+            key,
+            list.length ? list.map((x) => x.dayLabel).join(", ") : null,
+            acts.length ? acts.map((a) => ACTIVITY_LABELS[a.type]).join(", ") : null,
+            !s && onPickDay ? "registrar actividad" : null,
+          ]
+            .filter(Boolean)
+            .join(": ");
           return (
             <button
               key={key}
               type="button"
-              disabled={!s}
-              onClick={() => s && onOpen(s)}
-              aria-label={s ? `${key}: ${list.map((x) => x.dayLabel).join(", ")}` : key}
+              disabled={!s && !onPickDay}
+              onClick={() => (s ? onOpen(s) : onPickDay?.(key))}
+              aria-label={label}
               className={cn(
-                "flex h-9 items-center justify-center rounded-lg text-xs tabular-nums",
+                "flex h-10 flex-col items-center justify-center rounded-lg text-xs leading-none tabular-nums",
                 tone,
                 key === today && "ring-1 ring-[var(--foreground)]/40",
-                !s && "text-[var(--muted)]/70",
+                // Tocable (alta de actividad) exige contraste AA; deshabilitado puede ir atenuado.
+                !s && (onPickDay ? "text-[var(--muted)]" : "text-[var(--muted)]/70"),
               )}
             >
-              {d}
+              <span>{d}</span>
+              {acts.length > 0 && (
+                <span className="mt-0.5 text-[9px] leading-none" aria-hidden="true">
+                  {acts.slice(0, 2).map((a) => ACTIVITY_ICONS[a.type]).join("")}
+                </span>
+              )}
             </button>
           );
         })}

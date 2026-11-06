@@ -129,7 +129,8 @@ type PainOption = "load-down-reps-up" | "rir-plus-one" | "swap-candidate" | "exe
 
 ---
 
-## A5.6 — Actividades: editar, fecha pasada, calendario y covariable
+## A5.6 — Actividades: editar, fecha pasada, calendario y covariable ✅ (2026-11-06)
+Hecha. Agregado sobre la spec: la grilla de la Agenda se muestra también sin meso activo, para registrar actividades igual; los días tocables usan contraste AA.
 
 - `activityRepo.update(id, patch)`; en `/activities` cada tarjeta se edita (tipo, fecha, minutos, intensidad, nota). Alta desde la Agenda tocando un día pasado o futuro ("+ Actividad").
 - `ActivityRow` gana `source?: "manual" | "garmin"`, `externalId?`, `distanceKm?`, `avgHr?`, `maxHr?`. La Agenda muestra las actividades en el día (icono por tipo) junto a las sesiones.

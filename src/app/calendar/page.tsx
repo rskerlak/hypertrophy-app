@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { mesocycleRepo, sessionRepo, settingsRepo } from "@/db/repositories";
+import { activityRepo, mesocycleRepo, sessionRepo, settingsRepo } from "@/db/repositories";
 import { recommendCalendarShift } from "@/domain/calendar";
 import { daysBetween } from "@/domain/analytics";
 import { Badge, Button, Card, EmptyState, HonestNote, PageHeader, cn } from "@/components/ui";
@@ -24,9 +24,9 @@ export default function CalendarPage() {
 
   const data = useLiveQuery(async () => {
     const meso = await mesocycleRepo.active();
-    if (!meso) return { meso: null };
-    const [sessions, settings] = await Promise.all([sessionRepo.forMesocycle(meso.id), settingsRepo.get()]);
-    return { meso, sessions, settings };
+    if (!meso) return { meso: null, activities: await activityRepo.all() };
+    const [sessions, settings, activities] = await Promise.all([sessionRepo.forMesocycle(meso.id), settingsRepo.get(), activityRepo.all()]);
+    return { meso, sessions, settings, activities };
   }, []);
 
   if (!data) return null;
@@ -34,12 +34,17 @@ export default function CalendarPage() {
     return (
       <>
         <PageHeader title="Agenda" />
-        <EmptyState title="Sin mesociclo activo" hint="Generá un meso para ver tu agenda." action={<NewMesoButton label="Nuevo meso" variant="primary" size="md" />} />
+        <EmptyState title="Sin mesociclo activo" hint="Generá o reanudá un meso para ver tus sesiones." action={<NewMesoButton label="Nuevo meso" variant="primary" size="md" />} />
+        {/* A5.6: sin meso igual se ven y se registran actividades. */}
+        <div className="mt-4">
+          <MonthGrid sessions={[]} activities={data.activities} today={todayIso()} onOpen={() => {}} onPickDay={(date) => router.push(`/activities?date=${date}`)} />
+          <p className="-mt-2 text-[11px] text-[var(--muted)]">Tocá un día para registrar una actividad (natación, running…).</p>
+        </div>
       </>
     );
   }
 
-  const { meso, sessions, settings } = data;
+  const { meso, sessions, settings, activities } = data;
   const daysPerWeek = meso.plan.weeks.find((w) => !w.isDeload)?.days.length ?? 1;
   const weekdays = settings.trainingWeekdays ?? defaultWeekdays(daysPerWeek);
   const byWeek = new Map<number, SessionRow[]>();
@@ -92,7 +97,18 @@ export default function CalendarPage() {
         </Card>
       )}
 
-      {scheduled && <MonthGrid sessions={sessions} today={today} onOpen={(s) => router.push(`/session?id=${encodeURIComponent(s.id)}`)} />}
+      {scheduled && (
+        <MonthGrid
+          sessions={sessions}
+          activities={activities}
+          today={today}
+          onOpen={(s) => router.push(`/session?id=${encodeURIComponent(s.id)}`)}
+          onPickDay={(date) => router.push(`/activities?date=${date}`)}
+        />
+      )}
+      {scheduled && (
+        <p className="-mt-2 mb-3 text-[11px] text-[var(--muted)]">Tocá un día sin sesión para registrar una actividad (natación, running…).</p>
+      )}
 
       {scheduled && !editing && (
         <button type="button" className="mb-3 text-[11px] font-semibold text-[var(--primary-ink)]" onClick={() => setEditing(true)}>
