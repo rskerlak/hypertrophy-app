@@ -97,3 +97,20 @@ describe("re-auditoría A5-11: Mantener con re-estimaciones y salidas", () => {
     expect(holdExitCandidates(logs, { isDeload: false, reducedSlots: [] })).toHaveLength(2);
   });
 });
+
+describe("re-auditoría A5R2-01: APRE sin serie al fallo no baja la carga", () => {
+  it("si la última serie no fue al fallo (ajuste por dolor), se lee con doble progresión", () => {
+    // 3 series de 7 reps @1 en 8–12 sin AMRAP: APRE habría bajado la carga ("quedó en 7, piso 8").
+    const h = sessionLogs({ sessionId: "pain", exerciseId: "bench", sets: 3, loadKg: 100, reps: 7, rir: 1, targetReps: 7, targetRir: 3, timestamp: "2026-11-02T10:00:00Z" });
+    const p = nextPrescription({ ...base, repRange: { min: 8, max: 12 }, slotProgression: "apre", exerciseHistory: h });
+    expect(p.explain.rule).not.toBe("apre");
+    expect(p.nextLoadKg).toBe(100);
+  });
+  it("con la última serie al fallo, APRE sigue decidiendo", () => {
+    const h = sessionLogs({ sessionId: "ok", exerciseId: "bench", sets: 3, loadKg: 100, reps: 9, rir: 2, targetReps: 8, targetRir: 2, timestamp: "2026-11-03T10:00:00Z" });
+    h[h.length - 1] = { ...h[h.length - 1], kind: "failure", actualReps: 14, actualRir: 0 };
+    const p = nextPrescription({ ...base, repRange: { min: 8, max: 12 }, slotProgression: "apre", exerciseHistory: h });
+    expect(p.explain.rule).toBe("apre");
+    expect(p.nextLoadKg).toBeGreaterThan(100);
+  });
+});

@@ -308,8 +308,14 @@ function prescribe(input: NextPrescriptionInput): Prescription {
   // targetRir queda aplicado en los targets de la sesión; la progresión de
   // carga/reps se rige por reps logradas y el rango, no por el RIR en sí.
   void targetRir;
+  // A5R2-01: APRE decide la carga solo si la última serie de la sesión anterior
+  // fue de verdad al fallo (AMRAP). Si no (p. ej. un ajuste por dolor la sacó),
+  // esa sesión se lee con doble progresión: sus reps no son "reps al fallo".
   if (input.slotProgression === "apre") {
-    return apreProgression(input, sessions, repRange);
+    const lastSets = sessions[sessions.length - 1];
+    const lastSet = [...lastSets].sort((a, b) => a.setIndex - b.setIndex).at(-1);
+    // Al fallo = marcada "failure" o registrada con RIR 0 (datos anteriores a A2 la guardaban como normal).
+    if (lastSet && (lastSet.kind === "failure" || lastSet.actualRir === 0)) return apreProgression(input, sessions, repRange);
   }
   if (model === "block") {
     const reanchor = blockPhaseReanchor(input, sessions, repRange, targetRir);

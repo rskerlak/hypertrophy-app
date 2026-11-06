@@ -253,11 +253,19 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
         setTargets: planned.setTargets.map((t) => ({ ...t, targetRir: t.targetRir + painAdj.rirDelta, amrap: false })),
       };
     }
+    // A5R2-02: el piso de RIR por calibración también vale para las series con objetivo propio.
+    if (rirFloor !== null && planned.setTargets) {
+      planned = {
+        ...planned,
+        setTargets: planned.setTargets.map((t) => (t.amrap ? t : { ...t, targetRir: Math.max(t.targetRir, rirFloor) })),
+      };
+    }
     const painReps = !painAdj
       ? p.nextReps
       : painAdj.loadFactor < 1
         ? Math.min(rules.repRanges.globalValid.max, p.nextReps + painAdj.repsUp)
-        : Math.max(rules.repRanges.globalValid.min, p.nextReps - painAdj.rirDelta);
+        : // RIR +1: una rep menos, nunca por debajo del piso del rango (A5R2-01).
+          Math.max(planned.repRange.min, p.nextReps - painAdj.rirDelta);
     const exLogs = await setLogRepo.forExercise(exercise.id);
     const exSessions = await sessionRepo.byIds([...new Set(exLogs.map((l) => l.sessionId))]);
     const amrapTest = amrapTestEligibility({
