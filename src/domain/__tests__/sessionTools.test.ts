@@ -139,3 +139,17 @@ describe("explain (A1.10): cada rama de la doble progresión tiene su regla", ()
     expect(p.explain.inputs.saltoMinimoPct).toBe(14.3);
   });
 });
+
+describe("detectPRs: el récord de 1RM exige RIR reportado", () => {
+  const hist = sessionLogs({ sessionId: "a", exerciseId: "bench", sets: 2, loadKg: 100, reps: 8, rir: 1, timestamp: "2026-01-01T10:00:00Z" });
+  const s = (rir: number, rirReported: boolean) => ({
+    ...sessionLogs({ sessionId: "c", exerciseId: "bench", sets: 1, loadKg: 100, reps: 8, rir, timestamp: "2026-01-08T10:00:00Z" })[0],
+    rirReported,
+  });
+  it("RIR precargado (no tocado) no genera récord de 1RM aunque lo infle", () => {
+    expect(detectPRs(hist, s(4, false), rules).map((p) => p.kind)).not.toContain("e1rm");
+  });
+  it("con RIR reportado sí", () => {
+    expect(detectPRs(hist, s(4, true), rules).map((p) => p.kind)).toContain("e1rm");
+  });
+});

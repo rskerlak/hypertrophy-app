@@ -462,3 +462,33 @@ function buildDeloadWeek(
     deloadLoadPolicy: { firstHalf: "week1_load", secondHalfFraction: d.loadSecondHalf },
   };
 }
+
+/**
+ * Cambia el ejercicio de un slot en el plan desde `fromWeekIndex` en adelante
+ * (deload incluido), conservando series, rango, RIR y carga planificada. Las
+ * semanas ya entrenadas no se tocan: su historial sigue apuntando al ejercicio
+ * que se hizo. Puro: devuelve un plan nuevo.
+ */
+export function swapExerciseInPlan(
+  plan: MesocyclePlan,
+  dayIndex: number,
+  slotIndex: number,
+  exerciseId: string,
+  fromWeekIndex: number,
+): MesocyclePlan {
+  return {
+    ...plan,
+    weeks: plan.weeks.map((w) =>
+      w.weekIndex < fromWeekIndex
+        ? w
+        : {
+            ...w,
+            days: w.days.map((d, di) =>
+              di !== dayIndex
+                ? d
+                : { ...d, slots: d.slots.map((sl, si) => (si === slotIndex ? { ...sl, exerciseId } : sl)) },
+            ),
+          },
+    ),
+  };
+}

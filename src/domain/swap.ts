@@ -2,7 +2,7 @@
 // estancamiento sostenido. Nunca rotación aleatoria/frecuente (Kassiano 2022).
 
 import type { Rules } from "./rules";
-import type { Exercise, SetLog } from "./types";
+import { isWorkingSet, type Exercise, type SetLog } from "./types";
 import { groupBySession } from "./progression";
 import { estimate1RM } from "./oneRepMax";
 
@@ -25,7 +25,7 @@ export function suggestExerciseSwap(input: SuggestSwapInput): SwapSuggestion {
   if (!exercise.isSwappable) return { suggest: false };
 
   const cfg = rules.exerciseRotation.suggestSwapWhen;
-  const sessions = groupBySession(history);
+  const sessions = groupBySession(history.filter(isWorkingSet));
   // Se necesitan stagnationSessions sesiones SIN progreso respecto a una previa:
   // ventana de stagnationSessions + 1 sesiones.
   if (sessions.length < cfg.stagnationSessions + 1) return { suggest: false };

@@ -1,17 +1,23 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { buildSessionView, type SessionView } from "@/lib/sessionPlan";
-import { checkinRepo, sessionRepo, setLogRepo, settingsRepo } from "@/db/repositories";
+import { buildSessionView, type SessionView, type SlotPrescription } from "@/lib/sessionPlan";
+import { prsForSet } from "@/lib/sessionExtras";
+import { checkinRepo, exerciseRepo, mesocycleRepo, sessionRepo, setLogRepo, settingsRepo } from "@/db/repositories";
 import { useWakeLock } from "@/lib/useWakeLock";
 import { uuid } from "@/lib/id";
 import { fmtKg } from "@/lib/format";
-import { Badge, Button, Card, EditableNumber, HonestNote, PageHeader } from "@/components/ui";
+import { getRules } from "@/lib/rulesLoader";
+import { Badge, Button, Card, EditableNumber, HonestNote, PageHeader, cn } from "@/components/ui";
 import { RestTimer } from "@/components/RestTimer";
 import { CheckinSheet } from "@/components/CheckinSheet";
-import type { SetLog } from "@/domain/types";
+import { nextAchievableLoad, plateBreakdown, roundToAvailable, type RoundingContext } from "@/domain/rounding";
+import { warmupSets } from "@/domain/warmup";
+import { compareToPrevious, previousForIndex, type PreviousSet } from "@/domain/history";
+import type { PR } from "@/domain/records";
+import { isWorkingSet, type Exercise, type SetKind, type SetLog } from "@/domain/types";
 
 export default function SessionPage() {
   return (
@@ -21,39 +27,80 @@ export default function SessionPage() {
   );
 }
 
+/** Índice para series de calentamiento: fuera del rango de las de trabajo. */
+const WARMUP_BASE_INDEX = 100;
+
+interface LogArgs {
+  slotIndex: number;
+  exerciseId: string;
+  setIndex: number;
+  loadKg: number;
+  reps: number;
+  rir: number;
+  targetLoadKg: number;
+  targetReps: number;
+  targetRir: number;
+  rirReported: boolean;
+  kind: SetKind;
+  side?: "L" | "R";
+  note?: string;
+  existingId?: string;
+}
+
 function SessionRunner() {
   const id = useSearchParams().get("id") ?? "";
   const router = useRouter();
+  const rules = getRules();
 
   const [view, setView] = useState<SessionView | null | undefined>(undefined);
   const [showCheckin, setShowCheckin] = useState(false);
-  const [restKey, setRestKey] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+  const [swapFor, setSwapFor] = useState<SlotPrescription | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const settings = useLiveQuery(() => settingsRepo.get(), []);
+  const sessionRow = useLiveQuery(() => (id ? sessionRepo.get(id) : Promise.resolve(undefined)), [id]);
   const logsQuery = useLiveQuery(() => (id ? setLogRepo.forSession(id) : Promise.resolve([])), [id]);
   const logs = useMemo(() => logsQuery ?? [], [logsQuery]);
   const existingCheckin = useLiveQuery(() => (id ? checkinRepo.forSession(id) : Promise.resolve(null)), [id]);
+  const allExercises = useLiveQuery(() => exerciseRepo.all(), []);
 
-  useWakeLock(!!settings?.wakeLockEnabled && view?.session.status !== "completed");
-
-  useEffect(() => {
+  const refresh = useCallback(() => {
     if (id) buildSessionView(id).then(setView);
   }, [id]);
+  useEffect(refresh, [refresh]);
+
+  useWakeLock(!!settings?.wakeLockEnabled && view?.session.status !== "completed");
 
   useEffect(() => {
     if (existingCheckin === undefined) return;
     if (existingCheckin === null && logs.length === 0) setShowCheckin(true);
   }, [existingCheckin, logs.length]);
 
+  // Reloj de la sesión (duración) a resolución de minuto.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // Series por slot: por slotIndex (datos nuevos) o por ejercicio (datos viejos).
   const logsBySlot = useMemo(() => {
-    const m = new Map<string, SetLog[]>();
+    const m = new Map<number, SetLog[]>();
+    if (!view) return m;
     for (const l of logs) {
-      const arr = m.get(l.exerciseId) ?? [];
-      arr.push(l);
-      m.set(l.exerciseId, arr);
+      const slot =
+        l.slotIndex ?? view.slots.find((s) => s.exercise.id === l.exerciseId || s.planned.exerciseId === l.exerciseId)?.slotIndex;
+      if (slot === undefined) continue;
+      m.set(slot, [...(m.get(slot) ?? []), l]);
     }
     return m;
-  }, [logs]);
+  }, [logs, view]);
 
   if (view === undefined) return null;
   if (view === null) {
@@ -65,45 +112,64 @@ function SessionRunner() {
     );
   }
 
-  const { session, slots, isDeload } = view;
+  const { slots, isDeload } = view;
+  const session = sessionRow ?? view.session;
   const done = session.status === "completed";
-  const totalSets = slots.reduce((n, s) => n + s.planned.sets, 0);
-  const loggedSets = logs.length;
+  const workingLogs = logs.filter(isWorkingSet);
+  const totalSets = slots.reduce((n, s) => n + s.sets, 0);
+  const loggedSets = workingLogs.length;
+  const ctxFor = (slot: SlotPrescription): RoundingContext => ({
+    type: slot.planned.targetLoadKg === 0 ? "bodyweight" : slot.exercise.equipmentType,
+    equipment: settings?.equipment ?? view.equipment,
+  });
 
-  const unlogSet = async (logId: string) => {
-    await setLogRepo.remove(logId);
-  };
+  // --- Descanso: objetivo del último ejercicio registrado; en superserie,
+  // sin descanso hasta cerrar el último ejercicio del grupo.
+  const lastLog = [...workingLogs].sort((a, b) => a.timestamp.localeCompare(b.timestamp)).at(-1);
+  const lastSlot = lastLog
+    ? slots.find((s) => s.slotIndex === (lastLog.slotIndex ?? slots.find((x) => x.exercise.id === lastLog.exerciseId)?.slotIndex))
+    : undefined;
+  const group = lastSlot?.planned.supersetGroup;
+  const groupSlots = group ? slots.filter((s) => s.planned.supersetGroup === group) : [];
+  const supersetPending = !!group && groupSlots.at(-1)?.slotIndex !== lastSlot?.slotIndex;
+  const restTarget = supersetPending ? 0 : (lastSlot?.restSec ?? rules.rest.defaultCompoundSec);
 
-  const logSet = async (args: {
-    exerciseId: string;
-    setIndex: number;
-    loadKg: number;
-    reps: number;
-    rir: number;
-    /** Carga PRESCRITA por el motor (0 = peso corporal). La real va en loadKg. */
-    targetLoadKg: number;
-    targetReps: number;
-    targetRir: number;
-    /** false = RIR precargado sin tocar (no informa percepción). */
-    rirReported: boolean;
-    existingId?: string;
-  }) => {
+  const nextUp = slots
+    .map((s) => ({ s, n: (logsBySlot.get(s.slotIndex) ?? []).filter(isWorkingSet).length }))
+    .find(({ s, n }) => n < s.sets);
+  const nextLabel = nextUp
+    ? `${shortName(nextUp.s.exercise.name)} · ${nextUp.s.planned.targetLoadKg === 0 ? "corporal" : `${fmtKg(nextUp.s.suggestedLoadKg)} kg`} × ${nextUp.s.suggestedReps}`
+    : undefined;
+
+  const durationMin = session.startedAt ? Math.max(0, Math.round((now - Date.parse(session.startedAt)) / 60000)) : null;
+
+  const logSet = async (a: LogArgs) => {
+    const ts = new Date().toISOString();
     const log: SetLog = {
-      id: args.existingId ?? uuid(),
+      id: a.existingId ?? uuid(),
       sessionId: id,
-      exerciseId: args.exerciseId,
-      setIndex: args.setIndex,
-      targetLoadKg: args.targetLoadKg,
-      targetReps: args.targetReps,
-      targetRir: args.targetRir,
-      actualLoadKg: args.loadKg,
-      actualReps: args.reps,
-      actualRir: args.rir,
-      rirReported: args.rirReported,
-      timestamp: new Date().toISOString(),
+      exerciseId: a.exerciseId,
+      slotIndex: a.slotIndex,
+      setIndex: a.setIndex,
+      targetLoadKg: a.targetLoadKg,
+      targetReps: a.targetReps,
+      targetRir: a.targetRir,
+      actualLoadKg: a.loadKg,
+      actualReps: a.reps,
+      actualRir: a.rir,
+      rirReported: a.rirReported,
+      kind: a.kind === "working" ? undefined : a.kind,
+      side: a.side,
+      note: a.note?.trim() || undefined,
+      timestamp: ts,
     };
     await setLogRepo.put(log);
-    setRestKey((k) => k + 1);
+    if (a.kind !== "warmup") await sessionRepo.touch(id, ts);
+    clearDraft(id, a.slotIndex, a.setIndex);
+    if (a.kind !== "warmup") {
+      const prs = await prsForSet(id, log);
+      if (prs.length > 0) setToast(prLabel(prs[0]));
+    }
   };
 
   const completeSession = async () => {
@@ -114,6 +180,7 @@ function SessionRunner() {
         : "¿Finalizar la sesión? El motor usará estos registros para calcular la próxima.";
     if (!confirm(msg)) return;
     await sessionRepo.complete(id);
+    clearAllDrafts(id);
     router.push(`/session/done?id=${id}`);
   };
 
@@ -121,7 +188,7 @@ function SessionRunner() {
     <>
       <PageHeader
         title={session.dayLabel}
-        subtitle={`${loggedSets}/${totalSets} series`}
+        subtitle={`${loggedSets}/${totalSets} series${durationMin !== null ? ` · ${durationMin} min` : ""}`}
         action={
           <>
             {view.intensity === "heavy" && <Badge tone="danger">Fuerte</Badge>}
@@ -131,7 +198,9 @@ function SessionRunner() {
         }
       />
 
-      {!done && <RestTimer resetKey={restKey} />}
+      {!done && (
+        <RestTimer lastSetAt={session.lastSetAt} targetSec={restTarget} minSec={rules.rest.minSec} nextLabel={nextLabel} />
+      )}
 
       {showCheckin && !done && (
         <div className="mt-4">
@@ -143,9 +212,8 @@ function SessionRunner() {
         <div className="mt-4">
           <HonestNote>
             En el {Math.round(view.rirCalibration.echoPct ?? 0)}% de tus series el RIR registrado es
-            exactamente el objetivo precargado. Si al terminar cada serie ajustás el RIR a lo que
-            sentiste (aunque sea ±1), el motor puede adaptar reps y cargas a vos; mientras tanto se
-            comporta como no calibrado (piso de 1 RIR, ajuste prudente).
+            exactamente el objetivo precargado. Elegí el RIR que sentiste en la última serie de cada
+            ejercicio: con eso el motor puede adaptar reps y cargas a vos.
           </HonestNote>
         </div>
       )}
@@ -154,14 +222,14 @@ function SessionRunner() {
         !view.rirCalibration.echoDetected &&
         !view.rirCalibration.wellCalibrated &&
         !view.rirCalibration.insufficientData && (
-        <div className="mt-4">
-          <HonestNote>
-            Tu RIR reportado viene variando ±{view.rirCalibration.meanAbsDeviationReps} reps a carga
-            fija, así que el motor mantiene un piso de 1 RIR y ajusta con más cautela. Se recalibra
-            solo a medida que registrás.
-          </HonestNote>
-        </div>
-      )}
+          <div className="mt-4">
+            <HonestNote>
+              Tu RIR reportado viene variando ±{view.rirCalibration.meanAbsDeviationReps} reps a carga
+              fija, así que el motor mantiene un piso de 1 RIR y ajusta con más cautela. Se recalibra
+              solo a medida que registrás.
+            </HonestNote>
+          </div>
+        )}
 
       {isDeload && (
         <div className="mt-4">
@@ -173,17 +241,48 @@ function SessionRunner() {
       )}
 
       <div className="mt-4 space-y-3">
-        {slots.map((slot) => (
-          <ExerciseBlock
-            key={slot.slotIndex}
-            slot={slot}
-            logs={logsBySlot.get(slot.exercise.id) ?? []}
-            disabled={done}
-            bodyweightKg={settings?.bodyweightKg ?? 0}
-            onLog={logSet}
-            onUnlog={unlogSet}
-          />
-        ))}
+        {groupSlotsInOrder(slots).map((grp) =>
+          grp.length > 1 ? (
+            <div key={`g${grp[0].slotIndex}`} className="space-y-2 rounded-[calc(var(--radius)+4px)] border border-dashed border-[var(--primary)]/40 p-1.5">
+              <p className="px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--primary)]">
+                Superserie · sin descanso entre ejercicios
+              </p>
+              {grp.map((slot) => (
+                <ExerciseBlock
+                  key={slot.slotIndex}
+                  sessionId={id}
+                  slot={slot}
+                  logs={logsBySlot.get(slot.slotIndex) ?? []}
+                  disabled={done}
+                  bodyweightKg={settings?.bodyweightKg ?? 0}
+                  ctx={ctxFor(slot)}
+                  onLog={logSet}
+                  onSwap={() => setSwapFor(slot)}
+                  onChangeSets={async (d) => {
+                    await sessionRepo.changeSetsToday(id, slot.slotIndex, d);
+                    refresh();
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <ExerciseBlock
+              key={grp[0].slotIndex}
+              sessionId={id}
+              slot={grp[0]}
+              logs={logsBySlot.get(grp[0].slotIndex) ?? []}
+              disabled={done}
+              bodyweightKg={settings?.bodyweightKg ?? 0}
+              ctx={ctxFor(grp[0])}
+              onLog={logSet}
+              onSwap={() => setSwapFor(grp[0])}
+              onChangeSets={async (d) => {
+                await sessionRepo.changeSetsToday(id, grp[0].slotIndex, d);
+                refresh();
+              }}
+            />
+          ),
+        )}
       </div>
 
       {!done && (
@@ -191,181 +290,645 @@ function SessionRunner() {
           Finalizar sesión
         </Button>
       )}
-      {done && <Card className="mt-6 text-center text-sm text-[var(--muted)]">Sesión completada.</Card>}
+      {done && (
+        <Card className="mt-6 space-y-3 text-center text-sm text-[var(--muted)]">
+          <p>Sesión completada.</p>
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={async () => {
+              if (!confirm("¿Reabrir la sesión? Tus series quedan; vas a poder editarlas y volver a finalizar.")) return;
+              await sessionRepo.reopen(id);
+              refresh();
+            }}
+          >
+            Reabrir sesión
+          </Button>
+        </Card>
+      )}
+
+      {toast && (
+        <div className="fixed inset-x-0 top-4 z-[65] flex justify-center px-6" role="status">
+          <div className="rounded-full border border-[var(--success)]/40 bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--success)] shadow-[var(--pop-shadow)]">
+            ★ {toast}
+          </div>
+        </div>
+      )}
+
+      {swapFor && allExercises && (
+        <SwapSheet
+          slot={swapFor}
+          exercises={allExercises}
+          onClose={() => setSwapFor(null)}
+          onToday={async (exerciseId) => {
+            await sessionRepo.swapExerciseToday(id, swapFor.slotIndex, exerciseId);
+            setSwapFor(null);
+            refresh();
+          }}
+          onPlan={async (exerciseId) => {
+            await mesocycleRepo.swapExerciseInPlan(session.mesocycleId, session.dayIndex, swapFor.slotIndex, exerciseId, session.weekIndex);
+            await sessionRepo.swapExerciseToday(id, swapFor.slotIndex, null);
+            setSwapFor(null);
+            refresh();
+          }}
+        />
+      )}
     </>
   );
 }
 
+/** Agrupa slots consecutivos con el mismo supersetGroup. */
+function groupSlotsInOrder(slots: SlotPrescription[]): SlotPrescription[][] {
+  const out: SlotPrescription[][] = [];
+  for (const s of slots) {
+    const last = out.at(-1);
+    const g = s.planned.supersetGroup;
+    if (last && g && last[0].planned.supersetGroup === g) last.push(s);
+    else out.push([s]);
+  }
+  return out;
+}
+
+const shortName = (name: string) => name.replace(/\s*\(.*\)\s*$/, "");
+
+function prLabel(pr: PR): string {
+  if (pr.kind === "load") return `Récord de carga: ${fmtKg(pr.value)} kg (antes ${fmtKg(pr.previous ?? 0)})`;
+  if (pr.kind === "repsAtLoad") return `Récord: ${pr.value} reps con ${fmtKg(pr.atLoadKg ?? 0)} kg (antes ${pr.previous})`;
+  return `Récord de 1RM estimado: ${fmtKg(pr.value)} kg (antes ${fmtKg(pr.previous ?? 0)})`;
+}
+
+// ---------------- borradores (A1.7): sobreviven recargas ----------------
+
+interface Draft {
+  load: number;
+  reps: number;
+  rir: number | null;
+  rirTouched: boolean;
+  kind: SetKind;
+  side?: "L" | "R";
+  note?: string;
+}
+const draftKey = (sid: string, slot: number, set: number) => `mn-draft:${sid}:${slot}:${set}`;
+function readDraft(sid: string, slot: number, set: number): Draft | null {
+  try {
+    const raw = sessionStorage.getItem(draftKey(sid, slot, set));
+    return raw ? (JSON.parse(raw) as Draft) : null;
+  } catch {
+    return null;
+  }
+}
+function writeDraft(sid: string, slot: number, set: number, d: Draft) {
+  try {
+    sessionStorage.setItem(draftKey(sid, slot, set), JSON.stringify(d));
+  } catch {
+    /* almacenamiento no disponible */
+  }
+}
+function clearDraft(sid: string, slot: number, set: number) {
+  try {
+    sessionStorage.removeItem(draftKey(sid, slot, set));
+  } catch {
+    /* noop */
+  }
+}
+function clearAllDrafts(sid: string) {
+  try {
+    for (const k of Object.keys(sessionStorage)) if (k.startsWith(`mn-draft:${sid}:`)) sessionStorage.removeItem(k);
+  } catch {
+    /* noop */
+  }
+}
+
+// ---------------- bloque de ejercicio ----------------
+
+const RULE_INPUT_LABELS: Record<string, string> = {
+  repsLogradas: "Reps logradas (mínimo entre series)",
+  repsAjustadasPorRir: "Reps ajustadas por RIR",
+  topeRango: "Tope del rango",
+  pisoReps: "Piso del rango",
+  cargaKg: "Carga (kg)",
+  cargaInicialKg: "Carga inicial (kg)",
+  cargaAnteriorKg: "Carga anterior (kg)",
+  cargaNuevaKg: "Carga nueva (kg)",
+  saltoMinimoPct: "Salto mínimo de tu equipamiento (%)",
+  incrementoObjetivoPct: "Incremento objetivo del motor (%)",
+  sesionesSinProgreso: "Sesiones sin progreso",
+  umbral: "Umbral",
+  colchonUsado: "Colchón usado (reps)",
+  colchonMax: "Colchón máximo (reps)",
+  cargaSemana1Kg: "Carga de la semana 1 (kg)",
+  cargaHoyKg: "Carga de hoy (kg)",
+  fraccion: "Fracción aplicada",
+};
+
+const PROFILE_LABEL: Record<string, string> = { stretch: "en estiramiento", mid: "medio", short: "acortado" };
+
 function ExerciseBlock({
+  sessionId,
   slot,
   logs,
   disabled,
   bodyweightKg,
+  ctx,
   onLog,
-  onUnlog,
+  onSwap,
+  onChangeSets,
 }: {
-  slot: SessionView["slots"][number];
+  sessionId: string;
+  slot: SlotPrescription;
   logs: SetLog[];
   disabled: boolean;
   bodyweightKg: number;
-  onLog: (args: {
-    exerciseId: string;
-    setIndex: number;
-    loadKg: number;
-    reps: number;
-    rir: number;
-    targetLoadKg: number;
-    targetReps: number;
-    targetRir: number;
-    rirReported: boolean;
-    existingId?: string;
-  }) => void;
-  onUnlog: (logId: string) => void;
+  ctx: RoundingContext;
+  onLog: (a: LogArgs) => Promise<void>;
+  onSwap: () => void;
+  onChangeSets: (delta: number) => Promise<void>;
 }) {
-  const { exercise, planned, suggestedLoadKg, suggestedReps, targetRir, rationale } = slot;
-  const logsByIndex = new Map(logs.map((l) => [l.setIndex, l]));
-  // Convención: carga planificada 0 = ejercicio a PESO CORPORAL. La carga no
-  // progresa (el volumen/reps sí) y se registra tu peso corporal como carga real.
+  const rules = getRules();
+  const { exercise, planned, suggestedLoadKg, suggestedReps, targetRir, rationale, explain, previous } = slot;
+  const [whyOpen, setWhyOpen] = useState(false);
+  const [warmOpen, setWarmOpen] = useState(false);
+  const [noteEdit, setNoteEdit] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(exercise.note ?? "");
+  const [noteSaved, setNoteSaved] = useState(exercise.note);
+
+  const working = logs.filter(isWorkingSet);
+  const warmLogs = logs.filter((l) => !isWorkingSet(l));
+  const byIndex = new Map(working.map((l) => [l.setIndex, l]));
   const isBodyweight = planned.targetLoadKg === 0;
+  const plates = !isBodyweight ? plateBreakdown(suggestedLoadKg, ctx) : null;
+  const warmups = !isBodyweight ? warmupSets(suggestedLoadKg, ctx, rules) : [];
+  const lastIndexLogged = byIndex.has(slot.sets - 1);
+  const daysAgo = previous?.completedAt ? Math.round((Date.now() - Date.parse(previous.completedAt)) / 86400000) : null;
 
   return (
     <Card>
       <div className="mb-1 flex items-start justify-between gap-2">
-        <p className="font-medium">{exercise.name}</p>
-        <Badge tone="primary">RIR {targetRir}</Badge>
+        <div className="min-w-0">
+          <p className="font-medium">{exercise.name}</p>
+          {slot.plannedExercise && (
+            <p className="text-[11px] text-[var(--warning)]">Hoy en lugar de {shortName(slot.plannedExercise.name)}</p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setWhyOpen((v) => !v)}
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+              whyOpen ? "border-[var(--primary)]/50 text-[var(--primary)]" : "border-[var(--border)] text-[var(--muted)]",
+            )}
+            aria-expanded={whyOpen}
+          >
+            ¿por qué?
+          </button>
+          <Badge tone="primary">RIR {targetRir}</Badge>
+        </div>
       </div>
-      <p className="mb-3 text-xs text-[var(--muted)]">
+
+      <p className="text-xs text-[var(--muted)]">
         Objetivo: {isBodyweight ? "corporal" : `${fmtKg(suggestedLoadKg)} kg`} × {suggestedReps} reps ({planned.repRange.min}–
         {planned.repRange.max}
-        {suggestedReps > planned.repRange.max ? ` +${suggestedReps - planned.repRange.max}` : ""}) · {planned.sets} series
+        {suggestedReps > planned.repRange.max ? ` +${suggestedReps - planned.repRange.max}` : ""}) · {slot.sets} series
       </p>
+      {plates && plates.perSide.length > 0 && (
+        <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+          Por lado: <span className="font-medium text-[var(--foreground)]">{plates.perSide.map(fmtKg).join(" · ")}</span>
+          {" "}({ctx.type === "barbell" ? "barra" : "mango"} {fmtKg(plates.baseKg)})
+        </p>
+      )}
+      {previous && previous.sets.length > 0 && (
+        <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+          Última vez{daysAgo !== null ? ` (hace ${daysAgo === 0 ? "hoy" : `${daysAgo} d`})` : ""}:{" "}
+          {previous.sets
+            .map((s) => `${isBodyweight ? "BW" : fmtKg(s.loadKg)}×${s.reps}${s.rirReported ? ` @${s.rir}` : ""}`)
+            .join(", ")}
+        </p>
+      )}
 
-      <div className="space-y-2">
-        {Array.from({ length: planned.sets }).map((_, i) => (
+      {whyOpen && (
+        <div className="mt-2 rounded-xl bg-[var(--surface-2)] p-3 text-xs">
+          <p className="mb-2 leading-relaxed">{rationale}</p>
+          <table className="w-full">
+            <tbody>
+              {Object.entries(explain.inputs).map(([k, v]) => (
+                <tr key={k}>
+                  <td className="py-0.5 pr-2 text-[var(--muted)]">{RULE_INPUT_LABELS[k] ?? k}</td>
+                  <td className="py-0.5 text-right tabular-nums">{typeof v === "number" ? fmtKg(v) : v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-2 text-[10px] text-[var(--muted)]">Regla del motor: {explain.rule}</p>
+        </div>
+      )}
+
+      {(noteSaved || noteEdit) && (
+        <div className="mt-2">
+          {noteEdit ? (
+            <div className="flex gap-1">
+              <input
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                maxLength={200}
+                placeholder="Ej: asiento 4, agarre ancho"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2 text-xs"
+              />
+              <Button
+                size="sm"
+                onClick={async () => {
+                  await exerciseRepo.setNoteAndRest(exercise.id, { note: noteDraft });
+                  setNoteSaved(noteDraft.trim() || undefined);
+                  setNoteEdit(false);
+                }}
+              >
+                OK
+              </Button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setNoteEdit(true)} className="text-left text-[11px] text-[var(--foreground)]/80">
+              📝 {noteSaved}
+            </button>
+          )}
+        </div>
+      )}
+
+      {warmups.length > 0 && !disabled && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setWarmOpen((v) => !v)}
+            className="text-[11px] font-semibold text-[var(--muted)]"
+            aria-expanded={warmOpen}
+          >
+            {warmOpen ? "▾" : "▸"} Calentamiento · {warmups.length} series{warmLogs.length > 0 ? ` (${warmLogs.length} hechas)` : ""}
+          </button>
+          {warmOpen && (
+            <div className="mt-1 space-y-1">
+              {warmups.map((w, k) => {
+                const doneW = warmLogs.find((l) => l.setIndex === WARMUP_BASE_INDEX + k);
+                return (
+                  <div key={k} className="flex items-center justify-between rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-xs">
+                    <span className="text-[var(--muted)]">W{k + 1}</span>
+                    <span className="tabular-nums">
+                      {fmtKg(w.loadKg)} kg × {w.reps}
+                    </span>
+                    <button
+                      type="button"
+                      className={cn(
+                        "rounded-full px-3 py-1 font-semibold",
+                        doneW ? "text-[var(--success)]" : "bg-[var(--primary)]/15 text-[var(--primary)]",
+                      )}
+                      onClick={() =>
+                        doneW
+                          ? setLogRepo.remove(doneW.id)
+                          : onLog({
+                              slotIndex: slot.slotIndex,
+                              exerciseId: exercise.id,
+                              setIndex: WARMUP_BASE_INDEX + k,
+                              loadKg: w.loadKg,
+                              reps: w.reps,
+                              rir: targetRir,
+                              targetLoadKg: w.loadKg,
+                              targetReps: w.reps,
+                              targetRir,
+                              rirReported: false,
+                              kind: "warmup",
+                            })
+                      }
+                    >
+                      {doneW ? "✓" : "Log"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mt-3 space-y-2">
+        {Array.from({ length: slot.sets }).map((_, i) => (
           <SetRow
-            key={i}
+            key={`${exercise.id}-${i}`}
+            sessionId={sessionId}
+            slotIndex={slot.slotIndex}
             index={i}
-            existing={logsByIndex.get(i)}
+            existing={byIndex.get(i)}
+            previous={previousForIndex(previous?.sets ?? null, i)}
             defaultLoad={isBodyweight ? bodyweightKg : suggestedLoadKg}
             defaultReps={suggestedReps}
             defaultRir={targetRir}
             disabled={disabled}
             bodyweight={isBodyweight}
-            // La ÚLTIMA serie de cada ejercicio pide el RIR explícito: es la
-            // más cercana al fallo y la más precisa (Russo 2025). Las demás
-            // se precargan con el objetivo y cuentan como "no reportado"
-            // salvo que el RIR se toque.
-            requireRir={i === planned.sets - 1}
-            onLog={(loadKg, reps, rir, rirReported, existingId) =>
+            ctx={ctx}
+            // La ÚLTIMA serie de cada ejercicio pide el RIR explícito (A1.11):
+            // la más cercana al fallo y la más precisa (Russo 2025).
+            requireRir={i === slot.sets - 1}
+            onLog={(v) =>
               onLog({
+                slotIndex: slot.slotIndex,
                 exerciseId: exercise.id,
                 setIndex: i,
-                loadKg,
-                reps,
-                rir,
-                // Lo que pidió el motor, no lo que se levantó: permite medir
-                // adherencia y si el motor prescribe bien (la progresión usa
-                // siempre actualLoadKg).
+                loadKg: v.load,
+                reps: v.reps,
+                rir: v.rir,
+                // Lo que pidió el motor, no lo que se levantó (A0.1).
                 targetLoadKg: isBodyweight ? 0 : suggestedLoadKg,
                 targetReps: suggestedReps,
                 targetRir,
-                rirReported,
-                existingId,
+                rirReported: v.rirReported,
+                kind: v.kind,
+                side: v.side,
+                note: v.note,
               })
             }
-            onUnlog={onUnlog}
           />
         ))}
       </div>
 
-      {rationale && <p className="mt-2 text-[11px] text-[var(--muted)]">↳ {rationale}</p>}
+      {rationale && !whyOpen && <p className="mt-2 text-[11px] text-[var(--muted)]">↳ {rationale}</p>}
+
+      {!disabled && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <button type="button" className={chipBtn} onClick={() => onChangeSets(1)}>
+            + serie
+          </button>
+          <button
+            type="button"
+            className={chipBtn}
+            disabled={slot.sets <= 1 || lastIndexLogged}
+            onClick={() => onChangeSets(-1)}
+            title={lastIndexLogged ? "La última serie ya está registrada" : undefined}
+          >
+            − serie
+          </button>
+          {exercise.isSwappable !== false && (
+            <button type="button" className={chipBtn} onClick={onSwap}>
+              Cambiar ejercicio
+            </button>
+          )}
+          {!noteSaved && !noteEdit && (
+            <button type="button" className={chipBtn} onClick={() => setNoteEdit(true)}>
+              + nota
+            </button>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
 
+const chipBtn =
+  "rounded-full border border-[var(--border)] px-3 py-1.5 text-[11px] font-semibold text-[var(--muted)] active:text-[var(--foreground)] disabled:opacity-40";
+
+// ---------------- fila de serie ----------------
+
+const KIND_LABEL: Record<SetKind, string> = {
+  working: "Normal",
+  warmup: "Calentamiento",
+  drop: "Drop set",
+  failure: "Al fallo",
+  partial: "Parciales",
+};
+
 function SetRow({
+  sessionId,
+  slotIndex,
   index,
   existing,
+  previous,
   defaultLoad,
   defaultReps,
   defaultRir,
   disabled,
   bodyweight,
+  ctx,
   requireRir,
   onLog,
-  onUnlog,
 }: {
+  sessionId: string;
+  slotIndex: number;
   index: number;
   existing?: SetLog;
+  previous: PreviousSet | null;
   defaultLoad: number;
   defaultReps: number;
   defaultRir: number;
   disabled: boolean;
   bodyweight: boolean;
-  /** true en la última serie: RIR vacío hasta elegirlo (A1.11). */
+  ctx: RoundingContext;
   requireRir: boolean;
-  onLog: (loadKg: number, reps: number, rir: number, rirReported: boolean, existingId?: string) => void;
-  onUnlog: (logId: string) => void;
+  onLog: (v: { load: number; reps: number; rir: number; rirReported: boolean; kind: SetKind; side?: "L" | "R"; note?: string }) => void;
 }) {
-  const [load, setLoad] = useState(existing?.actualLoadKg ?? defaultLoad);
-  const [reps, setReps] = useState(existing?.actualReps ?? defaultReps);
+  const draft = !existing ? readDraft(sessionId, slotIndex, index) : null;
+  const [load, setLoadS] = useState(existing?.actualLoadKg ?? draft?.load ?? defaultLoad);
+  const [reps, setRepsS] = useState(existing?.actualReps ?? draft?.reps ?? defaultReps);
   // RIR: null = todavía sin elegir (solo en la serie que lo pide).
-  const [rir, setRirState] = useState<number | null>(
-    existing?.actualRir ?? (requireRir ? null : defaultRir),
+  const [rir, setRirS] = useState<number | null>(
+    existing?.actualRir ?? (draft ? draft.rir : requireRir ? null : defaultRir),
   );
-  const [rirTouched, setRirTouched] = useState(false);
-  const setRir = (v: number) => {
-    setRirState(v);
-    setRirTouched(true);
-  };
+  const [rirTouched, setRirTouched] = useState(draft?.rirTouched ?? false);
+  const [kind, setKind] = useState<SetKind>(existing?.kind ?? draft?.kind ?? "working");
+  const [side, setSide] = useState<"L" | "R" | undefined>(existing?.side ?? draft?.side);
+  const [note, setNote] = useState(existing?.note ?? draft?.note ?? "");
+  const [menu, setMenu] = useState(false);
+  const [rirOpen, setRirOpen] = useState(false);
+
   const logged = !!existing;
-  const needsRir = requireRir && rir === null && !logged;
-  // Serie logueada = BLOQUEADA (gris) para no tocarla sin querer.
-  // Para editar: ✓ des-loguea, corregís y volvés a dar Log.
   const locked = disabled || logged;
+  const needsRir = requireRir && rir === null && !logged;
+
+  const persist = (patch: Partial<Draft>) => {
+    if (logged) return;
+    writeDraft(sessionId, slotIndex, index, {
+      load, reps, rir, rirTouched, kind, side, note, ...patch,
+    });
+  };
+  const setLoad = (v: number) => (setLoadS(v), persist({ load: v }));
+  const setReps = (v: number) => (setRepsS(v), persist({ reps: v }));
+  const setRir = (v: number) => (setRirS(v), setRirTouched(true), persist({ rir: v, rirTouched: true }));
+
+  const copyPrevious = () => {
+    if (!previous) return;
+    if (!bodyweight) setLoadS(previous.loadKg);
+    setRepsS(previous.reps);
+    persist({ load: bodyweight ? load : previous.loadKg, reps: previous.reps });
+  };
+
+  // Steppers de carga que siguen el inventario (A1.2): + = siguiente alcanzable,
+  // − = mayor alcanzable por debajo.
+  const loadUp = (v: number) => nextAchievableLoad(v, ctx);
+  const loadDown = (v: number) => Math.max(0, roundToAvailable(Math.max(0, v - 0.001), ctx));
+  const breakdown = !bodyweight && !logged ? plateBreakdown(load, ctx) : null;
+  const cmp = logged ? compareToPrevious({ loadKg: existing.actualLoadKg, reps: existing.actualReps }, previous) : null;
 
   return (
     <div>
-    <div
-      className={
-        "flex items-center gap-1 rounded-xl border p-1.5 " +
-        (logged ? "border-[var(--success)]/40 bg-[var(--success)]/5" : "border-[var(--border)] bg-[var(--surface-2)]")
-      }
-    >
-      <span className="w-4 shrink-0 text-center text-xs text-[var(--muted)]">{index + 1}</span>
-      {bodyweight ? (
-        <div className="min-w-0 flex-1">
-          <p className="mb-0.5 text-center text-[10px] uppercase text-[var(--muted)]">kg</p>
-          <p className={"text-center text-sm font-medium " + (locked ? "opacity-50" : "")}>BW</p>
-        </div>
-      ) : (
-        <Field label="kg" value={load} step={1.25} min={0} onChange={setLoad} format={fmtKg} disabled={locked} />
-      )}
-      <Field label="reps" value={reps} step={1} min={0} onChange={setReps} disabled={locked} />
-      {needsRir ? (
-        <div className="min-w-0 flex-1">
-          <p className="mb-0.5 text-center text-[10px] uppercase text-[var(--primary)]">RIR ↓</p>
-          <p className="flex h-8 items-center justify-center text-sm font-semibold text-[var(--primary)]">?</p>
-        </div>
-      ) : (
-        <Field label="RIR" value={rir ?? defaultRir} step={1} min={0} onChange={setRir} disabled={locked} />
-      )}
-      <Button
-        size="sm"
-        variant={logged ? "secondary" : "primary"}
-        disabled={disabled || needsRir}
-        className="w-11 shrink-0 px-0"
-        title={logged ? "Des-loguear para editar" : needsRir ? "Elegí el RIR de esta serie" : "Registrar serie"}
-        onClick={() =>
-          logged
-            ? onUnlog(existing.id)
-            : onLog(load, reps, rir ?? defaultRir, requireRir || rirTouched)
-        }
+      <div
+        className={cn(
+          "flex items-center gap-1 rounded-xl border p-1.5",
+          logged ? "border-[var(--success)]/40 bg-[var(--success)]/5" : "border-[var(--border)] bg-[var(--surface-2)]",
+        )}
       >
-        {logged ? "✓" : "Log"}
-      </Button>
-    </div>
-    {needsRir && !disabled && <RirPicker onPick={setRir} />}
+        <button
+          type="button"
+          onClick={() => !disabled && setMenu((v) => !v)}
+          className="w-5 shrink-0 text-center text-xs text-[var(--muted)]"
+          aria-label={`Opciones de la serie ${index + 1}`}
+          title="Tipo, lado y nota"
+        >
+          {index + 1}
+          {kind !== "working" && <span className="block text-[8px] text-[var(--primary)]">{kind[0].toUpperCase()}</span>}
+        </button>
+        {bodyweight ? (
+          <div className="min-w-0 flex-1">
+            <p className="mb-0.5 text-center text-[10px] uppercase text-[var(--muted)]">kg</p>
+            <p className={cn("text-center text-sm font-medium", locked && "opacity-50")}>BW</p>
+          </div>
+        ) : (
+          <Field label="kg" value={load} min={0} onChange={setLoad} down={loadDown} up={loadUp} format={fmtKg} disabled={locked} wide />
+        )}
+        <Field
+          label="reps"
+          value={reps}
+          min={0}
+          onChange={setReps}
+          down={(v) => Math.max(0, v - 1)}
+          up={(v) => v + 1}
+          disabled={locked}
+          tone={cmp === "up" ? "up" : cmp === "down" ? "down" : undefined}
+        />
+        {/* RIR: celda compacta que abre el selector 0·1·2·3·4+ (la fila no
+            entra con tres pares de −/+ en 360–390 px y los botones se pisaban). */}
+        <div className="w-11 shrink-0">
+          <p className={cn("mb-0.5 text-center text-[10px] uppercase", needsRir ? "text-[var(--primary)]" : "text-[var(--muted)]")}>
+            RIR{needsRir ? " ↓" : ""}
+          </p>
+          <button
+            type="button"
+            disabled={locked}
+            onClick={() => setRirOpen((v) => !v)}
+            className={cn(
+              "h-8 w-full rounded-lg text-sm font-semibold tabular-nums disabled:opacity-40",
+              needsRir ? "text-[var(--primary)]" : "bg-[var(--surface)]",
+              rirOpen && "ring-2 ring-[var(--primary)]/30",
+            )}
+            aria-label="Elegir RIR"
+          >
+            {rir === null ? "?" : rir >= 4 ? "4+" : rir}
+          </button>
+        </div>
+        <Button
+          size="sm"
+          variant={logged ? "secondary" : "primary"}
+          disabled={disabled || needsRir}
+          className="w-11 shrink-0 px-0"
+          title={logged ? "Des-loguear para editar" : needsRir ? "Elegí el RIR de esta serie" : "Registrar serie"}
+          onClick={() =>
+            logged
+              ? setLogRepo.remove(existing.id)
+              : onLog({
+                  load: bodyweight ? defaultLoad : load,
+                  reps,
+                  rir: rir ?? defaultRir,
+                  rirReported: requireRir || rirTouched,
+                  kind,
+                  side,
+                  note,
+                })
+          }
+        >
+          {logged ? "✓" : "Log"}
+        </Button>
+      </div>
+
+      {!logged && !disabled && (previous || breakdown?.unreachable) && (
+        <div className="mt-0.5 flex items-center justify-between gap-2 pl-6 text-[10px] text-[var(--muted)]">
+          {previous ? (
+            <span>
+              ant. {bodyweight ? "BW" : fmtKg(previous.loadKg)}×{previous.reps}
+              {previous.rirReported ? ` @${previous.rir}` : ""}
+            </span>
+          ) : (
+            <span />
+          )}
+          <span className="flex items-center gap-2">
+            {breakdown?.unreachable && (
+              <button type="button" className="text-[var(--warning)]" onClick={() => setLoad(breakdown.nearestBelow)}>
+                no se arma → usar {fmtKg(breakdown.nearestBelow)}
+              </button>
+            )}
+            {previous && (
+              <button type="button" className="font-semibold text-[var(--primary)]" onClick={copyPrevious}>
+                copiar anterior
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+
+      {logged && existing.note && <p className="mt-0.5 pl-6 text-[10px] text-[var(--muted)]">📝 {existing.note}</p>}
+
+      {menu && !disabled && (
+        <div className="mt-1 space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2 text-xs">
+          <div className="flex flex-wrap gap-1">
+            {(["working", "drop", "failure", "partial"] as SetKind[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={async () => {
+                  setKind(k);
+                  persist({ kind: k });
+                  if (logged) await setLogRepo.patch(existing.id, { kind: k === "working" ? undefined : k });
+                }}
+                className={cn(chipBtn, kind === k && "border-[var(--primary)]/50 text-[var(--primary)]")}
+              >
+                {KIND_LABEL[k]}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[var(--muted)]">Lado:</span>
+            {([undefined, "L", "R"] as const).map((sd) => (
+              <button
+                key={sd ?? "-"}
+                type="button"
+                onClick={async () => {
+                  setSide(sd);
+                  persist({ side: sd });
+                  if (logged) await setLogRepo.patch(existing.id, { side: sd });
+                }}
+                className={cn(chipBtn, side === sd && "border-[var(--primary)]/50 text-[var(--primary)]")}
+              >
+                {sd === undefined ? "ambos" : sd === "L" ? "izq." : "der."}
+              </button>
+            ))}
+          </div>
+          <input
+            value={note}
+            onChange={(e) => {
+              setNote(e.target.value);
+              persist({ note: e.target.value });
+            }}
+            onBlur={async () => {
+              if (logged) await setLogRepo.patch(existing.id, { note: note.trim() || undefined });
+            }}
+            maxLength={200}
+            placeholder="Nota de la serie (molestia, técnica…)"
+            className="h-9 w-full rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-2"
+          />
+        </div>
+      )}
+
+      {(needsRir || rirOpen) && !locked && (
+        <RirPicker
+          onPick={(v) => {
+            setRir(v);
+            setRirOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -379,16 +942,16 @@ function RirPicker({ onPick }: { onPick: (rir: number) => void }) {
     <div className="mt-1.5 pl-5">
       <p className="mb-1 text-[11px] text-[var(--muted)]">¿Cuántas reps te quedaban en esta serie?</p>
       <div className="flex gap-1">
-      {[0, 1, 2, 3, 4].map((v) => (
-        <button
-          key={v}
-          type="button"
-          onClick={() => onPick(v)}
-          className="h-9 min-w-9 flex-1 rounded-lg border border-[var(--primary)]/35 bg-[var(--primary)]/10 text-sm font-semibold text-[var(--primary)] active:scale-95"
-        >
-          {v === 4 ? "4+" : v}
-        </button>
-      ))}
+        {[0, 1, 2, 3, 4].map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => onPick(v)}
+            className="h-9 min-w-9 flex-1 rounded-lg border border-[var(--primary)]/35 bg-[var(--primary)]/10 text-sm font-semibold text-[var(--primary)] active:scale-95"
+          >
+            {v === 4 ? "4+" : v}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -398,27 +961,36 @@ function Field({
   label,
   value,
   onChange,
-  step,
+  down,
+  up,
   min,
   format,
   disabled,
+  tone,
+  wide,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
-  step: number;
+  down: (v: number) => number;
+  up: (v: number) => number;
   min: number;
   format?: (v: number) => string;
   disabled: boolean;
+  tone?: "up" | "down";
+  /** Más ancho (carga: "107.5" necesita 5 caracteres). */
+  wide?: boolean;
 }) {
   return (
-    <div className="min-w-0 flex-1">
+    <div className={cn("min-w-0", wide ? "flex-[1.35]" : "flex-1")}>
       <p className="mb-0.5 text-center text-[10px] uppercase text-[var(--muted)]">{label}</p>
       <div className="flex items-center justify-center gap-0.5">
         <button
+          type="button"
           disabled={disabled}
           className="h-8 w-7 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"
-          onClick={() => onChange(Math.max(min, +(value - step).toFixed(2)))}
+          onClick={() => onChange(+down(value).toFixed(3))}
+          aria-label={`Bajar ${label}`}
         >
           −
         </button>
@@ -428,12 +1000,18 @@ function Field({
           min={min}
           format={format}
           disabled={disabled}
-          className="h-8 w-full min-w-[34px] text-sm"
+          className={cn(
+            "h-8 w-full min-w-[34px] text-sm",
+            tone === "up" && "text-[var(--success)]",
+            tone === "down" && "text-[var(--warning)]",
+          )}
         />
         <button
+          type="button"
           disabled={disabled}
           className="h-8 w-7 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"
-          onClick={() => onChange(+(value + step).toFixed(2))}
+          onClick={() => onChange(+up(value).toFixed(3))}
+          aria-label={`Subir ${label}`}
         >
           +
         </button>
@@ -441,3 +1019,87 @@ function Field({
     </div>
   );
 }
+
+// ---------------- cambio de ejercicio (A1.9) ----------------
+
+function SwapSheet({
+  slot,
+  exercises,
+  onClose,
+  onToday,
+  onPlan,
+}: {
+  slot: SlotPrescription;
+  exercises: Exercise[];
+  onClose: () => void;
+  onToday: (exerciseId: string | null) => void;
+  onPlan: (exerciseId: string) => void;
+}) {
+  const current = slot.exercise;
+  const byId = new Map(exercises.map((e) => [e.id, e]));
+  const fromCandidates = current.swapCandidates.map((id) => byId.get(id)).filter((e): e is Exercise => !!e);
+  const sameMuscle = exercises.filter(
+    (e) => e.primaryMuscle === current.primaryMuscle && e.id !== current.id && !current.swapCandidates.includes(e.id),
+  );
+  const list = [...fromCandidates, ...sameMuscle].slice(0, 14);
+  const [picked, setPicked] = useState<string | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/30 p-3" role="dialog" aria-modal aria-label="Cambiar ejercicio" onClick={onClose}>
+      <div
+        className="max-h-[80dvh] w-full max-w-md overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--pop-shadow)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-2 flex items-center justify-between">
+          <p className="font-semibold">Cambiar {shortName(current.name)}</p>
+          <button type="button" onClick={onClose} className="px-2 text-[var(--muted)]" aria-label="Cerrar">
+            ✕
+          </button>
+        </div>
+        <p className="mb-3 text-[11px] leading-relaxed text-[var(--muted)]">
+          Mismo músculo principal. Se conservan series, rango y RIR. Preferí perfiles en estiramiento o
+          medio: el trabajo en posición acortada es el menos respaldado (SCIENCE §8). No rotes por rotar.
+        </p>
+        {slot.plannedExercise && (
+          <Button variant="secondary" size="sm" className="mb-2 w-full" onClick={() => onToday(null)}>
+            Volver a {shortName(slot.plannedExercise.name)}
+          </Button>
+        )}
+        <div className="space-y-1">
+          {list.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              onClick={() => setPicked(e.id)}
+              className={cn(
+                "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm",
+                picked === e.id ? "border-[var(--primary)]/50 bg-[var(--primary)]/10" : "border-[var(--border)]",
+              )}
+            >
+              <span className="min-w-0 truncate">{e.name}</span>
+              <span className="ml-2 shrink-0 text-[10px] text-[var(--muted)]">
+                {PROFILE_LABEL[e.resistanceProfile]}
+                {current.swapCandidates.includes(e.id) ? " · sugerido" : ""}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex gap-2">
+          <Button variant="secondary" className="flex-1" disabled={!picked} onClick={() => picked && onToday(picked)}>
+            Solo hoy
+          </Button>
+          <Button
+            className="flex-1"
+            disabled={!picked}
+            onClick={() =>
+              picked && confirm("¿Cambiarlo en el plan desde esta semana? Las semanas ya entrenadas no cambian.") && onPlan(picked)
+            }
+          >
+            En el plan
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

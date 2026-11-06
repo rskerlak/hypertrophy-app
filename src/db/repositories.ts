@@ -12,7 +12,7 @@ import type {
 } from "@/domain/types";
 import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
-import { deriveBaseWeekFromPlan, generateMesocycle } from "@/domain/mesocycle";
+import { deriveBaseWeekFromPlan, generateMesocycle, swapExerciseInPlan } from "@/domain/mesocycle";
 import { groupBySession, nextPrescription, sameProgressionTrack } from "@/domain/progression";
 import { suggestLoadFromHistory } from "@/domain/oneRepMax";
 import { z } from "zod";
@@ -116,6 +116,13 @@ export const exerciseRepo = {
         await db.baseWeek.put({ id: "default", days });
       }
     });
+  },
+  /** Nota persistente y/o descanso propio de un ejercicio (también de biblioteca). */
+  async setNoteAndRest(id: string, changes: { note?: string; restSec?: number | null }): Promise<void> {
+    const update: Partial<Exercise> = {};
+    if (changes.note !== undefined) update.note = changes.note.trim() || undefined;
+    if (changes.restSec !== undefined) update.restSec = changes.restSec ?? undefined;
+    await getDb().exercises.update(id, update);
   },
 };
 
@@ -321,6 +328,33 @@ export const mesocycleRepo = {
     return { usedBaseWeek };
   },
 
+  /**
+   * Descargar ahora (A1.8): salta las sesiones de ACUMULACIÓN pendientes para
+   * que la próxima sea la semana de deload. Reversible: cada sesión saltada
+   * puede reabrirse. Devuelve cuántas se saltaron.
+   */
+  async startDeloadNow(id: string): Promise<number> {
+    const db = getDb();
+    const rows = await db.sessions.where("mesocycleId").equals(id).toArray();
+    const toSkip = rows.filter((s) => s.status === "pending" && !s.isDeload && !s.startedAt);
+    await db.transaction("rw", db.sessions, async () => {
+      for (const s of toSkip) await db.sessions.update(s.id, { status: "skipped" });
+    });
+    return toSkip.length;
+  },
+
+  /**
+   * Swap "en el plan" (A1.6/A1.9): cambia el ejercicio del slot desde la
+   * semana indicada en adelante. La semana base guardada no cambia (puede
+   * tener otra estructura que el meso activo).
+   */
+  async swapExerciseInPlan(id: string, dayIndex: number, slotIndex: number, exerciseId: string, fromWeekIndex: number): Promise<void> {
+    const db = getDb();
+    const meso = await db.mesocycles.get(id);
+    if (!meso) throw new Error("Mesociclo no encontrado.");
+    await db.mesocycles.update(id, { plan: swapExerciseInPlan(meso.plan, dayIndex, slotIndex, exerciseId, fromWeekIndex) });
+  },
+
   /** Activa un meso (pausa al activo actual, o lo completa si no le quedan sesiones). */
   async activate(id: string): Promise<void> {
     const db = getDb();
@@ -453,6 +487,59 @@ export const sessionRepo = {
     await getDb().sessions.update(id, { status: "skipped" });
     await finalizeMesoIfDone(id);
   },
+
+  /**
+   * Vuelve una sesión completada o saltada a "pendiente" (A1.6). Sus series
+   * registradas se conservan. Si el meso se había cerrado por esta sesión,
+   * vuelve a activo (pausando el que estuviera activo).
+   */
+  async reopen(id: string): Promise<void> {
+    const db = getDb();
+    const s = await db.sessions.get(id);
+    if (!s) throw new Error("Sesión no encontrada.");
+    await db.sessions.update(id, { status: "pending", completedAt: undefined });
+    const meso = await db.mesocycles.get(s.mesocycleId);
+    if (meso && meso.status !== "active") await mesocycleRepo.activate(meso.id);
+  },
+
+  /** Marca actividad: primera serie = inicio de la sesión; siempre, última serie. */
+  async touch(id: string, nowIso: string): Promise<void> {
+    const db = getDb();
+    const s = await db.sessions.get(id);
+    if (!s) return;
+    await db.sessions.update(id, { startedAt: s.startedAt ?? nowIso, lastSetAt: nowIso });
+  },
+
+  /** Sesión empezada y sin finalizar del meso activo (para "Continuar" en Home). */
+  async inProgress(): Promise<SessionRow | undefined> {
+    const db = getDb();
+    const active = await db.mesocycles.where("status").equals("active").first();
+    if (!active) return undefined;
+    const rows = await db.sessions.where("mesocycleId").equals(active.id).toArray();
+    return rows.find((s) => s.status === "pending" && !!s.startedAt);
+  },
+
+  /** Reemplaza el ejercicio de un slot SOLO en esta sesión (null = volver al del plan). */
+  async swapExerciseToday(id: string, slotIndex: number, exerciseId: string | null): Promise<void> {
+    const db = getDb();
+    const s = await db.sessions.get(id);
+    if (!s) return;
+    const prev = (s.overrides?.exercise ?? []).filter((x) => x.slotIndex !== slotIndex);
+    const exercise = exerciseId ? [...prev, { slotIndex, exerciseId }] : prev;
+    await db.sessions.update(id, { overrides: { ...s.overrides, exercise } });
+  },
+
+  /** Suma o resta series SOLO en esta sesión (el plan no cambia). */
+  async changeSetsToday(id: string, slotIndex: number, delta: number): Promise<void> {
+    const db = getDb();
+    const s = await db.sessions.get(id);
+    if (!s) return;
+    const list = s.overrides?.setsDelta ?? [];
+    const cur = list.find((x) => x.slotIndex === slotIndex)?.delta ?? 0;
+    const next = cur + delta;
+    const setsDelta = [...list.filter((x) => x.slotIndex !== slotIndex), ...(next !== 0 ? [{ slotIndex, delta: next }] : [])];
+    await db.sessions.update(id, { overrides: { ...s.overrides, setsDelta } });
+  },
 };
 
 /** Si no quedan sesiones pendientes en el meso de esta sesión, lo marca completado. */
@@ -484,6 +571,22 @@ export const setLogRepo = {
   },
   async remove(id: string): Promise<void> {
     await getDb().setLogs.delete(id);
+  },
+  /**
+   * Series de un ejercicio en sesiones COMPLETADAS fuera de deload (todos los
+   * mesos), excluyendo una sesión. Base para récords personales.
+   */
+  async completedNonDeloadForExercise(exerciseId: string, excludeSessionId?: string): Promise<SetLog[]> {
+    const db = getDb();
+    const logs = await db.setLogs.where("exerciseId").equals(exerciseId).toArray();
+    const ids = [...new Set(logs.map((l) => l.sessionId))].filter((x) => x !== excludeSessionId);
+    const sessions = await db.sessions.bulkGet(ids);
+    const ok = new Set(sessions.filter((s) => s && s.status === "completed" && !s.isDeload).map((s) => s!.id));
+    return logs.filter((l) => ok.has(l.sessionId));
+  },
+  /** Actualiza nota/tipo/lado de una serie ya registrada. */
+  async patch(id: string, changes: Partial<Pick<SetLog, "note" | "kind" | "side">>): Promise<void> {
+    await getDb().setLogs.update(id, changes);
   },
 };
 

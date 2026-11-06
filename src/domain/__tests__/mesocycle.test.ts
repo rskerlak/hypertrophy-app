@@ -325,3 +325,17 @@ describe("generateMesocycle — deload", () => {
     }
   });
 });
+
+describe("swapExerciseInPlan (A1.9)", () => {
+  it("cambia el slot desde la semana dada, deload incluido; las anteriores no", async () => {
+    const { swapExerciseInPlan } = await import("../mesocycle");
+    const plan = gen("double", 4);
+    const next = swapExerciseInPlan(plan, 0, 0, "db-press", 2);
+    expect(next.weeks[0].days[0].slots[0].exerciseId).toBe(plan.weeks[0].days[0].slots[0].exerciseId);
+    expect(next.weeks[1].days[0].slots[0].exerciseId).toBe(plan.weeks[1].days[0].slots[0].exerciseId);
+    for (const w of next.weeks.filter((x) => x.weekIndex >= 2)) expect(w.days[0].slots[0].exerciseId).toBe("db-press");
+    // conserva series y rango
+    expect(next.weeks[2].days[0].slots[0].sets).toBe(plan.weeks[2].days[0].slots[0].sets);
+    expect(next.weeks[2].days[0].slots[0].repRange).toEqual(plan.weeks[2].days[0].slots[0].repRange);
+  });
+});

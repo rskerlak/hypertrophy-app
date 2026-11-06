@@ -1,10 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { settingsRepo } from "@/db/repositories";
 import { getRules } from "@/lib/rulesLoader";
 import Link from "next/link";
-import { Card, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
+import { Button, Card, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { InstallCard } from "@/components/InstallCard";
 import { BackupCard } from "@/components/BackupCard";
 import { BugListCard } from "@/components/BugReport";
@@ -270,6 +271,8 @@ export default function SettingsPage() {
         />
       </Card>
 
+      <NotificationCard />
+
       <Card className="mb-4">
         <p className="mb-2 font-medium">Tema</p>
         <div className="grid grid-cols-2 gap-2">
@@ -331,5 +334,46 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
         }
       />
     </button>
+  );
+}
+
+/**
+ * Permiso de notificaciones para el fin del descanso (A1.4). Se pide solo
+ * desde acá, nunca en medio de una sesión. Sin permiso, el timer igual vibra.
+ */
+function NotificationCard() {
+  const supported = typeof window !== "undefined" && "Notification" in window;
+  const [perm, setPerm] = useState<string>(supported ? Notification.permission : "unsupported");
+  return (
+    <Card className="mb-4">
+      <p className="font-medium">Aviso de fin de descanso</p>
+      <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+        El timer vibra al terminar el descanso. Con permiso, también avisa si tenés la app en segundo
+        plano. En iPhone funciona con la app instalada en la pantalla de inicio.
+      </p>
+      <div className="mt-3">
+        {perm === "granted" ? (
+          <p className="text-sm text-[var(--success)]">✓ Notificaciones activadas</p>
+        ) : perm === "denied" ? (
+          <p className="text-sm text-[var(--muted)]">Bloqueadas en el navegador; se habilitan desde sus ajustes.</p>
+        ) : perm === "unsupported" ? (
+          <p className="text-sm text-[var(--muted)]">Este navegador no soporta notificaciones.</p>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              try {
+                setPerm(await Notification.requestPermission());
+              } catch {
+                setPerm("denied");
+              }
+            }}
+          >
+            Activar notificaciones
+          </Button>
+        )}
+      </div>
+    </Card>
   );
 }

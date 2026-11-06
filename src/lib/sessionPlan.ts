@@ -1,7 +1,14 @@
 // Compone el plan del día con la autorregulación (F6). No es dominio puro
 // (lee repos), pero delega todo el cálculo a src/domain.
 
-import { groupBySession, nextPrescription, sameProgressionTrack } from "@/domain/progression";
+import {
+  groupBySession,
+  nextPrescription,
+  sameProgressionTrack,
+  type PrescriptionExplain,
+} from "@/domain/progression";
+import { lastSessionSets, type PreviousSet } from "@/domain/history";
+import { roundToAvailable } from "@/domain/rounding";
 import { deloadLoadForDay } from "@/domain/deload";
 import {
   assessRirCalibration,
@@ -17,11 +24,22 @@ import type { SessionRow } from "@/db/schema";
 export interface SlotPrescription {
   slotIndex: number;
   exercise: Exercise;
+  /** Ejercicio del plan si hoy se reemplazó (swap "solo hoy"). */
+  plannedExercise?: Exercise;
   planned: PlannedSlot;
+  /** Series de HOY (plan + cambios de esta sesión). */
+  sets: number;
   suggestedLoadKg: number;
   suggestedReps: number;
   targetRir: number;
   rationale: string;
+  explain: PrescriptionExplain;
+  /** Última sesión de la misma pista (series de trabajo) y su fecha. */
+  previous: { sets: PreviousSet[]; completedAt?: string } | null;
+  /** Descanso objetivo en segundos (ejercicio o default por tipo). */
+  restSec: number;
+  /** true si hoy hay un deload por ejercicio aplicado a este slot. */
+  exerciseDeload?: boolean;
 }
 
 export interface SessionView {
@@ -62,10 +80,17 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
   const rirFloor = calibratedRirFloor(rirCalibration, rules);
 
   const slots: SlotPrescription[] = [];
+  const overrides = session.overrides ?? {};
   for (let i = 0; i < day.slots.length; i++) {
-    const planned = day.slots[i];
-    const exercise = exById.get(planned.exerciseId);
+    const basePlanned = day.slots[i];
+    const plannedExercise = exById.get(basePlanned.exerciseId);
+    // Swap "solo hoy": mismo slot (series, rango, RIR), otro ejercicio.
+    const swapId = overrides.exercise?.find((x) => x.slotIndex === i)?.exerciseId;
+    const exercise = (swapId ? exById.get(swapId) : undefined) ?? plannedExercise;
     if (!exercise) continue;
+    const planned: PlannedSlot = swapId && exById.get(swapId) ? { ...basePlanned, exerciseId: exercise.id } : basePlanned;
+    const setsDelta = overrides.setsDelta?.find((x) => x.slotIndex === i)?.delta ?? 0;
+    const exDeload = overrides.exerciseDeload?.find((x) => x.slotIndex === i);
 
     // Historial del ejercicio dentro de este meso, ANTERIOR a la sesión actual.
     // En DUP el mismo ejercicio rota de zona (pesado/medio/liviano): la doble
@@ -108,6 +133,14 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
       ? {
           nextLoadKg: deload.loadKg,
           nextReps: planned.repRange.min,
+          explain: {
+            rule: deload.half === "first" ? ("deload-first-half" as const) : ("deload-second-half" as const),
+            inputs: {
+              cargaSemana1Kg: planned.targetLoadKg,
+              cargaHoyKg: deload.loadKg,
+              fraccion: deload.half === "first" ? 1 : week.deloadLoadPolicy!.secondHalfFraction,
+            },
+          },
           rationale:
             deload.half === "first"
               ? "Deload, primera mitad: carga de la semana 1 con menos series y reps. Gestión de fatiga, no progresión."
@@ -136,14 +169,38 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
     // Piso de RIR si el reporte no está calibrado: no prescribir 0 RIR cuando
     // no sabemos dónde está realmente el fallo para este usuario.
     const targetRir = rirFloor !== null ? Math.max(planned.targetRir, rirFloor) : planned.targetRir;
+    // "Última vez" (solo para mostrar, A1.1): la pista de este meso; si es la
+    // primera sesión del meso, la última vez que se hizo el ejercicio en
+    // cualquier meso (sin deload). La progresión NO usa este respaldo.
+    let prev = lastSessionSets(history);
+    let prevSession = prev ? mesoSessions.find((s) => s.id === prev!.sessionId) : undefined;
+    if (!prev) {
+      prev = lastSessionSets(await setLogRepo.completedNonDeloadForExercise(exercise.id, session.id));
+      prevSession = prev ? await sessionRepo.get(prev.sessionId) : undefined;
+    }
+    const ctxLoad = {
+      type: planned.targetLoadKg === 0 ? ("bodyweight" as const) : exercise.equipmentType,
+      equipment: settings.equipment,
+    };
+    const baseSets = Math.max(1, planned.sets + setsDelta);
     slots.push({
       slotIndex: i,
       exercise,
+      plannedExercise: swapId && plannedExercise && plannedExercise.id !== exercise.id ? plannedExercise : undefined,
       planned,
-      suggestedLoadKg: p.nextLoadKg,
+      sets: exDeload ? Math.max(1, Math.round(baseSets * exDeload.setsFactor)) : baseSets,
+      suggestedLoadKg: exDeload ? roundToAvailable(p.nextLoadKg * exDeload.loadFactor, ctxLoad) : p.nextLoadKg,
       suggestedReps: p.nextReps,
       targetRir,
-      rationale: p.rationale,
+      rationale: exDeload
+        ? `Deload de este ejercicio aplicado hoy (${Math.round(exDeload.setsFactor * 100)}% series, ${Math.round(exDeload.loadFactor * 100)}% carga). ${p.rationale}`
+        : p.rationale,
+      explain: p.explain,
+      previous: prev ? { sets: prev.sets, completedAt: prevSession?.completedAt } : null,
+      restSec:
+        exercise.restSec ??
+        (exercise.secondaryMuscles.length > 0 ? rules.rest.defaultCompoundSec : rules.rest.defaultIsolationSec),
+      exerciseDeload: !!exDeload,
     });
   }
 

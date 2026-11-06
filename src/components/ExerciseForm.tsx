@@ -27,6 +27,9 @@ export function ExerciseForm({
   const [equipmentType, setEquip] = useState<EquipmentType>(initial?.equipmentType ?? "machine");
   const [resistanceProfile, setResistance] = useState<ResistanceProfile>(initial?.resistanceProfile ?? "mid");
   const [isSwappable, setSwappable] = useState(initial?.isSwappable ?? true);
+  const [note, setNote] = useState(initial?.note ?? "");
+  // Descanso propio (s). Vacío = default por tipo desde el config (A1.4).
+  const [restSec, setRestSec] = useState<string>(initial?.restSec !== undefined ? String(initial.restSec) : "");
 
   const toggleSecondary = (m: string) => {
     setSecondary((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
@@ -43,6 +46,8 @@ export function ExerciseForm({
       isSwappable,
       swapCandidates: initial?.swapCandidates ?? [],
       defaultRepRange: initial?.defaultRepRange,
+      note: note.trim() || undefined,
+      restSec: restSec.trim() === "" ? undefined : Math.max(0, Math.round(Number(restSec) || 0)),
     });
   };
 
@@ -112,6 +117,26 @@ export function ExerciseForm({
           </Select>
         </div>
       </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label>Descanso propio (s)</Label>
+          <Input
+            inputMode="numeric"
+            value={restSec}
+            onChange={(e) => setRestSec(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder={secondary.length > 0 ? String(rules.rest.defaultCompoundSec) : String(rules.rest.defaultIsolationSec)}
+          />
+        </div>
+        <div>
+          <Label>Nota</Label>
+          <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="asiento 4…" />
+        </div>
+      </div>
+      <p className="-mt-2 text-xs text-[var(--muted)]">
+        Vacío = {rules.rest.defaultCompoundSec} s en multiarticulares y {rules.rest.defaultIsolationSec} s en
+        aislamiento (Singer 2024: beneficio pequeño por encima de 60 s, nada claro por encima de 90 s).
+      </p>
 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={isSwappable} onChange={(e) => setSwappable(e.target.checked)} className="h-4 w-4" />

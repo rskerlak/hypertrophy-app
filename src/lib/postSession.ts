@@ -15,6 +15,8 @@ import {
 } from "@/db/repositories";
 
 export interface SwapHint {
+  /** Posición del slot en el día (para aplicar el cambio en el plan). */
+  slotIndex: number;
   exerciseId: string;
   exerciseName: string;
   candidateId?: string;
@@ -95,6 +97,7 @@ export async function analyzePostSession(sessionId: string): Promise<PostSession
       if (r.suggest) {
         const cand = r.candidateId ? exById.get(r.candidateId) : undefined;
         swaps.push({
+          slotIndex: day.slots.indexOf(slot),
           exerciseId: exercise.id,
           exerciseName: exercise.name,
           candidateId: r.candidateId,

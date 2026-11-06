@@ -264,6 +264,7 @@ export default function PlanPage() {
                           {ex.resistanceProfile === "stretch" && " · estiramiento"}
                           {tr?.role === "trim" && <Badge tone="warning">prescindible</Badge>}
                           {tr?.role === "anchor" && <Badge tone="success">ancla</Badge>}
+                          {slot.supersetGroup && <Badge tone="primary">superserie</Badge>}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-0.5">
@@ -274,6 +275,38 @@ export default function PlanPage() {
                         </button>
                       </div>
                     </div>
+                    {slotIdx < day.slots.length - 1 && (
+                      <button
+                        type="button"
+                        className="mb-2 text-[11px] font-semibold text-[var(--primary)]"
+                        onClick={() => {
+                          const next = day.slots[slotIdx + 1];
+                          const linked = !!slot.supersetGroup && slot.supersetGroup === next.supersetGroup;
+                          const g = slot.supersetGroup ?? next.supersetGroup ?? `ss-${dayIdx}-${slotIdx}`;
+                          const days = baseWeek.days.map((d, i) => {
+                            if (i !== dayIdx) return d;
+                            const slots = d.slots.map((s, j) => {
+                              if (j !== slotIdx && j !== slotIdx + 1) return s;
+                              if (linked) {
+                                // Desvincular: el siguiente sale del grupo; este también si queda solo.
+                                const { supersetGroup: _g, ...rest } = s;
+                                void _g;
+                                return j === slotIdx + 1 || !d.slots.some((x, k) => k < slotIdx && x.supersetGroup === s.supersetGroup)
+                                  ? rest
+                                  : s;
+                              }
+                              return { ...s, supersetGroup: g };
+                            });
+                            return { ...d, slots };
+                          });
+                          save({ days });
+                        }}
+                      >
+                        {slot.supersetGroup && slot.supersetGroup === day.slots[slotIdx + 1]?.supersetGroup
+                          ? "✕ quitar superserie con el siguiente"
+                          : "⇣ superserie con el siguiente"}
+                      </button>
+                    )}
                     <div className="grid grid-cols-3 gap-2 text-center text-xs text-[var(--muted)]">
                       <MiniStepper
                         label="Series"

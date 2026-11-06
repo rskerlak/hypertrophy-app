@@ -3,7 +3,7 @@
 
 import type { Rules } from "./rules";
 import { estimate1RM } from "./oneRepMax";
-import { isWorkingSet, type SetLog } from "./types";
+import { isRirReported, isWorkingSet, type SetLog } from "./types";
 
 export type PRKind = "load" | "repsAtLoad" | "e1rm";
 
@@ -41,9 +41,11 @@ export function detectPRs(history: SetLog[], newSet: SetLog, rules: Rules): PR[]
     }
   }
 
-  if (newSet.actualLoadKg > 0) {
+  // El 1RM estimado usa el RIR: solo con RIR REPORTADO de ambos lados (un RIR
+  // precargado sin tocar no es percepción y lo inflaría o desinflaría).
+  if (newSet.actualLoadKg > 0 && isRirReported(newSet)) {
     const e = (l: SetLog) => estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, rules);
-    const bestE = Math.max(...past.filter((l) => l.actualLoadKg > 0).map(e), 0);
+    const bestE = Math.max(...past.filter((l) => l.actualLoadKg > 0 && isRirReported(l)).map(e), 0);
     const cur = e(newSet);
     if (bestE > 0 && cur > bestE) out.push({ kind: "e1rm", value: Math.round(cur * 10) / 10, previous: Math.round(bestE * 10) / 10 });
   }

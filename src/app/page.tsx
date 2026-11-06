@@ -21,7 +21,8 @@ export default function HomePage() {
     const meso = all.find((m) => m.status === "active") ?? null;
     if (!meso) return { meso: null, paused, lastCompleted };
     const sessions = await sessionRepo.forMesocycle(meso.id);
-    const next = sessions.find((s) => s.status === "pending");
+    // Sesión empezada y sin finalizar primero (A1.6); si no, la próxima pendiente.
+    const next = sessions.find((s) => s.status === "pending" && !!s.startedAt) ?? sessions.find((s) => s.status === "pending");
     const completed = sessions.filter((s) => s.status === "completed").length;
     return { meso, sessions, next, completed, paused, lastCompleted };
   }, []);
@@ -130,8 +131,13 @@ export default function HomePage() {
           </div>
           <p className="mb-4 text-xl font-semibold">{next.dayLabel}</p>
           <Button className="w-full" size="lg" onClick={() => router.push(`/session?id=${next.id}`)}>
-            Empezar entrenamiento
+            {next.startedAt ? "Continuar sesión" : "Empezar entrenamiento"}
           </Button>
+          {next.startedAt && (
+            <p className="mt-2 text-center text-[11px] text-[var(--muted)]">
+              Empezada {new Date(next.startedAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          )}
         </Card>
       ) : (
         <Card className="mb-4">
