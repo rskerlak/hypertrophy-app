@@ -84,6 +84,8 @@ function SessionRunner() {
     targetLoadKg: number;
     targetReps: number;
     targetRir: number;
+    /** false = RIR precargado sin tocar (no informa percepción). */
+    rirReported: boolean;
     existingId?: string;
   }) => {
     const log: SetLog = {
@@ -97,6 +99,7 @@ function SessionRunner() {
       actualLoadKg: args.loadKg,
       actualReps: args.reps,
       actualRir: args.rir,
+      rirReported: args.rirReported,
       timestamp: new Date().toISOString(),
     };
     await setLogRepo.put(log);
@@ -214,6 +217,7 @@ function ExerciseBlock({
     targetLoadKg: number;
     targetReps: number;
     targetRir: number;
+    rirReported: boolean;
     existingId?: string;
   }) => void;
   onUnlog: (logId: string) => void;
@@ -247,7 +251,12 @@ function ExerciseBlock({
             defaultRir={targetRir}
             disabled={disabled}
             bodyweight={isBodyweight}
-            onLog={(loadKg, reps, rir, existingId) =>
+            // La ÚLTIMA serie de cada ejercicio pide el RIR explícito: es la
+            // más cercana al fallo y la más precisa (Russo 2025). Las demás
+            // se precargan con el objetivo y cuentan como "no reportado"
+            // salvo que el RIR se toque.
+            requireRir={i === planned.sets - 1}
+            onLog={(loadKg, reps, rir, rirReported, existingId) =>
               onLog({
                 exerciseId: exercise.id,
                 setIndex: i,
@@ -260,6 +269,7 @@ function ExerciseBlock({
                 targetLoadKg: isBodyweight ? 0 : suggestedLoadKg,
                 targetReps: suggestedReps,
                 targetRir,
+                rirReported,
                 existingId,
               })
             }
@@ -281,6 +291,7 @@ function SetRow({
   defaultRir,
   disabled,
   bodyweight,
+  requireRir,
   onLog,
   onUnlog,
 }: {
@@ -291,18 +302,30 @@ function SetRow({
   defaultRir: number;
   disabled: boolean;
   bodyweight: boolean;
-  onLog: (loadKg: number, reps: number, rir: number, existingId?: string) => void;
+  /** true en la última serie: RIR vacío hasta elegirlo (A1.11). */
+  requireRir: boolean;
+  onLog: (loadKg: number, reps: number, rir: number, rirReported: boolean, existingId?: string) => void;
   onUnlog: (logId: string) => void;
 }) {
   const [load, setLoad] = useState(existing?.actualLoadKg ?? defaultLoad);
   const [reps, setReps] = useState(existing?.actualReps ?? defaultReps);
-  const [rir, setRir] = useState(existing?.actualRir ?? defaultRir);
+  // RIR: null = todavía sin elegir (solo en la serie que lo pide).
+  const [rir, setRirState] = useState<number | null>(
+    existing?.actualRir ?? (requireRir ? null : defaultRir),
+  );
+  const [rirTouched, setRirTouched] = useState(false);
+  const setRir = (v: number) => {
+    setRirState(v);
+    setRirTouched(true);
+  };
   const logged = !!existing;
+  const needsRir = requireRir && rir === null && !logged;
   // Serie logueada = BLOQUEADA (gris) para no tocarla sin querer.
   // Para editar: ✓ des-loguea, corregís y volvés a dar Log.
   const locked = disabled || logged;
 
   return (
+    <div>
     <div
       className={
         "flex items-center gap-1 rounded-xl border p-1.5 " +
@@ -319,17 +342,54 @@ function SetRow({
         <Field label="kg" value={load} step={1.25} min={0} onChange={setLoad} format={fmtKg} disabled={locked} />
       )}
       <Field label="reps" value={reps} step={1} min={0} onChange={setReps} disabled={locked} />
-      <Field label="RIR" value={rir} step={1} min={0} onChange={setRir} disabled={locked} />
+      {needsRir ? (
+        <div className="min-w-0 flex-1">
+          <p className="mb-0.5 text-center text-[10px] uppercase text-[var(--primary)]">RIR ↓</p>
+          <p className="flex h-8 items-center justify-center text-sm font-semibold text-[var(--primary)]">?</p>
+        </div>
+      ) : (
+        <Field label="RIR" value={rir ?? defaultRir} step={1} min={0} onChange={setRir} disabled={locked} />
+      )}
       <Button
         size="sm"
         variant={logged ? "secondary" : "primary"}
-        disabled={disabled}
+        disabled={disabled || needsRir}
         className="w-11 shrink-0 px-0"
-        title={logged ? "Des-loguear para editar" : "Registrar serie"}
-        onClick={() => (logged ? onUnlog(existing.id) : onLog(load, reps, rir))}
+        title={logged ? "Des-loguear para editar" : needsRir ? "Elegí el RIR de esta serie" : "Registrar serie"}
+        onClick={() =>
+          logged
+            ? onUnlog(existing.id)
+            : onLog(load, reps, rir ?? defaultRir, requireRir || rirTouched)
+        }
       >
         {logged ? "✓" : "Log"}
       </Button>
+    </div>
+    {needsRir && !disabled && <RirPicker onPick={setRir} />}
+    </div>
+  );
+}
+
+/**
+ * Selector rápido de RIR para la serie que lo pide: un tap elige y habilita
+ * "Log". Valores fijos de la escala (0 = al fallo … 4+ = lejos del fallo).
+ */
+function RirPicker({ onPick }: { onPick: (rir: number) => void }) {
+  return (
+    <div className="mt-1.5 pl-5">
+      <p className="mb-1 text-[11px] text-[var(--muted)]">¿Cuántas reps te quedaban en esta serie?</p>
+      <div className="flex gap-1">
+      {[0, 1, 2, 3, 4].map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onPick(v)}
+          className="h-9 min-w-9 flex-1 rounded-lg border border-[var(--primary)]/35 bg-[var(--primary)]/10 text-sm font-semibold text-[var(--primary)] active:scale-95"
+        >
+          {v === 4 ? "4+" : v}
+        </button>
+      ))}
+      </div>
     </div>
   );
 }

@@ -93,7 +93,7 @@ export function exportMesoToExcel(input: ExportInput): void {
     [
       "Fecha", "Semana", "Día", "Ejercicio", "Serie",
       "Carga objetivo (kg)", "Reps objetivo", "RIR objetivo",
-      "Carga real (kg)", "Reps reales", "RIR real",
+      "Carga real (kg)", "Reps reales", "RIR real", "RIR reportado",
     ],
     ...logs.map((l) => {
       const s = sessionById.get(l.sessionId);
@@ -109,6 +109,7 @@ export function exportMesoToExcel(input: ExportInput): void {
         l.actualLoadKg,
         l.actualReps,
         l.actualRir,
+        l.rirReported === false ? "no (precargado)" : "sí",
       ];
     }),
   ];

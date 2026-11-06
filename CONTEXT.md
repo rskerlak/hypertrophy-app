@@ -115,6 +115,7 @@ Tipar todo con TypeScript. IDs `string` (uuid). Índices donde se filtra.
 - `id`, `sessionId` (índice), `exerciseId` (índice), `setIndex`
 - `targetLoadKg`, `targetReps`, `targetRir`
 - `actualLoadKg`, `actualReps`, `actualRir`
+- `rirReported?`: `false` = RIR precargado con el objetivo y no tocado (no informa percepción); `true` = elegido o ajustado; ausente = dato anterior (se asume reportado, la detección de eco lo cubre). En sesión la **última serie de cada ejercicio** exige elegir el RIR (selector 0 · 1 · 2 · 3 · 4+); las demás se precargan y cuentan como reportadas solo si se tocan. Calibración, ajuste de reps por RIR, RIR creep, deriva de RIR y e1RM de Stats usan solo RIR reportado (`isRirReported`).
 - `timestamp`
 
 **`bugReports`** (v4)

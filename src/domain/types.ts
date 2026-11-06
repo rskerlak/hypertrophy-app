@@ -86,7 +86,18 @@ export interface SetLog {
   actualLoadKg: number;
   actualReps: number;
   actualRir: number;
+  /**
+   * false = el RIR es el valor precargado (objetivo) sin tocar: NO informa la
+   * percepción del usuario. true = elegido/ajustado explícitamente. Ausente =
+   * dato anterior a A1.11 (se asume reportado; la detección de eco lo cubre).
+   */
+  rirReported?: boolean;
   timestamp: string;
+}
+
+/** ¿El RIR de esta serie informa la percepción del usuario? (ver SetLog.rirReported) */
+export function isRirReported(l: Pick<SetLog, "rirReported">): boolean {
+  return l.rirReported !== false;
 }
 
 export interface Checkin {

@@ -120,7 +120,7 @@ Principio de diseño: **menos taps, más contexto, cero sorpresas**. Todo lo que
 - **UI**: chip "¿por qué?" junto al objetivo que despliega el `rationale` + una tabla de `inputs` legible. Es el diferencial de producto más citado por los usuarios de RP/MacroFactor/Fitbod ("no sé por qué me pide esto").
 - **Aceptación**: tests de que cada rama de `doubleProgression` y `linearProgression` produce un `explain.rule` distinto y documentado en `CONTEXT.md` §6.
 
-### A1.11 Carga del RIR que mida percepción, no eco (depende de A0.8)
+### A1.11 Carga del RIR que mida percepción, no eco (depende de A0.8) — HECHO con la opción (c)
 - **Problema**: precargar el RIR objetivo en cada serie hace que se confirme sin pensar (99 % de eco en datos reales). Sin RIR real, el ajuste por RIR, la calibración, la señal de RIR creep y el e1RM pierden sentido.
 - **Opciones (elige el usuario)**: (a) RIR vacío hasta que se toque: selector rápido de 5 botones (0 · 1 · 2 · 3 · 4+) en la fila, con "Log" deshabilitado hasta elegir; (b) precarga solo en la serie 1 y en las siguientes el RIR de la serie anterior (refleja fatiga intra-sesión); (c) precarga como hoy pero pedir RIR explícito solo en la **última serie** de cada ejercicio (la más informativa: más cerca del fallo, Russo 2025) y marcar las demás como "RIR no reportado" (excluidas de calibración).
 - **Requisitos comunes**: `SetLog.rirReported?: boolean` (false = valor por defecto no tocado) para que calibración/ajuste ignoren lo no reportado; nunca más de 1 tap extra por serie; tono neutral.

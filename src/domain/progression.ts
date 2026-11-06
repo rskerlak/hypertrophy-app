@@ -12,6 +12,7 @@ import type {
   SetLog,
 } from "./types";
 import { nextAchievableLoad, roundToAvailable } from "./rounding";
+import { isRirReported } from "./types";
 
 export interface NextPrescriptionInput {
   /** Logs de sesiones previas de este slot (mismo ejercicio), cualquier orden. */
@@ -135,6 +136,8 @@ function rirAdjustedReps(
 ): number {
   return Math.min(
     ...sessionLogs.map((l) => {
+      // RIR no reportado (precargado sin tocar): sin ajuste, solo cuentan las reps.
+      if (!isRirReported(l)) return l.actualReps;
       let adj = Math.max(-capReps, Math.min(capReps, l.actualRir - l.targetRir));
       // Un RIR reportado lejos del fallo es de baja información: se atenúa.
       if (l.actualRir >= dampenFrom) adj = Math.trunc(adj / 2);

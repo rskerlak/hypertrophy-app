@@ -2,7 +2,7 @@
 // NUNCA bombeo/dolor como progreso. Incluye siempre el aviso de "n pequeño".
 
 import type { Rules } from "./rules";
-import type { Checkin, Exercise, MesoStats, MesocyclePlan, SetLog } from "./types";
+import { isRirReported, type Checkin, type Exercise, type MesoStats, type MesocyclePlan, type SetLog } from "./types";
 import { estimate1RM } from "./oneRepMax";
 import { groupBySession, progressionTrackKey } from "./progression";
 import { rirEchoPct } from "./rirCalibration";
@@ -72,8 +72,13 @@ export function computeMesoStats(input: ComputeMesoStatsInput): MesoStats {
   for (const t of logsByTrack.values()) {
     const bySession = groupBySession(t.logs);
     if (bySession.length < 2) continue;
-    const best = (s: SetLog[]) =>
-      Math.max(...s.map((l) => estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, rules)));
+    // e1RM con las series de RIR reportado si las hay (la última de cada
+    // ejercicio, la más cercana al fallo y la más precisa: Russo 2025).
+    const best = (s: SetLog[]) => {
+      const reported = s.filter(isRirReported);
+      const use = reported.length > 0 ? reported : s;
+      return Math.max(...use.map((l) => estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, rules)));
+    };
     const first = best(bySession[0]);
     const last = best(bySession[bySession.length - 1]);
     const multi = (tracksPerExercise.get(t.exerciseId) ?? 0) > 1;
@@ -128,6 +133,7 @@ export function computeMesoStats(input: ComputeMesoStatsInput): MesoStats {
     const w = sessionWeek.get(l.sessionId);
     if (w === undefined) continue;
     const arr = diffsByWeek.get(w) ?? [];
+    if (!isRirReported(l)) continue; // la deriva de RIR solo con RIR reportado
     arr.push(l.actualRir - l.targetRir);
     diffsByWeek.set(w, arr);
   }

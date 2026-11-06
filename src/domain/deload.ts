@@ -5,6 +5,7 @@
 import type { Rules } from "./rules";
 import { effectiveLandmarks } from "./rules";
 import { roundToAvailable, type RoundingContext } from "./rounding";
+import { isRirReported } from "./types";
 import type {
   Checkin,
   DeloadEvaluation,
@@ -42,11 +43,11 @@ export function summarizeSessionPair(
     const prev = prevByExercise.get(exId);
     if (!prev) continue;
     // Comparación a carga fija: solo series con la misma carga real.
-    const prevBest = new Map<number, { reps: number; rir: number }>();
+    const prevBest = new Map<number, { reps: number; rir: number; rirReported: boolean }>();
     for (const p of prev) {
       const b = prevBest.get(p.actualLoadKg);
       if (!b || p.actualReps > b.reps) {
-        prevBest.set(p.actualLoadKg, { reps: p.actualReps, rir: p.actualRir });
+        prevBest.set(p.actualLoadKg, { reps: p.actualReps, rir: p.actualRir, rirReported: isRirReported(p) });
       }
     }
     let dropped = false;
@@ -54,6 +55,8 @@ export function summarizeSessionPair(
       const b = prevBest.get(c.actualLoadKg);
       if (!b) continue;
       if (c.actualReps < b.reps) dropped = true;
+      // RIR creep solo entre series con RIR reportado en ambos lados.
+      if (!isRirReported(c) || !b.rirReported) continue;
       const rirIncrease = c.actualRir - b.rir;
       if (rirIncrease > maxRirIncrease) maxRirIncrease = rirIncrease;
     }
