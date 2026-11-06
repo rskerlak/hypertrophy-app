@@ -5,6 +5,7 @@ Esta carpeta contiene instrucciones **ejecutables por agentes** (Claude Opus 5.5
 | Archivo | Qué es | Quién lo usa |
 |---|---|---|
 | `PLAN_A.md` | "Estudio": motor + sesión profesional + historial, 100% offline | Agentes implementadores |
+| `PLAN_A5.md` | "Memoria": historial entre mesos, mantener, dolor, actividades, test AMRAP. 100% offline | Agentes implementadores, **después** de Plan A |
 | `PLAN_B.md` | "Plataforma": backend propio, login, sync, capa IA (DeepSeek), integraciones | Agentes implementadores, **después** de A0–A1 |
 | `AUDITORIA.md` | Protocolo de auditoría en tres pistas (UX, código, seguridad) y criterios de aceptación | Agentes auditores |
 

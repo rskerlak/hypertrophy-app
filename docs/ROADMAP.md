@@ -11,12 +11,12 @@ Estado público de MyoNoesis. El detalle ejecutable de cada tarea está en
 | A3 | Historial por ejercicio, agenda real, reporte semanal, adherencia, tendencias | ✅ Hecho |
 | A4 | Respaldo validado, borrado seguro, SW sin cortes, perfiles de gym, kg/lb, accesibilidad | ✅ Hecho |
 | Auditoría | Revisión UX, código y seguridad de Plan A ([informes](audits/)) | ✅ Aprobada con observaciones |
+| A5 | Memoria: historial entre mesos, mantener, dolor, Garmin, test AMRAP, respaldo compartido ([`PLAN_A5.md`](plans/PLAN_A5.md)) | 📝 Planificado |
 | B | Plataforma (ver [`PLAN_B.md`](plans/PLAN_B.md)) | 💤 No iniciado |
 
 ## Ideas sin fecha
 - Asesor post-meso con IA que **interpreta** las estadísticas del ciclo (aconseja, nunca prescribe).
 - Recalibración intra-sujeto de landmarks tras 3+ ciclos.
-- Test AMRAP opcional para medir la precisión del RIR contra el fallo real.
 - Búsqueda del historial por rango de fechas.
 - Interfaz en inglés.
 
