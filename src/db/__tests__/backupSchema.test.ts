@@ -69,6 +69,15 @@ describe("validateBackup (A4.1)", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/baseWeek\[0\]\.days\.0\.slots\.0\.repRange/);
   });
+  it("A5.3: la intención del meso es opcional y solo acepta valores conocidos", () => {
+    const ok = valid() as unknown as { data: { mesocycles: Array<Record<string, unknown>> } };
+    ok.data.mesocycles[0].intent = "maintenance";
+    expect(validateBackup(ok).ok).toBe(true);
+    ok.data.mesocycles[0].intent = "bulk";
+    const r = validateBackup(ok);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/mesocycles\[0\]\.intent/);
+  });
   it("R-01: overrides de sesión con factores imposibles se rechazan", () => {
     const b = valid() as unknown as { data: { sessions: Array<Record<string, unknown>> } };
     b.data.sessions[0].overrides = { exerciseDeload: [{ slotIndex: 0, setsFactor: 0.5, loadFactor: 1e9 }] };

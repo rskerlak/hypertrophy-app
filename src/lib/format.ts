@@ -95,6 +95,14 @@ export const CORRELATION_LABELS: Record<string, string> = {
   d_calfCm: "Δ Gemelo",
 };
 
+/** Qué significa cada intención (selector al generar el meso). */
+export const INTENT_HINTS: Record<keyof typeof INTENT_LABELS, string> = {
+  hypertrophy: "Lo habitual: se espera que el 1RM estimado suba de meso a meso.",
+  strength: "Bloque orientado a cargas altas; se compara contra otros mesos de rango parecido.",
+  maintenance: "Para no perder (vacaciones, otro deporte en foco): un meso plano es lo esperado y no cuenta como estancamiento.",
+  recovery: "Volver de un dolor o una pausa: tampoco cuenta como estancamiento.",
+};
+
 /** Intención declarada del meso (A5.3). */
 export const INTENT_LABELS: Record<"hypertrophy" | "strength" | "maintenance" | "recovery", string> = {
   hypertrophy: "Hipertrofia",

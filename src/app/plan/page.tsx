@@ -8,10 +8,10 @@ import { getRules } from "@/lib/rulesLoader";
 import { effectiveLandmarks } from "@/domain/rules";
 import { sessionCapWarnings, weeklyVolumeByMuscle } from "@/domain/volume";
 import { suggestVolumeTrim, trimRoleBySlot } from "@/domain/volumeTrim";
-import type { BaseWeek, DayIntensity, Exercise, ProgressionModel, RirBand } from "@/domain/types";
+import type { BaseWeek, DayIntensity, Exercise, MesoIntent, ProgressionModel, RirBand } from "@/domain/types";
 import { Badge, Button, Card, cn, EditableNumber, EmptyState, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { VolumeBar } from "@/components/VolumeBar";
-import { PROGRESSION_LABELS, fmtSets, muscleLabel } from "@/lib/format";
+import { INTENT_HINTS, INTENT_LABELS, PROGRESSION_LABELS, fmtSets, muscleLabel } from "@/lib/format";
 import { ROUTINE_TEMPLATES } from "@/lib/templates";
 import { WEEKDAY_LETTERS, defaultWeekdays, todayIso } from "@/lib/agenda";
 import { askConfirm, showAlert } from "@/store/dialogs";
@@ -447,7 +447,7 @@ export default function PlanPage() {
               maxWeeks={rules.experienceProfiles[settings.experienceProfile].maxAccumulationWeeks}
               initialWeekdays={settings.trainingWeekdays ?? defaultWeekdays(baseWeek.days.length)}
               onCancel={() => setShowGen(false)}
-              onGenerate={async (name, model, weeks, rirBand, startIso, weekdays) => {
+              onGenerate={async (name, model, weeks, rirBand, startIso, weekdays, intent) => {
                 // A4.4: generar activa el meso nuevo y pausa el actual; avisar antes.
                 const current = await mesocycleRepo.active();
                 if (current) {
@@ -462,7 +462,7 @@ export default function PlanPage() {
                   )
                     return;
                 }
-                const meso = await mesocycleRepo.createFromBaseWeek({ name, progressionModel: model, numAccumulationWeeks: weeks, rirBand });
+                const meso = await mesocycleRepo.createFromBaseWeek({ name, progressionModel: model, numAccumulationWeeks: weeks, rirBand, intent });
                 // Agenda (A3.2): solo fechas para mostrar; la progresión sigue siendo por sesión.
                 if (weekdays.length > 0) await mesocycleRepo.schedule(meso.id, startIso, weekdays);
                 router.push("/");
@@ -487,7 +487,7 @@ function GenerateForm({
   defaultWeeks: number;
   maxWeeks: number;
   initialWeekdays: number[];
-  onGenerate: (name: string, model: ProgressionModel, weeks: number, rirBand: RirBand, startIso: string, weekdays: number[]) => void;
+  onGenerate: (name: string, model: ProgressionModel, weeks: number, rirBand: RirBand, startIso: string, weekdays: number[], intent: MesoIntent) => void;
   onCancel: () => void;
 }) {
   const rules = getRules();
@@ -500,12 +500,26 @@ function GenerateForm({
   const [band, setBand] = useState<RirBand>({ min: Math.max(lim.min, 1), max: Math.min(lim.max, 3) });
   const [start, setStart] = useState(todayIso());
   const [days, setDays] = useState<number[]>(initialWeekdays);
+  const [intent, setIntent] = useState<MesoIntent>("hypertrophy");
 
   return (
     <Card className="space-y-4">
       <div>
         <Label>Nombre</Label>
         <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div>
+        <Label>Intención del meso</Label>
+        <Select value={intent} onChange={(e) => setIntent(e.target.value as MesoIntent)}>
+          {(Object.keys(INTENT_LABELS) as MesoIntent[]).map((k) => (
+            <option key={k} value={k}>
+              {INTENT_LABELS[k]}
+            </option>
+          ))}
+        </Select>
+        <p className="mt-1.5 text-xs text-[var(--muted)]">
+          {INTENT_HINTS[intent]} No cambia las cargas ni el plan: le da contexto a la tendencia entre mesos.
+        </p>
       </div>
       <div>
         <Label>Modelo de progresión</Label>
@@ -578,7 +592,7 @@ function GenerateForm({
         <Button variant="secondary" className="flex-1" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button className="flex-1" onClick={() => onGenerate(name.trim() || "Mesociclo", model, weeks, band, start, days)}>
+        <Button className="flex-1" onClick={() => onGenerate(name.trim() || "Mesociclo", model, weeks, band, start, days, intent)}>
           Generar
         </Button>
       </div>

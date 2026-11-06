@@ -7,6 +7,7 @@ import type {
   DayIntensity,
   Exercise,
   MesocyclePlan,
+  MesoIntent,
   ProgressionModel,
   RirBand,
   SetLog,
@@ -400,6 +401,8 @@ export const mesocycleRepo = {
     continuedFromId?: string;
     /** Banda de RIR del meso (ej. 1–3). Sin valor: calendario del config. */
     rirBand?: RirBand;
+    /** Intención declarada (A5.3); sin valor = hipertrofia. */
+    intent?: MesoIntent;
   }): Promise<MesocycleRow> {
     const db = getDb();
     const rules = getRules();
@@ -431,6 +434,7 @@ export const mesocycleRepo = {
       status: "active",
       plan,
       continuedFromId: args.continuedFromId,
+      ...(args.intent && args.intent !== "hypertrophy" ? { intent: args.intent } : {}),
     };
 
     const sessions: SessionRow[] = [];
@@ -465,6 +469,10 @@ export const mesocycleRepo = {
     return meso;
   },
 
+  /** Cambia la intención declarada (A5.3). Solo la usa la memoria larga. */
+  async setIntent(id: string, intent: MesoIntent): Promise<void> {
+    await getDb().mesocycles.update(id, { intent });
+  },
   async setStatus(id: string, status: MesocycleRow["status"]): Promise<void> {
     await getDb().mesocycles.update(id, { status });
   },
@@ -689,6 +697,7 @@ export const mesocycleRepo = {
       baseWeekOverride: baseWeek,
       continuedFromId: sourceId,
       rirBand: source.plan.rirBand,
+      intent: source.intent,
     });
   },
 };

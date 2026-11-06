@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { mesocycleRepo, sessionRepo } from "@/db/repositories";
-import { PROGRESSION_LABELS } from "@/lib/format";
+import { INTENT_LABELS, PROGRESSION_LABELS } from "@/lib/format";
+import type { MesoIntent } from "@/domain/types";
 import { Badge, Button, Card, EmptyState, HonestNote, PageHeader } from "@/components/ui";
 import type { MesocycleRow } from "@/db/schema";
 import { NewMesoButton } from "@/components/NewMesoSheet";
@@ -75,6 +76,21 @@ export default function MesosPage() {
                   {p.done}/{p.total} sesiones
                   {m.continuedFromId && " · continuación"}
                 </p>
+                <label className="mt-2 flex items-center gap-2 text-xs text-[var(--muted)]">
+                  Intención
+                  <select
+                    aria-label={`Intención de ${m.name}`}
+                    className="h-9 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--foreground)]"
+                    value={m.intent ?? "hypertrophy"}
+                    onChange={(e) => mesocycleRepo.setIntent(m.id, e.target.value as MesoIntent)}
+                  >
+                    {(Object.keys(INTENT_LABELS) as MesoIntent[]).map((k) => (
+                      <option key={k} value={k}>
+                        {INTENT_LABELS[k]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {m.status === "active" && (
                     <>

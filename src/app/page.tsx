@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { mesocycleRepo, sessionRepo, settingsRepo } from "@/db/repositories";
 import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
-import { PROGRESSION_LABELS } from "@/lib/format";
+import { INTENT_LABELS, PROGRESSION_LABELS } from "@/lib/format";
 import { Onboarding } from "@/components/Onboarding";
 import { MeasurementPrompt } from "@/components/MeasurementPrompt";
 import { BackupPrompt } from "@/components/BackupPrompt";
@@ -99,7 +99,12 @@ export default function HomePage() {
       <PageHeader
         title="Hoy"
         subtitle={meso.name}
-        action={<Badge tone="primary">{PROGRESSION_LABELS[meso.progressionModel]}</Badge>}
+        action={
+          <span className="flex items-center gap-1">
+            {meso.intent && meso.intent !== "hypertrophy" && <Badge>{INTENT_LABELS[meso.intent]}</Badge>}
+            <Badge tone="primary">{PROGRESSION_LABELS[meso.progressionModel]}</Badge>
+          </span>
+        }
       />
 
       <MeasurementPrompt />

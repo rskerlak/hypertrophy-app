@@ -156,6 +156,7 @@ const mesocycleRow = z
       })
       .passthrough(),
     continuedFromId: shortText.optional(),
+    intent: z.enum(["hypertrophy", "strength", "maintenance", "recovery"]).optional(),
   })
   .passthrough();
 
