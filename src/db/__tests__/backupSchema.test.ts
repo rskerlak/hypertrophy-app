@@ -89,3 +89,17 @@ describe("validateBackup (A4.1)", () => {
     expect(performance.now() - t0).toBeLessThan(500);
   });
 });
+
+describe("R-02: listas anidadas enormes se cortan por largo antes de validar", () => {
+  it("5 M discos en el inventario se rechazan rápido y sin validar cada uno", () => {
+    const b = valid();
+    (b.data.settings[0].equipment as { platesKg: unknown[] }).platesKg = new Array(5_000_000).fill(1.25);
+    const t0 = performance.now();
+    const r = validateBackup(b);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/settings\[0\]\.equipment\.platesKg: demasiadas filas/);
+    // Lo que importa es no validar 5 M elementos (memoria); el recorrido barato
+    // del largo depende de la máquina, así que el umbral es holgado.
+    expect(performance.now() - t0).toBeLessThan(20000);
+  }, 60000);
+});

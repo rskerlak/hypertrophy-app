@@ -44,7 +44,11 @@ const rir = z.number().finite().min(0, "RIR negativo").max(DATA_LIMITS.maxRir, "
 const index = z.number().int().min(0).max(DATA_LIMITS.maxIndex);
 const shortText = z.string().max(DATA_LIMITS.maxNameChars, "texto demasiado largo");
 const longText = z.string().max(DATA_LIMITS.maxTextChars, "texto demasiado largo");
-const list = <T extends z.ZodTypeAny>(item: T, max: number = DATA_LIMITS.maxRows) => z.array(item).max(max, "demasiadas filas");
+// Primero el tope (sobre elementos sin validar, barato) y recién después cada
+// elemento: `z.array(item).max(n)` valida TODO antes de mirar el largo y una
+// lista anidada enorme agotaba la memoria (auditoría R-02).
+const list = <T extends z.ZodTypeAny>(item: T, max: number = DATA_LIMITS.maxRows) =>
+  z.array(z.unknown()).max(max, "demasiadas filas").pipe(z.array(item));
 const repRange = z.object({ min: reps, max: reps }).refine((r) => r.min <= r.max, { message: "rango de reps con mín > máx" });
 const sets = z.number().int().min(0).max(DATA_LIMITS.maxSetsPerSlot, "series fuera de rango");
 

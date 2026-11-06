@@ -189,3 +189,47 @@ Equipo cargable en los 6 modelos y variantes: nunca se congela, nunca baja (salv
 ### Veredicto actualizado
 
 **RECHAZADO.** De los hallazgos originales están cerrados todos los Altos y Medios (H1, H2, M1–M8), todos los Bajos (B1–B6) y la sospecha S1. Pero la corrección de M2 introdujo **N1 (Alta)**, una prescripción incorrecta en bloques con peso corporal, que es acotada y se corrige con un cambio chico. Además quedan 4 Bajos nuevos (N2–N5). Con N1 corregido y su test agregado, esta pista quedaría **APROBADA CON OBSERVACIONES**; los Bajos no bloquean el cierre del Plan A.
+
+---
+
+## Re-auditoría 2 (HEAD bf38c2d)
+
+Fecha: 2026-11-06. Alcance: N1–N5, más volver a correr la simulación de bloques con peso corporal y con equipo cargable. Para reproducir usé tests descartables (`*.tmp.test.ts`), ya borrados.
+
+### Verificación base
+
+En el repo, typecheck falló por un archivo temporal de **otro** auditor (`src/db/__tests__/secaudit3.tmp.test.ts`, en curso, no versionado). Por eso corrí todo en una copia aislada de `HEAD` (`git archive` + junction a `node_modules`):
+
+| Comando | Resultado |
+|---|---|
+| `tsc --noEmit` | limpio |
+| `eslint` | limpio |
+| `vitest run` | 24 archivos, **286 tests** en verde |
+| `next build` | OK |
+
+### Estado
+
+| id | estado | verificación |
+|---|---|---|
+| N1 | **CERRADO** | `blockPhaseReanchor` devuelve `null` con `equipmentType === "bodyweight" \|\| currentLoadKg === 0`, y además exige que `historyWeekIndex` y `weekIndex` caigan en fases distintas. `sessionPlan` pasa `lastHistoryWeek(history, mesoSessions)`, que es la semana de la última sesión de progresión de la pista. Simulación de bloques con peso corporal (3 y 4 sesiones/semana, logs con 80 kg como hace la UI): reps 8→27 sin re-anclaje, carga siempre 0. El bucle 8→16 desapareció. Test `auditPlanA.test.ts` N1. |
+| N2 | **CERRADO** | Con reps prescritas sobre el tope dentro de la misma fase ya no re-ancla, porque el disparador es el cambio de fase. Test `auditPlanA.test.ts` N2. |
+| N3 | **CERRADO** | `replaceExerciseInPlan(..., isTrained)` no toca los días completados o saltados. `replaceAndRemove` arma el set `week:day` de las sesiones no pendientes. Reproducción pura: semana 0 con el día A entrenado da `bench@80, fly@20 \| fly@20, fly@20`. Es correcto: el día entrenado queda intacto y el resto lleva la carga estimada. |
+| N4 | **CERRADO** | `saveEquipment` atrapa el error y muestra un toast; lo usan los Steppers de barra, mango y paso de máquina. La lista de discos ya lo hacía. |
+| N5 | **CERRADO** (parte a) / **aceptado** (parte b) | Tests nuevos: swap sin candidatos (`swap.test.ts`) y `chronicPoorReadiness` con `readinessMax` en el límite y por encima (`deload.test.ts`). Los repositorios siguen sin IndexedDB falsa: queda como riesgo **Baja aceptado**, con la recomendación de mover a funciones puras la lógica de selección de historial y carga que vive en `lib`/`db`. |
+
+### Simulación de bloques (20 sesiones, re-corrida)
+
+`historyWeekIndex` = semana de la sesión anterior, igual que en la app; 5 semanas; 3 y 4 sesiones por semana.
+
+| Equipo | Resultado |
+|---|---|
+| Barra con discos de 1.25 | OK. Re-ancla solo al entrar a intensificación (semana 2→3): +8 % (3/sem) o +16 % (4/sem), con reps al piso 5. Después, doble progresión normal. |
+| Barra sin 1.25, máquina 5, rack fijo | OK. Re-anclaje +11–12.5 % o +0 % (cuando la carga ya era la redondeada), sin bajadas. |
+| Armable 12 kg, polea 20 kg | OK. El re-anclaje redondea a la carga actual (+0 %) y deja reps 5. Los saltos mayores al 15 % ocurren en el tope y salen avisados como `double-ceiling-large-jump`. |
+| Peso corporal | OK. Sin re-anclaje y carga 0. Reps crecientes con tope 30 (M6). |
+
+En todos los casos la carga no se congela ni baja, y las reps no superan el tope de la fase con equipo cargable.
+
+### Veredicto final de la pista de código
+
+**APROBADO CON OBSERVACIONES.** No queda ningún hallazgo Alto ni Medio abierto en esta pista. La única observación es N5b, un Bajo aceptado: los repositorios no tienen tests porque no hay una IndexedDB falsa, y se recomienda extraer a funciones puras la lógica de historial y carga de `lib`/`db`. Del lado del código, la fase A4 y el Plan A pueden cerrarse.

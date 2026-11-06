@@ -23,7 +23,7 @@ push a `main`), así que se agrupa por fase.
 - Respaldo validado por completo con topes y límite de 25 MB; se importa la salida validada; pantalla de error con exportar/importar (S-01…S-03, S-07).
 - CSP por meta, Next 15.5.29, workflows con acciones fijadas por SHA y sin credenciales persistidas, `.gitignore` para temporales y respaldos, `serve` solo en localhost (S-04…S-06, S-09, S-12, S-13, S-14).
 - Pendiente del lado de la cuenta (no es código): verificar el dominio en GitHub Pages y proteger `main` (S-06, S-10).
-- **Dependencias con avisos aceptados:** `xlsx` (SheetJS 0.18) tiene avisos solo en el camino de **lectura** de planillas; la app únicamente **escribe** el Excel de exportación, así que no es explotable aquí. `zod` 3 tiene un aviso de memoria con colecciones grandes: el respaldo se valida fila por fila y corta en el primer error (R-02).
+- **Dependencias con avisos aceptados:** `xlsx` (SheetJS 0.18) tiene avisos solo en el camino de **lectura** de planillas; la app únicamente **escribe** el Excel de exportación, así que no es explotable aquí. `zod` 3 tiene un aviso de memoria con colecciones grandes: el respaldo se valida fila por fila cortando en el primer error, y cada lista (también las anidadas) chequea su largo antes de validar sus elementos (R-02).
 
 ### Re-auditoría
 - Bloques en peso corporal ya no re-anclan (N1/N2): el re-anclaje corre solo si cambió la fase entre la última sesión y la actual.

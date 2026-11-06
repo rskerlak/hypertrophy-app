@@ -255,7 +255,7 @@ Cada ítem lleva su cita a `SCIENCE.md` (actualizarla en el mismo commit). Lo qu
 ---
 
 ## Auditoría (2026-11-05/06)
-Informes en `docs/audits/2026-11-05-planA-{ux,codigo,seguridad}.md`: las tres pistas dieron 4 Altos (H1, H2, UX-01, UX-02) y 20 Medios. Todos los Altos y Medios se corrigieron en el commit "Plan A audit fixes" (ver CHANGELOG); queda pendiente la re-auditoría de los hallazgos cerrados.
+Informes en `docs/audits/2026-11-05-planA-{ux,codigo,seguridad}.md`: las tres pistas dieron 4 Altos (H1, H2, UX-01, UX-02) y 20 Medios. Todos se corrigieron ("Plan A audit fixes", "Plan A re-audit fixes" y el ajuste final de listas anidadas). Tras dos re-auditorías el veredicto de las tres pistas es **APROBADO CON OBSERVACIONES**, sin Altos ni Medios abiertos en UX y código: **Plan A cerrado**. Quedan Bajos documentados en cada informe, la verificación en un iPhone real y dos ajustes de la cuenta de GitHub (dominio verificado en Pages y protección de `main`).
 
 ## Criterio de "Plan A terminado"
 - Todas las tareas con aceptación verde; `npm run test` ≥ 180 tests; `typecheck`, `lint`, `build` limpios.

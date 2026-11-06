@@ -10,7 +10,7 @@ Estado público de MyoNoesis. El detalle ejecutable de cada tarea está en
 | A2 | Motor: deload ponderado, serie ancla, APRE, tope por sesión, confianza en el RIR | ✅ Hecho |
 | A3 | Historial por ejercicio, agenda real, reporte semanal, adherencia, tendencias | ✅ Hecho |
 | A4 | Respaldo validado, borrado seguro, SW sin cortes, perfiles de gym, kg/lb, accesibilidad | ✅ Hecho |
-| Auditoría | Revisión UX, código y seguridad de Plan A según [`AUDITORIA.md`](plans/AUDITORIA.md) | ⏳ Pendiente |
+| Auditoría | Revisión UX, código y seguridad de Plan A ([informes](audits/)) | ✅ Aprobada con observaciones |
 | B | Plataforma (ver [`PLAN_B.md`](plans/PLAN_B.md)) | 💤 No iniciado |
 
 ## Ideas sin fecha

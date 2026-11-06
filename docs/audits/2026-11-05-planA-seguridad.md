@@ -182,3 +182,46 @@ Fecha: 2026-11-06. Commit: `5858d9c`. `out/` se reconstruyó a partir de HEAD: e
 - Los dos son Medios de la Pista 3 y no bloquean el cierre de Plan A.
 - Antes de que Plan B use el import, o el mismo esquema, para el sync, hay que cerrar R-01 y R-02.
 - Las tareas de cuenta (verificar el dominio, proteger `main`) quedan en manos del usuario.
+
+---
+
+## Re-auditoría 2 (HEAD bf38c2d)
+
+Fecha: 2026-11-06. Commit: `bf38c2d`. `out/` se reconstruyó a partir de HEAD: el chunk `633-71140f731e76b27b.js` contiene `bf38c2d`. Alcance: solo R-01, R-02, R-04 y la documentación de S-05.
+
+**Método:**
+- Test descartable `src/db/__tests__/secaudit3.tmp.test.ts`, ya borrado:
+  - Los mismos archivos adversarios de 3 MB y 10 MB (N = 1,5 M / 5 M).
+  - Variantes con el array largo **dentro** de una fila.
+  - Corrida con el heap de Node limitado a 512 MB (`NODE_OPTIONS=--max-old-space-size=512`) para medir el pico real, porque el delta de `heapUsed` se distorsiona con el GC.
+- Prueba aparte del patrón de corrección (`pipe.tmp.test.ts`, también borrado).
+- Playwright con `csp.mjs` y `errb.mjs` contra el build, en orígenes aislados.
+- `next dev` temporal en `127.0.0.1:3014`, ya detenido.
+- `npx vitest run src/db`: 11/11.
+
+| id | estado | verificación |
+|---|---|---|
+| R-01 | **Cerrado** | `sessionRow.overrides` está tipado (`backupSchema.ts:172-185`): `exercise[]` exige `slotIndex` y `exerciseId`; `setsDelta.delta` es entero en ±50; `setsFactor` y `loadFactor` van de 0 a 1; cada lista tiene ≤ 40 filas. Unit: `delta 1e9`, `loadFactor 1e9`, `setsFactor 1e9`, `exercise: "no-es-array"`, `exercise: [{slotIndex: 0}]` y `setsDelta: {a: 1}` → `ok: false`, y un override válido → `ok: true`. Mensaje: `Respaldo inválido en sessions[0].overrides.setsDelta.0.delta: Number must be less than or equal to 50.` E2E: el mismo archivo armado de la re-auditoría 1 ahora se rechaza **antes** de pedir confirmación ("No se importó nada… `sessions[25].overrides.exercise: Expected array, received string`") y no se borra nada. |
+| R-02 | **Parcial: sigue Media** | **Tablas (primer nivel): cerrado.** `validateBackup` (`:304-336`) valida el encabezado, después el largo de cada tabla (`:322`) y después fila por fila, cortando en el primer error. `settings` y `setLogs` = `Array(5 M)` (10 MB) → rechazo en **0–4 ms con Δheap ≈ 0**, también con el heap limitado a 512 MB. **Arrays dentro de una fila: sigue abierto.** `list()` (`:47`) sigue siendo `z.array(item).max(n)`, y Zod parsea y acumula un issue por elemento antes de aplicar `.max()`. Con 1,5 M elementos (3 MB): `settings[0].prioritizedMuscles` → 1,9 s y Δheap ≈ 392 MB; `equipment.platesKg` de `"x"` (6 MB) → Δheap ≈ 456 MB. Con 5 M elementos (10–20 MB) y el heap limitado a 512 MB, **`prioritizedMuscles`, `mesocycles[0].plan.weeks` y `equipment.platesKg` cierran el proceso**: `FATAL ERROR … JavaScript heap out of memory`. Pasan el tope de 25 MB, así que en un móvil cierran la pestaña. No hay pérdida de datos porque se valida antes de borrar. Así, la nota del CHANGELOG ("fila por fila y corta en el primer error") es exacta para las tablas, pero no para los arrays anidados. | **Corrección verificada:** `const list = (item, max) => z.array(z.unknown()).max(max, "demasiadas filas").pipe(z.array(item))`. Con `Array(5 M).fill("x")` y el heap limitado a 512 MB → 1 solo issue ("demasiadas filas") en 2,2 s, sin OOM; `[1, 2]` → ok y `[1, 200]` → falla, así que la semántica se conserva. Más barato todavía: `z.custom<unknown[]>((v) => Array.isArray(v) && v.length <= max, "demasiadas filas").pipe(z.array(item))`. |
+| R-04 | **Cerrado** | La meta queda envuelta en `process.env.NODE_ENV === "production"` (`layout.tsx:49`). Build: la meta está en `index.html`, `session.html`, `settings.html` y `stats.html`. `next dev` (3014): el HTML **no** tiene meta CSP, la página hidrata (tiene botones) y hay **0 errores de consola**. Producción, con `csp.mjs` sobre el build nuevo: recorrido completo, respaldo y Excel descargados, **0 violaciones** fuera del fetch a otro origen que provoqué a propósito, que sigue bloqueado. |
+| S-05 (documentación) | **Cerrado para `xlsx`; corregir el texto de `zod`** | `CHANGELOG.md:26` documenta `xlsx` como solo-escritura, y alcanza: verifiqué que no hay `XLSX.read`. La frase sobre `zod` atribuye la mitigación a la validación fila por fila, pero según R-02 eso no cubre los arrays anidados. Hay que corregirla junto con el fix de `list()`. |
+
+**Conteo final de la pista "Cliente (PWA)":**
+- Alta: 0.
+- Media: 1 (R-02, solo arrays anidados).
+- Baja: 6 abiertas.
+  - Del lado de la cuenta: S-10 (verificar el dominio) y la protección de `main` (de S-06).
+  - S-11 (para Plan B), R-03, R-05 y R-06.
+- Sospecha: 1 (S-14, iOS).
+
+**Notas:**
+- Borré `secaudit3.tmp.test.ts`, `pipe.tmp.test.ts` y los JSON del E2E.
+- Detuve el `next dev` y reconstruí al final con `npm run build`, así que `.next` y `out/` quedan en estado de producción de HEAD.
+
+### Veredicto final de la pista de seguridad cliente
+
+**APROBADO CON OBSERVACIONES.**
+- Ningún Alto quedó abierto en ningún momento, y de los 8 Medios (S-01…S-06, R-01, R-02) se cerraron 7.
+- Queda **R-02 en los arrays anidados**: una pestaña cerrada por un archivo armado que el propio usuario elige importar, sin pérdida de datos.
+- Bajo el gate de `AUDITORIA.md` no bloquea el cierre de Plan A, porque la Pista 3 no es principal en A.
+- Sí debe cerrarse antes de que Plan B reutilice este esquema para validar payloads de sync. La corrección es de una línea (`list()` con largo primero) y está verificada arriba.
