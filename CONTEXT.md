@@ -153,6 +153,7 @@ Elegir modelo de progresión, número de semanas de acumulación (default por pe
 ### F4 — Calendario (agenda impulsada por sesión)
 Vista de calendario real con las sesiones planificadas. Si un día no se entrena, la app **corre los días** o **sugiere saltar** con recomendación basada en evidencia.
 **Aceptación:** el estado del meso avanza solo al **completar** una sesión, nunca por paso del tiempo. Un día perdido no rompe la progresión: la sesión N sigue siendo N. El aviso es neutral. La recomendación de correr vs. saltar viene de una función pura (§6) y no altera cargas por sí sola.
+**A3:** al generar el meso se eligen fecha de inicio y días de entrenamiento (`settings.trainingWeekdays`, 0 = domingo); `mesocycleRepo.schedule` asigna `plannedDate` a las sesiones **pendientes** en orden (`scheduleDates`, función pura), y las completadas o saltadas conservan la suya. La Agenda muestra vista mensual y lista por semana; si la primera pendiente quedó atrás, avisa los días de atraso con `recommendCalendarShift({ daysMissed })` real y ofrece "Correr agenda desde hoy" (re-agenda las pendientes) y, con ≥ 6 días, "Saltar esta" con confirmación. Saltadas se reabren; completadas se abren.
 
 ### F5 — Ejecutar sesión
 Mostrar los slots del día con targets (carga, reps, RIR). Registrar por serie: peso, reps, RIR. Timer de descanso. **Wake lock** activo. Marcar sesión completada.
@@ -277,6 +278,8 @@ recommendCalendarShift(input: { missedSession: Session; daysMissed: number; rule
 Como la progresión es por sesión, la recomendación por defecto es **correr** (shift): no se pierde estímulo, solo se desplaza la agenda. Sugerir **skip** solo si saltar mantiene mejor la frecuencia semanal objetivo del músculo. Nunca altera cargas por sí sola.
 
 ---
+
+**A3 — historial y análisis** (`src/domain/analytics.ts`, puras y testeadas): `exerciseTimeline` (e1RM y carga tope por sesión y por pista, solo completadas sin deload; vista `/exercise?id=`), `weeklyReport` (sesiones hechas/saltadas, minutos, series fraccionadas por músculo hechas vs planificadas), `loadAdherence` (carga real vs prescrita; ignora registros previos a A0.1, detectados por `rirReported` ausente), `ema` (tendencia de peso con `measurements.weightTrendAlpha`), `sleepDebtBySession` (noches seguidas sin el mínimo) y `repDeltaBySession` (reps a carga fija vs la sesión previa del mismo día) para la correlación intra-sujeto en Stats, que exige n ≥ 6 y se presenta como asociación, no causa.
 
 ### Reglas fijadas por las correcciones de A0 (no deben volver)
 Cada una tiene test de regresión en `src/domain/__tests__/`.

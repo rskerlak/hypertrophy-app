@@ -22,6 +22,8 @@ export interface SettingsRow {
   prioritizedMuscles: string[];
   equipment: Equipment;
   wakeLockEnabled: boolean;
+  /** Días de entrenamiento para la agenda (0 = domingo … 6 = sábado). Solo agenda. */
+  trainingWeekdays?: number[];
   /** El usuario declara seguros/spotter en barra libre: habilita APRE (serie al fallo) en barra. */
   barbellFailureAllowed?: boolean;
   onboarded: boolean;

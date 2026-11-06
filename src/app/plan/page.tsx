@@ -9,10 +9,11 @@ import { effectiveLandmarks } from "@/domain/rules";
 import { sessionCapWarnings, weeklyVolumeByMuscle } from "@/domain/volume";
 import { suggestVolumeTrim, trimRoleBySlot } from "@/domain/volumeTrim";
 import type { BaseWeek, DayIntensity, Exercise, ProgressionModel, RirBand } from "@/domain/types";
-import { Badge, Button, Card, EditableNumber, EmptyState, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
+import { Badge, Button, Card, cn, EditableNumber, EmptyState, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { VolumeBar } from "@/components/VolumeBar";
 import { PROGRESSION_LABELS, fmtKg, fmtSets, muscleLabel } from "@/lib/format";
 import { ROUTINE_TEMPLATES } from "@/lib/templates";
+import { WEEKDAY_LETTERS, defaultWeekdays, todayIso } from "@/lib/agenda";
 
 export default function PlanPage() {
   const router = useRouter();
@@ -391,9 +392,12 @@ export default function PlanPage() {
               defaultModel={rules.experienceProfiles[settings.experienceProfile].defaultProgressionModel as ProgressionModel}
               defaultWeeks={rules.experienceProfiles[settings.experienceProfile].defaultAccumulationWeeks}
               maxWeeks={rules.experienceProfiles[settings.experienceProfile].maxAccumulationWeeks}
+              initialWeekdays={settings.trainingWeekdays ?? defaultWeekdays(baseWeek.days.length)}
               onCancel={() => setShowGen(false)}
-              onGenerate={async (name, model, weeks, rirBand) => {
-                await mesocycleRepo.createFromBaseWeek({ name, progressionModel: model, numAccumulationWeeks: weeks, rirBand });
+              onGenerate={async (name, model, weeks, rirBand, startIso, weekdays) => {
+                const meso = await mesocycleRepo.createFromBaseWeek({ name, progressionModel: model, numAccumulationWeeks: weeks, rirBand });
+                // Agenda (A3.2): solo fechas para mostrar; la progresión sigue siendo por sesión.
+                if (weekdays.length > 0) await mesocycleRepo.schedule(meso.id, startIso, weekdays);
                 router.push("/");
               }}
             />
@@ -408,13 +412,15 @@ function GenerateForm({
   defaultModel,
   defaultWeeks,
   maxWeeks,
+  initialWeekdays,
   onGenerate,
   onCancel,
 }: {
   defaultModel: ProgressionModel;
   defaultWeeks: number;
   maxWeeks: number;
-  onGenerate: (name: string, model: ProgressionModel, weeks: number, rirBand: RirBand) => void;
+  initialWeekdays: number[];
+  onGenerate: (name: string, model: ProgressionModel, weeks: number, rirBand: RirBand, startIso: string, weekdays: number[]) => void;
   onCancel: () => void;
 }) {
   const rules = getRules();
@@ -425,6 +431,8 @@ function GenerateForm({
   // y más de 3 queda lejos del estímulo (ver rules.config _bandNote).
   const lim = rules.rirSchedule.selectableBand;
   const [band, setBand] = useState<RirBand>({ min: Math.max(lim.min, 1), max: Math.min(lim.max, 3) });
+  const [start, setStart] = useState(todayIso());
+  const [days, setDays] = useState<number[]>(initialWeekdays);
 
   return (
     <Card className="space-y-4">
@@ -475,11 +483,35 @@ function GenerateForm({
           queda lejos del estímulo. El piso de 1 en barra libre se mantiene por seguridad.
         </p>
       </div>
+      <div>
+        <Label>Agenda: días que entrenás y fecha de inicio</Label>
+        <div className="flex gap-1">
+          {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+            <button
+              key={d}
+              type="button"
+              aria-pressed={days.includes(d)}
+              onClick={() => setDays(days.includes(d) ? days.filter((x) => x !== d) : [...days, d])}
+              className={cn(
+                "h-10 flex-1 rounded-xl border text-sm font-semibold",
+                days.includes(d) ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]" : "border-[var(--border)] text-[var(--muted)]",
+              )}
+            >
+              {WEEKDAY_LETTERS[d]}
+            </button>
+          ))}
+        </div>
+        <Input type="date" className="mt-2" value={start} onChange={(e) => setStart(e.target.value)} />
+        <p className="mt-1.5 text-xs text-[var(--muted)]">
+          Solo agenda: si perdés un día, la sesión pendiente sigue siendo la misma. Sin días
+          marcados, el meso queda sin fechas.
+        </p>
+      </div>
       <div className="flex gap-2">
         <Button variant="secondary" className="flex-1" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button className="flex-1" onClick={() => onGenerate(name.trim() || "Mesociclo", model, weeks, band)}>
+        <Button className="flex-1" onClick={() => onGenerate(name.trim() || "Mesociclo", model, weeks, band, start, days)}>
           Generar
         </Button>
       </div>

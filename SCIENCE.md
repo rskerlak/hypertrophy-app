@@ -99,6 +99,9 @@ No es la prioridad del motor, pero condiciona la adherencia y por eso está refl
 - **Proteína (Morton 2018, *BJSM*, 49 estudios): meseta ~1.62 g/kg/día (IC 1.03–2.20); ~2.2 g/kg como techo defendible.** Breakpoint incierto, probablemente más alto en entrenados. → 1.6 como **piso**, no techo. Autoreporte simple, no contador de macros.
 - **Sueño:** una noche mala es predictor **ruidoso y débil** del rendimiento de esa sesión; pesa más la deuda crónica y el estrés sostenido. → registrar para tendencia, **no recortar la sesión**; el árbitro honesto es el rendimiento real (reps al RIR objetivo).
 
+- **Deuda de sueño en Stats (A3.5):** la app correlaciona noches **consecutivas** sin el mínimo con reps a carga fija, porque el efecto descrito es acumulativo (Craven 2022, meta: ~−2,85 % de fuerza con restricción de sueño, mayor con más noches) y una noche aislada predice poco. Es una correlación intra-sujeto con n chico: se muestra desde 6 pares y nunca modifica la sesión.
+- **Tendencia de peso (A3.5):** media móvil exponencial con α = 0,1 (`measurements.weightTrendAlpha`), el mismo orden que usan MacroFactor y Dr. Muscle. Es una heurística de suavizado para leer la dirección por encima del ruido diario (agua, sal, glucógeno), no un parámetro fisiológico.
+
 ## 11. Métricas (qué sí, qué no)
 - **Válidas:** carga estimada, reps a carga fija (fatiga), volumen completado vs planeado, deriva de RIR, adherencia.
 - **Vanidad (excluir):** bombeo y dolor muscular son marcadores **pobres** de estímulo/hipertrofia; el DOMS baja con la adaptación y no indica mejor sesión.

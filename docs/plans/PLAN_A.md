@@ -187,6 +187,8 @@ Cada ítem lleva su cita a `SCIENCE.md` (actualizarla en el mismo commit). Lo qu
 
 ## A3 — Historial y análisis
 
+> **Estado: hecho.** Desvíos menores respecto de lo escrito: la correlación de sueño es una tarjeta propia en `/stats` (no una fila del heatmap); al completar o saltar no se re-agenda solo: la Agenda detecta el atraso y ofrece "Correr agenda desde hoy"; la búsqueda por rango de fechas queda para después (hay búsqueda por nombre en `/stats` y `/exercises`).
+
 ### A3.1 Vista por ejercicio
 - Ruta `/exercise?id=…` (estática: página con query string, como `/session`). Gráficos Recharts: e1RM por sesión (por pista, sin deload), reps a carga fija, carga por sesión; tabla de sesiones con series; notas del ejercicio; botón "Ver en plan".
 - **Aceptación**: E2E con el respaldo real (banca: ~26 sesiones).

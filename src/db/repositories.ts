@@ -13,6 +13,7 @@ import type {
 import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
 import { deriveBaseWeekFromPlan, generateMesocycle, swapExerciseInPlan } from "@/domain/mesocycle";
+import { scheduleDates } from "@/domain/analytics";
 import { groupBySession, nextPrescription, sameProgressionTrack } from "@/domain/progression";
 import { suggestLoadFromHistory } from "@/domain/oneRepMax";
 import { z } from "zod";
@@ -329,6 +330,24 @@ export const mesocycleRepo = {
   },
 
   /**
+   * Agenda (A3.2): asigna fechas a las sesiones PENDIENTES en orden desde
+   * `startIso`, solo en los días de entrenamiento elegidos. Las completadas y
+   * saltadas conservan su fecha. Solo agenda: la progresión no depende de esto.
+   */
+  async schedule(id: string, startIso: string, weekdays: number[]): Promise<void> {
+    const db = getDb();
+    const rows = (await db.sessions.where("mesocycleId").equals(id).toArray()).sort(
+      (a, b) => a.weekIndex - b.weekIndex || a.dayIndex - b.dayIndex,
+    );
+    const pending = rows.filter((s) => s.status === "pending");
+    const dates = scheduleDates(pending.length, startIso, weekdays);
+    await db.transaction("rw", db.sessions, async () => {
+      for (let i = 0; i < pending.length; i++) await db.sessions.update(pending[i].id, { plannedDate: dates[i] });
+    });
+    await settingsRepo.update({ trainingWeekdays: [...weekdays].sort() });
+  },
+
+  /**
    * Descargar ahora (A1.8): salta las sesiones de ACUMULACIÓN pendientes para
    * que la próxima sea la semana de deload. Reversible: cada sesión saltada
    * puede reabrirse. Devuelve cuántas se saltaron.
@@ -508,6 +527,10 @@ export const sessionRepo = {
     const s = await db.sessions.get(id);
     if (!s) return;
     await db.sessions.update(id, { startedAt: s.startedAt ?? nowIso, lastSetAt: nowIso });
+  },
+
+  async byIds(ids: string[]): Promise<SessionRow[]> {
+    return (await getDb().sessions.bulkGet(ids)).filter((s): s is SessionRow => !!s);
   },
 
   /** Sesión empezada y sin finalizar del meso activo (para "Continuar" en Home). */

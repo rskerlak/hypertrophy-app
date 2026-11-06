@@ -53,6 +53,10 @@ export const rulesSchema = z
           .default({ min: 0, max: 4 }),
       })
       .passthrough(),
+    measurements: z
+      .object({ weightTrendAlpha: z.number().gt(0).max(1) })
+      .passthrough()
+      .default({ weightTrendAlpha: 0.1 }),
     warmup: z
       .object({
         enabled: z.boolean(),

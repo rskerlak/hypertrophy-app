@@ -19,6 +19,15 @@ import { FatigueChart } from "@/components/FatigueChart";
 import { exportMesoToExcel, type ExportInput } from "@/lib/exportExcel";
 import { buildMesoObservations } from "@/lib/mesoObservations";
 import { assessRirCalibration, type RirCalibration } from "@/domain/rirCalibration";
+import {
+  loadAdherence,
+  repDeltaBySession,
+  sleepDebtBySession,
+  weeklyReport,
+  type LoadAdherence,
+  type WeeklyReport,
+} from "@/domain/analytics";
+import { pearson } from "@/domain/correlations";
 import { correlationMatrix, summarizeByModel, type CorrelationResult, type MesoObservation } from "@/domain/correlations";
 import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
 import { CORRELATION_LABELS, PROGRESSION_LABELS } from "@/lib/format";
@@ -35,6 +44,7 @@ export default function StatsPage() {
   const router = useRouter();
   const [mesos, setMesos] = useState<Array<{ id: string; name: string; status: string }>>([]);
   const [mesoId, setMesoId] = useState<string | null>(null);
+  const [q, setQ] = useState("");
   const [state, setState] = useState<
     | {
         stats: MesoStats;
@@ -42,6 +52,9 @@ export default function StatsPage() {
         exNames: Map<string, string>;
         exportData: ExportInput;
         rirCal: RirCalibration;
+        weeks: WeeklyReport[];
+        adherence: LoadAdherence | null;
+        sleep: { r: number | null; n: number };
       }
     | null
     | undefined
@@ -99,12 +112,36 @@ export default function StatsPage() {
         exercises,
         rules: getRules(),
       });
+      const rules = getRules();
+      // Reporte por semana del meso (A3.3).
+      const refs = sessions.map((s) => ({ ...s, mesocycleId: meso.id }));
+      const weeks = meso.plan.weeks.map((w) =>
+        weeklyReport({ plan: meso.plan, sessions: refs, logs: setLogs, exercises, weekIndex: w.weekIndex, rules }),
+      );
+      // Deuda de sueño vs reps a carga fija (A3.5), intra-sujeto y con n chico.
+      const ordered = sessions
+        .filter((s) => s.status === "completed" && !s.isDeload)
+        .sort((a, b) => a.weekIndex - b.weekIndex || a.dayIndex - b.dayIndex);
+      const logsBy = new Map<string, typeof setLogs>();
+      for (const l of setLogs) logsBy.set(l.sessionId, [...(logsBy.get(l.sessionId) ?? []), l]);
+      const debt = sleepDebtBySession(
+        ordered.map((s) => s.id),
+        new Map(checkins.filter((c) => !!c.sessionId).map((c) => [c.sessionId, c])),
+      );
+      const deltas = repDeltaBySession(ordered.map((s) => ({ sessionId: s.id, dayKey: String(s.dayIndex), logs: logsBy.get(s.id) ?? [] })));
+      const pairs = debt
+        .map((d, i) => [d, deltas[i]] as const)
+        .filter((p): p is readonly [number, number] => p[0] !== null && p[1] !== null)
+        .map(([a, b]) => [a, b] as [number, number]);
       setState({
         stats,
         name: meso.name,
         exNames: new Map(exercises.map((e) => [e.id, e.name])),
         exportData: { meso, sessions, setLogs, checkins, exercises, stats, activities },
-        rirCal: assessRirCalibration(setLogs, getRules()),
+        rirCal: assessRirCalibration(setLogs, rules),
+        weeks,
+        adherence: loadAdherence(setLogs),
+        sleep: { r: pearson(pairs), n: pairs.length },
       });
     })();
   }, [mesoId]);
@@ -119,7 +156,11 @@ export default function StatsPage() {
     );
   }
 
-  const { stats, name, exNames, exportData, rirCal } = state;
+  const { stats, name, exNames, exportData, rirCal, weeks, adherence, sleep } = state;
+  const term = q.trim().toLowerCase();
+  const visibleExercises = stats.perExercise.filter((e) => !term || (exNames.get(e.exerciseId) ?? "").toLowerCase().includes(term));
+  // Semana actual del meso: la última con alguna sesión hecha o la primera.
+  const currentWeek = [...weeks].reverse().find((w) => w.sessionsCompleted > 0) ?? weeks[0];
 
   return (
     <>
@@ -159,9 +200,76 @@ export default function StatsPage() {
         />
       </div>
 
+      {currentWeek && (
+        <>
+          <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">
+            {currentWeek.isDeload ? "Semana de deload" : `Semana ${currentWeek.weekIndex + 1}`}
+          </h2>
+          <Card className="mb-4">
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span>
+                {currentWeek.sessionsCompleted}/{currentWeek.sessionsPlanned} sesiones
+                {currentWeek.sessionsSkipped > 0 && <span className="text-[var(--muted)]"> · {currentWeek.sessionsSkipped} saltadas</span>}
+              </span>
+              <span className="tabular-nums text-[var(--muted)]">{currentWeek.minutes > 0 ? `${currentWeek.minutes} min` : ""}</span>
+            </div>
+            <div className="space-y-1">
+              {currentWeek.byMuscle.slice(0, 10).map((m) => (
+                <div key={m.muscle} className="flex items-center gap-2 text-xs">
+                  <span className="w-24 shrink-0 truncate text-[var(--muted)]">{muscleLabel(m.muscle)}</span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--surface-2)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--primary)]"
+                      style={{ width: `${m.planned > 0 ? Math.min(100, (m.done / m.planned) * 100) : 0}%` }}
+                    />
+                  </div>
+                  <span className="w-16 shrink-0 text-right tabular-nums">
+                    {fmtKg(m.done)}/{fmtKg(m.planned)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-[var(--muted)]">Series fraccionadas de trabajo hechas / planificadas.</p>
+          </Card>
+        </>
+      )}
+
+      {adherence && (
+        <>
+          <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">Adherencia a la carga prescrita</h2>
+          <Card className="mb-4">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-lg font-bold tabular-nums">{adherence.pctAtTarget}%</p>
+                <p className="text-[11px] text-[var(--muted)]">igual</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold tabular-nums">{adherence.pctAbove}%</p>
+                <p className="text-[11px] text-[var(--muted)]">más pesada</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold tabular-nums">{adherence.pctBelow}%</p>
+                <p className="text-[11px] text-[var(--muted)]">más liviana</p>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] text-[var(--muted)]">
+              {adherence.samples} series · desvío medio {adherence.meanDeltaPct > 0 ? "+" : ""}
+              {adherence.meanDeltaPct}%. Mide cuánto seguís la carga que propone el motor (no es una
+              nota: cambiarla a mano también es información).
+            </p>
+          </Card>
+        </>
+      )}
+
       {stats.perExercise.length > 0 && (
         <>
           <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">Progresión de carga estimada (1RM)</h2>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar ejercicio…"
+            className="mb-2 h-10 w-full rounded-2xl border border-[var(--border)] bg-[var(--surface-2)] px-3.5 text-sm"
+          />
           {stats.rirEchoPct !== null && stats.rirEchoPct >= getRules().rirCalibration.echoThresholdPct && (
             <div className="mb-2">
               <HonestNote>
@@ -173,8 +281,12 @@ export default function StatsPage() {
             </div>
           )}
           <Card className="mb-4 space-y-2">
-            {stats.perExercise.map((e) => (
-              <div key={`${e.exerciseId}|${e.track ?? ""}`} className="flex items-center justify-between text-sm">
+            {visibleExercises.map((e) => (
+              <Link
+                key={`${e.exerciseId}|${e.track ?? ""}`}
+                href={`/exercise?id=${e.exerciseId}`}
+                className="flex items-center justify-between text-sm"
+              >
                 <span className="truncate">
                   {exNames.get(e.exerciseId) ?? e.exerciseId}
                   {e.track && <span className="text-[var(--muted)]"> · {e.track}</span>}
@@ -187,12 +299,38 @@ export default function StatsPage() {
                     {e.deltaPct > 0 ? "+" : ""}
                     {e.deltaPct}%
                   </Badge>
+                  <span className="text-[var(--muted)]">›</span>
                 </span>
-              </div>
+              </Link>
             ))}
+            {visibleExercises.length === 0 && <p className="text-sm text-[var(--muted)]">Sin resultados.</p>}
           </Card>
         </>
       )}
+
+      <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">Deuda de sueño y rendimiento</h2>
+      <Card className="mb-4">
+        {sleep.n < 6 || sleep.r === null ? (
+          <p className="text-sm leading-relaxed text-[var(--muted)]">
+            Pocos datos ({sleep.n} sesiones con check-in y comparación a carga fija). Con varias
+            sesiones vas a ver si las noches seguidas sin dormir tu mínimo se asocian a menos reps a la
+            misma carga.
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between text-sm">
+              <span>Correlación noches sin el mínimo ↔ reps a carga fija</span>
+              <span className="tabular-nums">r = {sleep.r.toFixed(2)}</span>
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
+              {sleep.n} sesiones. Correlación intra-sujeto con n chico: no prueba causa. La evidencia
+              muestra efectos pequeños que crecen con noches acumuladas (Craven 2022: −2,85 % de
+              fuerza) y casi nada por una noche aislada; por eso la app nunca recorta la sesión por
+              sueño.
+            </p>
+          </>
+        )}
+      </Card>
 
       {stats.perMuscle.length > 0 && (
         <>
