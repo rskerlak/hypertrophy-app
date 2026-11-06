@@ -313,3 +313,27 @@ describe("estancamiento con la pista continua (A5.1.3)", () => {
     expect(suggestExerciseSwap({ exercise: bench, candidates, history: r.history, rules }).suggest).toBe(false);
   });
 });
+
+// ---------------- Auditoría A5-11 ----------------
+import { nextPrescription as np11, progressionTrackKey } from "../progression";
+import { rules as rules11, equipment as eq11, sessionLogs as logs11 } from "./fixtures";
+
+describe("auditoría A5-11: bloques entre mesos de distinta duración y pistas por modelo", () => {
+  // Último meso de 3 semanas: la semana 3 (índice 2) es intensificación (2/3 > 0,6).
+  // El meso nuevo de 5 semanas arranca en acumulación: hay cambio de fase y se re-ancla.
+  const h = logs11({ sessionId: "prev", exerciseId: "x", sets: 3, loadKg: 90, reps: 6, rir: 1, targetReps: 6, targetRir: 1, timestamp: "2026-10-01T10:00:00Z" });
+  const base = { exerciseHistory: h, model: "block" as const, targetRir: 2, repRange: { min: 8, max: 15 }, currentLoadKg: 90, equipmentType: "machine" as const, equipment: eq11, weekIndex: 0, historyWeekIndex: 2, numAccumulationWeeks: 5, rules: rules11 };
+  it("con historyNumAccumulationWeeks del meso de origen detecta el cambio de fase", () => {
+    expect(np11({ ...base, historyNumAccumulationWeeks: 3 }).explain.rule).toBe("block-phase-reanchor");
+  });
+  it("sin él, mediría la semana vieja contra la duración nueva y no lo vería", () => {
+    expect(np11(base).explain.rule).not.toBe("block-phase-reanchor");
+  });
+  it("lineal, doble y APRE con el mismo rango comparten pista; DUP por zona y bloques no", () => {
+    const slot = { repRange: { min: 8, max: 12 } };
+    expect(progressionTrackKey({ slot }, "linear")).toBe(progressionTrackKey({ slot }, "double"));
+    expect(progressionTrackKey({ slot: { ...slot, dayType: "heavy" as never } }, "dup")).not.toBe(progressionTrackKey({ slot: { ...slot, dayType: "light" as never } }, "dup"));
+    expect(progressionTrackKey({ slot }, "block")).not.toBe(progressionTrackKey({ slot }, "double"));
+    expect(progressionTrackKey({ slot, intensity: "heavy" }, "double")).not.toBe(progressionTrackKey({ slot, intensity: "light" }, "double"));
+  });
+});

@@ -6,7 +6,7 @@ Objetivo: que la app deje de tratar cada mesociclo como un universo aparte y emp
 
 Prerrequisito: Plan A cerrado (commit `057cb17`, 287 tests). Leer primero `docs/plans/README.md` (reglas 1–10 siguen vigentes, en especial la 2: ningún número científico fuera de `rules.config.json`; la 5: el check-in nunca modifica una prescripción; y la 7: el motor sugiere, el usuario decide).
 
-Convenciones: las mismas de `PLAN_A.md`. Cada tarea es un commit; el orden de fases es obligatorio (A5.0 → A5.1 → … → A5.9); A5.10 es opcional y va al final. Las claves nuevas de `rules.config.json` llevan nota `_` y campo Zod con `.default(...)` en `src/domain/rules.ts`. Toda tabla o campo nuevo en Dexie es una versión nueva y aditiva (v5) y sube `backupVersion` a 3 (se importan 1, 2 y 3).
+Convenciones: las mismas de `PLAN_A.md`. Cada tarea es un commit; el orden de fases es obligatorio (A5.0 → A5.1 → … → A5.9); A5.10 es opcional y va al final. Las claves nuevas de `rules.config.json` llevan nota `_` y campo Zod con `.default(...)` en `src/domain/rules.ts`. Los campos nuevos de A5 son opcionales dentro de Dexie v4 y del respaldo v2 (se validan igual); la versión Dexie v5 y `backupVersion` 3 se hacen **una sola vez** en un plan posterior, junto con las tablas del sync (auditoría A5S-12).
 
 ---
 

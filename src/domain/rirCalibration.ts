@@ -58,7 +58,7 @@ export interface RirAccuracy {
 /** % de series con RIR registrado === RIR objetivo (null si no hay series). */
 export function rirEchoPct(allLogs: SetLog[]): number | null {
   // Solo series con RIR reportado: el precargado sin tocar no es eco, es "sin dato".
-  const logs = allLogs.filter((l) => isRirReported(l) && isWorkingSet(l));
+  const logs = allLogs.filter((l) => isRirReported(l) && isWorkingSet(l) && !l.amrapTest);
   if (logs.length === 0) return null;
   const eq = logs.filter((l) => l.actualRir === l.targetRir).length;
   return round2((eq / logs.length) * 100);
@@ -191,8 +191,9 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // ---------------- A5.8: test AMRAP de precisión ----------------
 
 /** Error de un test: reps que de verdad quedaban − RIR que el usuario creía. null si no es test. */
-export function amrapTestError(l: Pick<SetLog, "amrapTest" | "actualReps">): number | null {
-  if (!l.amrapTest) return null;
+export function amrapTestError(l: Pick<SetLog, "amrapTest" | "actualReps" | "kind">): number | null {
+  // A5S-05: un "test" que no fue al fallo no mide nada.
+  if (!l.amrapTest || l.kind !== "failure") return null;
   return l.actualReps - l.amrapTest.repsAtPrediction - l.amrapTest.predictedRir;
 }
 

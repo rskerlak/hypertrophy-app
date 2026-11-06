@@ -45,7 +45,8 @@ export async function painStatus(mesocycleId: string): Promise<PainStatus | null
   for (const x of signal.perExercise) {
     const z = signal.zones.find((q) => q.zone === x.zone)!;
     const streakStart = Date.parse(latest) - z.streakDays * 86_400_000;
-    const dismissed = (settings.dismissedPainSuggestions ?? []).some(
+    const dismissedList = Array.isArray(settings.dismissedPainSuggestions) ? settings.dismissedPainSuggestions : [];
+    const dismissed = dismissedList.some(
       (d) => d.exerciseId === x.exerciseId && d.zone === x.zone && Date.parse(d.at) >= streakStart - 86_400_000 && z.trend !== "rising",
     );
     if (dismissed) continue;

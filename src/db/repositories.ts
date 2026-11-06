@@ -16,7 +16,7 @@ import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
 import { countExerciseInPlan, deriveBaseWeekFromPlan, generateMesocycle, replaceExerciseInPlan, swapExerciseInPlan } from "@/domain/mesocycle";
 import { scheduleDates } from "@/domain/analytics";
-import { CURRENT_BACKUP_VERSION, equipmentSchema, validateBackup } from "@/db/backupSchema";
+import { CURRENT_BACKUP_VERSION, equipmentSchema, validateActivity, validateBackup } from "@/db/backupSchema";
 import { groupBySession, holdExitDetected, nextPrescription } from "@/domain/progression";
 import { trackHistory } from "@/domain/history";
 import { suggestLoadFromHistory } from "@/domain/oneRepMax";
@@ -80,7 +80,7 @@ export const settingsRepo = {
   /** A5.5: no volver a proponer lo mismo durante la racha de dolor actual. */
   async dismissPain(exerciseId: string, zone: string): Promise<void> {
     const cur = await settingsRepo.get();
-    const list = (cur.dismissedPainSuggestions ?? []).filter((x) => !(x.exerciseId === exerciseId && x.zone === zone));
+    const list = (Array.isArray(cur.dismissedPainSuggestions) ? cur.dismissedPainSuggestions : []).filter((x) => !(x.exerciseId === exerciseId && x.zone === zone));
     await getDb().settings.update("default", { dismissedPainSuggestions: [...list, { exerciseId, zone, at: new Date().toISOString() }] });
   },
   async update(patch: Partial<Omit<SettingsRow, "id">>): Promise<void> {
@@ -690,6 +690,9 @@ export const mesocycleRepo = {
           anchor,
           // Mismos parámetros que la sesión (auditoría M5): APRE y confianza en el RIR.
           slotProgression: slot.progression,
+          // A5-01: Mantener también vale al continuar el meso (si no, la semana 1
+          // y el deload del meso nuevo heredaban una carga subida).
+          holdLoad: ex.holdLoad,
           rirCapOverride: calibratedRirCap(rules.progressionModels.double.rirAdjustmentCapReps, calibration, rules),
           rules,
         });
@@ -735,23 +738,36 @@ export const sessionRepo = {
   },
   async complete(id: string): Promise<void> {
     const db = getDb();
-    // A5.4: si en un ejercicio en "Mantener" cargaste más que lo prescrito en
-    // todas las series, sale de Mantener (lo avisa la pantalla de cierre).
-    const [logs, settings] = await Promise.all([db.setLogs.where("sessionId").equals(id).toArray(), settingsRepo.get()]);
-    const holdExits: string[] = [];
-    for (const exerciseId of new Set(logs.map((l) => l.exerciseId))) {
-      const ex = await db.exercises.get(exerciseId);
-      if (!ex?.holdLoad) continue;
-      const exLogs = logs.filter((l) => l.exerciseId === exerciseId);
-      if (holdExitDetected(exLogs, { type: ex.equipmentType, equipment: settings.equipment })) {
-        await db.exercises.update(exerciseId, { holdLoad: false, holdSince: undefined });
-        holdExits.push(exerciseId);
+    const settings = await settingsRepo.get();
+    await db.transaction("rw", db.sessions, db.setLogs, db.exercises, async () => {
+      const [session, logs] = await Promise.all([db.sessions.get(id), db.setLogs.where("sessionId").equals(id).toArray()]);
+      // A5.4: si en un ejercicio en "Mantener" cargaste más que lo prescrito en
+      // todas las series, sale de Mantener (lo avisa la pantalla de cierre).
+      // A5-02: nunca contra una carga prescrita reducida a propósito (deload,
+      // deload del ejercicio, ajuste por dolor): usar tu carga de siempre ahí no
+      // es "cargar más".
+      const reducedSlots = new Set([
+        ...(session?.overrides?.exerciseDeload ?? []).map((x) => x.slotIndex),
+        ...(session?.overrides?.painAdjust ?? []).filter((x) => x.loadFactor < 1).map((x) => x.slotIndex),
+      ]);
+      const holdExits: string[] = [];
+      if (session && !session.isDeload) {
+        for (const exerciseId of new Set(logs.map((l) => l.exerciseId))) {
+          const ex = await db.exercises.get(exerciseId);
+          if (!ex?.holdLoad) continue;
+          const exLogs = logs.filter((l) => l.exerciseId === exerciseId && (l.slotIndex === undefined || !reducedSlots.has(l.slotIndex)));
+          if (holdExitDetected(exLogs, { type: ex.equipmentType, equipment: settings.equipment })) {
+            await db.exercises.update(exerciseId, { holdLoad: false, holdSince: undefined });
+            holdExits.push(exerciseId);
+          }
+        }
       }
-    }
-    await db.sessions.update(id, {
-      status: "completed",
-      completedAt: new Date().toISOString(),
-      ...(holdExits.length ? { holdExits } : {}),
+      // Al re-completar una sesión reabierta, holdExits se recalcula (no queda el viejo).
+      await db.sessions.update(id, {
+        status: "completed",
+        completedAt: new Date().toISOString(),
+        holdExits: holdExits.length ? holdExits : undefined,
+      });
     });
     await finalizeMesoIfDone(id);
   },
@@ -996,10 +1012,18 @@ export const activityRepo = {
     return getDb().activities.get(id);
   },
   async add(a: Omit<ActivityRow, "id">): Promise<void> {
-    await getDb().activities.put({ ...a, id: uuid() });
+    const row = { ...a, id: uuid() };
+    // A5S-04: nada que el respaldo después rechace.
+    const v = validateActivity(row);
+    if (!v.ok) throw new Error(v.error);
+    await getDb().activities.put(row);
   },
   /** A5.6: editar tipo, fecha, minutos, intensidad o nota. Los campos del proveedor no se tocan. */
   async update(id: string, patch: Partial<Pick<ActivityRow, "date" | "type" | "durationMin" | "intensity" | "note">>): Promise<void> {
+    const cur = await getDb().activities.get(id);
+    if (!cur) return;
+    const v = validateActivity({ ...cur, ...patch });
+    if (!v.ok) throw new Error(v.error);
     await getDb().activities.update(id, patch);
   },
   async remove(id: string): Promise<void> {

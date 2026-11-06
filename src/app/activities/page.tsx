@@ -7,6 +7,8 @@ import { activityRepo } from "@/db/repositories";
 import { ACTIVITY_ICONS, ACTIVITY_LABELS, ACTIVITY_SOURCE_LABELS } from "@/lib/format";
 import { todayIso } from "@/lib/agenda";
 import { Badge, Button, Card, EmptyState, Input, Label, PageHeader, Select } from "@/components/ui";
+import { DATA_LIMITS } from "@/db/backupSchema";
+import { showAlert } from "@/store/dialogs";
 import type { ActivityRow } from "@/db/schema";
 import { askConfirm } from "@/store/dialogs";
 
@@ -26,7 +28,9 @@ export default function ActivitiesPage() {
 function ActivitiesInner() {
   const router = useRouter();
   // A5.6: `/activities?date=YYYY-MM-DD` abre el alta con esa fecha (desde la Agenda).
-  const dateParam = useSearchParams().get("date");
+  // A5S-04: solo una fecha real YYYY-MM-DD; cualquier otra cosa se ignora.
+  const rawDate = useSearchParams().get("date");
+  const dateParam = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) && !Number.isNaN(Date.parse(`${rawDate}T00:00:00Z`)) ? rawDate : null;
   const history = useLiveQuery(() => activityRepo.all(), []);
   const [adding, setAdding] = useState(!!dateParam);
   const [editing, setEditing] = useState<ActivityRow | null>(null);
@@ -115,8 +119,9 @@ function ActivityForm({ initial, initialDate, onDone }: { initial?: ActivityRow;
   const [intensity, setIntensity] = useState<1 | 2 | 3>(initial?.intensity ?? 2);
   const [note, setNote] = useState(initial?.note ?? "");
 
+  const dur = parseFloat(duration.replace(",", "."));
+  const durTooLong = Number.isFinite(dur) && dur > DATA_LIMITS.maxActivityMin;
   const save = async () => {
-    const dur = parseFloat(duration.replace(",", "."));
     const patch = {
       date: `${date}T12:00:00.000Z`,
       type,
@@ -124,9 +129,13 @@ function ActivityForm({ initial, initialDate, onDone }: { initial?: ActivityRow;
       intensity,
       note: note.trim() || undefined,
     };
-    if (initial) await activityRepo.update(initial.id, patch);
-    else await activityRepo.add(patch);
-    onDone();
+    try {
+      if (initial) await activityRepo.update(initial.id, patch);
+      else await activityRepo.add(patch);
+      onDone();
+    } catch (e) {
+      await showAlert({ title: "No se pudo guardar", message: `Revisá los datos (${e instanceof Error ? e.message : String(e)}).` });
+    }
   };
 
   return (
@@ -147,6 +156,7 @@ function ActivityForm({ initial, initialDate, onDone }: { initial?: ActivityRow;
         <div>
           <Label>Duración (min)</Label>
           <Input inputMode="decimal" placeholder="ej: 30" value={duration} onChange={(e) => setDuration(e.target.value)} />
+          {durTooLong && <p className="mt-1 text-[11px] text-[var(--danger-ink)]">Máximo {DATA_LIMITS.maxActivityMin} min.</p>}
         </div>
       </div>
       <div>
@@ -172,7 +182,7 @@ function ActivityForm({ initial, initialDate, onDone }: { initial?: ActivityRow;
       </div>
       <div>
         <Label>Nota (opcional)</Label>
-        <Input placeholder="ej: 5 km por el parque" value={note} onChange={(e) => setNote(e.target.value)} />
+        <Input placeholder="ej: 5 km por el parque" maxLength={DATA_LIMITS.maxTextChars} value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
       {initial?.source && initial.source !== "manual" && (
         <p className="text-[11px] text-[var(--muted)]">
@@ -186,7 +196,7 @@ function ActivityForm({ initial, initialDate, onDone }: { initial?: ActivityRow;
         <Button variant="secondary" className="flex-1" onClick={onDone}>
           Cancelar
         </Button>
-        <Button className="flex-1" onClick={save} disabled={!date}>
+        <Button className="flex-1" onClick={save} disabled={!date || durTooLong}>
           Guardar
         </Button>
       </div>

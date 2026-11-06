@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { sessionRepo, settingsRepo } from "@/db/repositories";
 import { painStatus, type PainStatus } from "@/lib/pain";
 import { PAIN_OPTION_LABELS, PAIN_ZONE_LABELS } from "@/lib/format";
+import { getRules } from "@/lib/rulesLoader";
 import type { PainOption } from "@/domain/pain";
 import { Badge, Button, Card, HonestNote } from "./ui";
 
@@ -106,7 +107,7 @@ export function PainSuggestions({ mesocycleId }: { mesocycleId: string }) {
           {status.signal.persistent
             ? "El dolor se sostiene hace varias semanas: conviene consultar a un profesional (kinesiólogo o médico deportólogo). "
             : ""}
-          Seguir cargando con dolor tolerable (hasta ~5/10, que calme en un día y no empeore semana a semana) suele ser mejor
+          Seguir cargando con dolor tolerable (hasta ~{getRules().pain.acceptableMax}/10, que calme en un día y no empeore semana a semana) suele ser mejor
           que el reposo total en molestias de tendón; los umbrales son de guías clínicas, no una regla para vos. Si se
           repite o empeora, consultá a un profesional.
         </HonestNote>

@@ -119,7 +119,7 @@ No es la prioridad del motor, pero condiciona la adherencia y por eso está refl
 - La app **nunca diagnostica** ni nombra una lesión; con dolor sostenido sugiere consultar a un profesional.
 
 ## 14. Actividad externa: natación, running, bici (A5.6)
-- **Interferencia cardio-fuerza:** con sesiones en días distintos es prácticamente nula sobre hipertrofia y fuerza máxima (Schumann 2022, *Sports Med*, meta-análisis: SMD −0,01 hipertrofia, −0,06 fuerza máxima). El riesgo aparece en la **misma sesión** o con poco descanso entre ambas (Petré 2021, *Sports Med*). Por eso la actividad externa **no descuenta** carga ni series: solo se anota como contexto cuando el disparador de deload por caída de rendimiento se activa ("hubo actividad intensa el día anterior"), para que el usuario lo pondere.
+- **Interferencia cardio-fuerza:** en conjunto es prácticamente nula sobre hipertrofia y fuerza máxima (Schumann 2022, *Sports Med*, meta-análisis: SMD −0,01 hipertrofia, −0,06 fuerza máxima; son estimaciones **agrupadas** de todos los diseños, no específicas de "días distintos"), con una atenuación de la **fuerza explosiva** (SMD −0,28). En entrenados, el efecto sobre la fuerza aparece sobre todo en la **misma sesión** (Petré 2021, *Sports Med*: ES −0,66 misma sesión vs −0,10 sesiones separadas). Por eso la actividad externa **no descuenta** carga ni series: solo se anota como contexto cuando el disparador de deload por caída de rendimiento se activa ("hubo actividad intensa el día anterior"), para que el usuario lo pondere.
 - Las kcal del reloj no se usan para nada prescriptivo (error MAPE 22–32 %).
 
 ## 15. Test AMRAP de precisión del RIR (A5.8; amplía §4)

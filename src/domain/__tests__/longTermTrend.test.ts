@@ -137,3 +137,25 @@ describe("longTermTrend (A5.2.1)", () => {
     expect(t.points[0].e1rmKg).toBe(100);
   });
 });
+
+describe("auditoría A5S-03: escala con muchos puntos", () => {
+  it("200 000 puntos no desbordan la pila y terminan rápido", () => {
+    const points = Array.from({ length: 200_000 }, (_, i) => ({
+      sessionId: `s${i}`,
+      date: `2026-01-01T10:00:00Z`,
+      mesocycleId: `m${i % 4}`,
+      trackKey: "normal|8-10",
+      trackLabel: "8–10",
+      e1rmKg: 100,
+      e1rmFromReported: true,
+      topLoadKg: 100,
+      repsAtTopLoad: 8,
+      repRange: { min: 8, max: 10 },
+      sets: [{ loadKg: 100, reps: 8, rir: 1, rirReported: true }],
+    }));
+    const t0 = performance.now();
+    const t = longTermTrend({ points, mesos: ["m0", "m1", "m2", "m3"].map((id) => ({ id })), rules });
+    expect(t.points).toHaveLength(4);
+    expect(performance.now() - t0).toBeLessThan(5000);
+  });
+});

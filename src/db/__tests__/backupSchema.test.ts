@@ -117,6 +117,34 @@ describe("validateBackup (A4.1)", () => {
     b.data.setLogs[0].amrapTest = { predictedRir: 20, repsAtPrediction: 10 };
     expect(validateBackup(b).ok).toBe(false);
   });
+  it("auditoría A5 (seguridad): campos nuevos validados", () => {
+    type B = { data: Record<string, Array<Record<string, unknown>>> };
+    const fresh = () => valid() as unknown as B;
+    // A5S-02: dismissedPainSuggestions debe ser una lista bien formada
+    let b = fresh();
+    b.data.settings[0].dismissedPainSuggestions = "x";
+    expect(validateBackup(b).ok).toBe(false);
+    b.data.settings[0].dismissedPainSuggestions = [{ exerciseId: "bench", zone: "elbow", at: "2026-11-02T10:00:00.000Z" }];
+    expect(validateBackup(b).ok).toBe(true);
+    // A5S-03: fecha del check-in
+    b = fresh();
+    b.data.checkins[0].date = "ayer";
+    expect(validateBackup(b).ok).toBe(false);
+    // A5S-05: un test AMRAP que no fue al fallo
+    b = fresh();
+    b.data.setLogs[0] = { ...b.data.setLogs[0], kind: "warmup", actualRir: 0, amrapTest: { predictedRir: 2, repsAtPrediction: 5 } };
+    expect(validateBackup(b).ok).toBe(false);
+    // A5S-06: zona del ajuste por dolor
+    b = fresh();
+    b.data.sessions[0].overrides = { painAdjust: [{ slotIndex: 0, loadFactor: 0.9, repsUp: 3, rirDelta: 0, zone: "__proto__" }] };
+    expect(validateBackup(b).ok).toBe(false);
+    // A5S-07: claves de ubicación en actividades se descartan
+    b = fresh();
+    b.data.activities = [{ id: "a", date: "2026-11-02T12:00:00.000Z", type: "running", lat: 1.5, lon: 2.5, polyline: "abc" }];
+    const r = validateBackup(b);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(Object.keys((r.backup.data.activities ?? [])[0] as object)).not.toContain("lat");
+  });
   it("R-01: overrides de sesión con factores imposibles se rechazan", () => {
     const b = valid() as unknown as { data: { sessions: Array<Record<string, unknown>> } };
     b.data.sessions[0].overrides = { exerciseDeload: [{ slotIndex: 0, setsFactor: 0.5, loadFactor: 1e9 }] };

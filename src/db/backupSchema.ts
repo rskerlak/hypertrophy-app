@@ -35,6 +35,7 @@ export const DATA_LIMITS = {
 export const SUPPORTED_BACKUP_VERSIONS = [1, 2] as const;
 export const CURRENT_BACKUP_VERSION = 2;
 
+const painZone = z.enum(["shoulder", "elbow", "wrist", "hip", "knee", "ankle", "lower_back", "neck", "other"]);
 const isoDate = z
   .string()
   .refine((s) => /^\d{4}-\d{2}-\d{2}/.test(s) && !Number.isNaN(Date.parse(s.length === 10 ? `${s}T00:00:00Z` : s)), {
@@ -79,6 +80,8 @@ const settingsRow = z
     units: z.enum(["kg", "lb"]).optional(),
     theme: z.enum(["light", "dark"]).optional(),
     trainingWeekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+    // A5S-02: si llegaba algo que no era lista, la sesión no abría.
+    dismissedPainSuggestions: list(z.object({ exerciseId: shortText, zone: painZone, at: isoDate }).passthrough(), 1000).optional(),
   })
   .passthrough();
 
@@ -199,7 +202,7 @@ const sessionRow = z
               loadFactor: z.number().min(0.5).max(1),
               repsUp: z.number().int().min(0).max(10),
               rirDelta: z.number().int().min(0).max(3),
-              zone: shortText,
+              zone: painZone,
             })
             .passthrough(),
           DATA_LIMITS.maxSlotsPerDay,
@@ -234,19 +237,25 @@ const setLogRow = z
   .refine((l) => !l.amrapTest || l.amrapTest.repsAtPrediction <= l.actualReps, {
     message: "test AMRAP: reps al punto de predicción mayores que las reps totales",
     path: ["amrapTest", "repsAtPrediction"],
+  })
+  // A5S-05: el test es por definición una serie al fallo (si no, falsea la calibración).
+  .refine((l) => !l.amrapTest || (l.kind === "failure" && l.actualRir === 0), {
+    message: "test AMRAP: debe ser una serie al fallo con RIR 0",
+    path: ["amrapTest"],
   });
 
 const checkinRow = z
   .object({
     id,
     sessionId: z.string().max(DATA_LIMITS.maxNameChars),
-    date: shortText,
+    // A5S-03: una fecha inválida agrupaba todos los reportes de dolor en una semana.
+    date: isoDate,
     sleptMinimum: z.boolean().nullable(),
     proteinSufficient: z.boolean().nullable(),
     energyBalance: z.enum(["surplus", "maintenance", "deficit"]).nullable(),
     readiness: z.number().int().min(1).max(5).nullable().optional(),
     perceivedFatigue: z.number().int().min(1).max(5).nullable().optional(),
-    pain: list(z.object({ zone: z.enum(["shoulder", "elbow", "wrist", "hip", "knee", "ankle", "lower_back", "neck", "other"]), score: z.number().int().min(0).max(10) }).passthrough(), 9).optional(),
+    pain: list(z.object({ zone: painZone, score: z.number().int().min(0).max(10) }).passthrough(), 9).optional(),
     note: longText.optional(),
   })
   .passthrough();
@@ -268,7 +277,16 @@ const activityRow = z
     avgHr: hr.optional(),
     maxHr: hr.optional(),
   })
-  .passthrough();
+  // A5S-07: claves desconocidas (lat, lon, polyline…) se descartan: nunca GPS.
+  .strip();
+
+/** A5S-04: la UI valida cada actividad con el mismo schema del respaldo antes de guardarla. */
+export function validateActivity(row: unknown): { ok: true } | { ok: false; error: string } {
+  const r = activityRow.safeParse(row);
+  if (r.success) return { ok: true };
+  const i = r.error.issues[0];
+  return { ok: false, error: `${i.path.join(".")}: ${i.message}` };
+}
 
 const bugReportRow = z
   .object({

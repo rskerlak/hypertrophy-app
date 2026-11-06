@@ -61,3 +61,15 @@ garmin-export/
 
 # Tabla de alimentos: incluye filas de ARGENFOODS (sin licencia explicita de redistribucion)
 docs/research/alimentos-ar.json
+
+# Auditoría A5 (A5S-10): exportaciones de wearables, informes y respaldos renombrados
+DI_CONNECT/
+*.fit
+*.gpx
+*.tcx
+Activities*.csv
+*informe*.pdf
+respaldo*.json
+*backup*.json
+!src/db/__fixtures__/*.json
+.claude/worktrees/

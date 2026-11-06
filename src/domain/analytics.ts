@@ -52,7 +52,9 @@ export function exerciseTimeline(input: {
   const byId = new Map(input.sessions.map((s) => [s.id, s]));
   const bySession = new Map<string, SetLog[]>();
   for (const l of input.logs) {
-    if (l.exerciseId !== exerciseId || !isWorkingSet(l)) continue;
+    // A5-04/A5-18: sin la serie del test AMRAP: su RIR 0 inflaría la cuota cerca
+    // del fallo y su e1RM al fallo no es comparable con el de series normales.
+    if (l.exerciseId !== exerciseId || !isComparableSet(l)) continue;
     const s = byId.get(l.sessionId);
     if (!s || s.status !== "completed" || s.isDeload) continue;
     bySession.set(l.sessionId, [...(bySession.get(l.sessionId) ?? []), l]);
@@ -140,6 +142,8 @@ export function longTermTrend(input: {
   echoMesoIds?: Set<string>;
   /** El ejercicio está en Mantener (A5.4): no cuenta para estancamiento. */
   holdLoad?: boolean;
+  /** A5-17: desde cuándo (ISO). Solo los mesos con sesiones desde esa fecha quedan fuera; sin fecha, todos. */
+  holdSince?: string;
   rules: Rules;
 }): LongTermTrend {
   const cfg = input.rules.longTermTrend;
@@ -147,7 +151,9 @@ export function longTermTrend(input: {
   const byMeso = new Map<string, ExercisePoint[]>();
   for (const p of input.points) {
     if (!intentOf.has(p.mesocycleId)) continue;
-    byMeso.set(p.mesocycleId, [...(byMeso.get(p.mesocycleId) ?? []), p]);
+    const arr = byMeso.get(p.mesocycleId);
+    if (arr) arr.push(p);
+    else byMeso.set(p.mesocycleId, [p]);
   }
   const points: TrendPoint[] = [];
   for (const [mesocycleId, ps] of byMeso) {
@@ -156,8 +162,9 @@ export function longTermTrend(input: {
     const use = reportedPs.length ? reportedPs : ps;
     const top = [...use].sort((a, b) => b.e1rmKg - a.e1rmKg).slice(0, cfg.topSessionsPerMeso);
     const ranges = ps.map((p) => p.repRange).filter((r): r is { min: number; max: number } => !!r);
+    // Sin spread: con muchos puntos Math.min(...xs) desborda la pila (A5S-03).
     const repBand = ranges.length
-      ? { min: Math.min(...ranges.map((r) => r.min)), max: Math.max(...ranges.map((r) => r.max)) }
+      ? { min: ranges.reduce((a, r) => Math.min(a, r.min), Infinity), max: ranges.reduce((a, r) => Math.max(a, r.max), -Infinity) }
       : null;
     const reportedSets = ps.flatMap((p) => p.sets.filter((s) => s.rirReported));
     const near = reportedSets.filter((s) => s.rir <= cfg.nearFailureRirMax).length;
@@ -165,13 +172,16 @@ export function longTermTrend(input: {
     points.push({
       mesocycleId,
       intent,
-      firstDate: ps.map((p) => p.date).sort()[0],
+      firstDate: ps.reduce((a, p) => (p.date < a ? p.date : a), ps[0].date),
       e1rmKg: Math.round(median(top.map((p) => p.e1rmKg)) * 10) / 10,
       repBand,
       nearFailureShare: reportedSets.length ? near / reportedSets.length : 0,
       sessions: ps.length,
       reliable: !echo && reportedPs.length > 0 && (repBand === null || repBand.max <= cfg.highRepUnreliableFrom),
-      countable: !input.holdLoad && intent !== "maintenance" && intent !== "recovery",
+      countable:
+        !(input.holdLoad && (!input.holdSince || ps.some((p) => p.date >= input.holdSince!))) &&
+        intent !== "maintenance" &&
+        intent !== "recovery",
     });
   }
   points.sort((a, b) => a.firstDate.localeCompare(b.firstDate));

@@ -168,3 +168,63 @@ describe("la serie del test no finge fatiga en la sesión siguiente (A5.8)", () 
     expect(summarizeSessionPair(prev, curr, "c").exercisesWithRepDropAtFixedLoad).toBe(0);
   });
 });
+
+// ---------------- Auditoría A5 (pista código) ----------------
+import { lastSessionSets } from "../history";
+import { exerciseTimeline, longTermTrend } from "../analytics";
+import { rirEchoPct } from "../rirCalibration";
+
+describe("auditoría A5: la serie del test no contamina vistas ni tendencias", () => {
+  const sessions = [{ id: "s1", mesocycleId: "m", weekIndex: 0, dayIndex: 0, status: "completed" as const, isDeload: false, completedAt: "2026-11-01T10:00:00.000Z" }];
+  const plan = { weeks: [{ weekIndex: 0, isDeload: false, days: [{ label: "A", slots: [{ exerciseId: "leg-press", sets: 3, repRange: { min: 8, max: 12 }, targetRir: 2, targetLoadKg: 100 }] }] }] };
+  const logs = [log({ setIndex: 0, actualReps: 10 }), log({ setIndex: 1, actualReps: 10 }), { ...test(10, 2, 15, "s1"), setIndex: 2 }];
+
+  it("A5-03: 'última vez' no muestra la serie al fallo", () => {
+    const last = lastSessionSets(logs)!;
+    expect(last.sets).toHaveLength(2);
+    expect(last.sets.every((s) => s.reps === 10)).toBe(true);
+  });
+  it("A5-04/A5-18: el timeline de e1RM (y la cuota cerca del fallo) no usa el test", () => {
+    const pts = exerciseTimeline({
+      exerciseId: "leg-press",
+      logs,
+      sessions,
+      plansByMeso: new Map([["m", { ...plan, progressionModel: "double" } as never]]),
+      rules,
+    });
+    expect(pts[0].sets).toHaveLength(2);
+    expect(pts[0].sets.some((s) => s.rir === 0)).toBe(false);
+  });
+  it("A5-05: el eco de RIR no cuenta el test", () => {
+    expect(rirEchoPct([log({}), log({}), test(10, 2, 12)])).toBe(100);
+  });
+});
+
+describe("auditoría A5-17: Mantener solo excluye los mesos desde que se activó", () => {
+  const pts = (id: string, month: number, e1rm: number) =>
+    Array.from({ length: 3 }, (_, i) => ({
+      sessionId: `${id}${i}`,
+      date: `2026-${String(month).padStart(2, "0")}-0${i + 1}T10:00:00Z`,
+      mesocycleId: id,
+      trackKey: "normal|8-10",
+      trackLabel: "8–10",
+      e1rmKg: e1rm,
+      e1rmFromReported: true,
+      topLoadKg: 100,
+      repsAtTopLoad: 8,
+      repRange: { min: 8, max: 10 },
+      sets: [{ loadKg: 100, reps: 8, rir: 1, rirReported: true }],
+    }));
+  const input = {
+    points: [...pts("a", 3, 117), ...pts("b", 5, 118), ...pts("c", 7, 117.5), ...pts("d", 9, 117.2)],
+    mesos: ["a", "b", "c", "d"].map((id) => ({ id })),
+    holdLoad: true,
+    rules,
+  };
+  it("sin fecha, ningún meso cuenta; con fecha, solo los posteriores quedan fuera", () => {
+    expect(longTermTrend(input).points.every((p) => !p.countable)).toBe(true);
+    const t = longTermTrend({ ...input, holdSince: "2026-09-01T00:00:00Z" });
+    expect(t.points.map((p) => p.countable)).toEqual([true, true, true, false]);
+    expect(t.plateauSuggested).toBe(true);
+  });
+});

@@ -430,8 +430,8 @@ export default function StatsPage() {
               Medido contra el fallo, n={rirCal.measured.n} tests (protocolo de Martikainen 2025 adaptado a una serie).
               {rirCal.wellCalibrated
                 ? " El motor confía en tu RIR con el tope completo."
-                : " El motor recorta el ajuste por RIR y mantiene un piso de 1 RIR."}{" "}
-              En entrenados lo habitual es subestimar la reserva por 1–1,5 reps. Con pocos tests el número todavía se mueve.
+                : ` El motor recorta el ajuste por RIR y mantiene un piso de ${getRules().rirCalibration.rirFloorWhenUncalibrated} RIR.`}{" "}
+              En entrenados lo habitual es subestimar la reserva (ver SCIENCE §4). Con pocos tests el número todavía se mueve.
             </p>
           </>
         ) : rirCal.echoDetected ? (
@@ -483,7 +483,7 @@ export default function StatsPage() {
             <p className="text-xs leading-relaxed text-[var(--muted)]">
               {rirCal.wellCalibrated
                 ? "Tu capacidad implícita (reps + RIR) es consistente a carga fija, así que el motor confía en tu RIR con el tope completo y permite acercarse a 0 RIR al final del meso."
-                : "Tu capacidad implícita (reps + RIR) varía bastante a carga fija, así que el motor recorta el ajuste por RIR y mantiene un piso de 1 RIR: sin precisión, prescribir el fallo es adivinar."}{" "}
+                : `Tu capacidad implícita (reps + RIR) varía bastante a carga fija, así que el motor recorta el ajuste por RIR y mantiene un piso de ${getRules().rirCalibration.rirFloorWhenUncalibrated} RIR: sin precisión, prescribir el fallo es adivinar.`}{" "}
               Medido sobre {rirCal.samples} comparaciones. Es una cota superior del ruido: también
               incluye variación real de rendimiento.
               {rirCal.measured
@@ -534,7 +534,7 @@ export default function StatsPage() {
                 trend={t.trend}
                 mesoNames={trends.mesoNames}
                 title={t.exercise.name.replace(/\s*\(.*\)$/, "")}
-                href={`/exercise?id=${t.exercise.id}`}
+                href={`/exercise?id=${encodeURIComponent(t.exercise.id)}`}
               />
             ))}
           </div>

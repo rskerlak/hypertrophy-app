@@ -116,7 +116,7 @@ function SessionDone() {
           <ul className="mb-3 space-y-1 text-sm">
             {analysis.plateaus.map((p) => (
               <li key={p.exerciseId}>
-                <a className="underline" href={`/exercise?id=${p.exerciseId}`}>
+                <a className="underline" href={`/exercise?id=${encodeURIComponent(p.exerciseId)}`}>
                   {p.exerciseName.replace(/\s*\(.*\)$/, "")}
                 </a>{" "}
                 <span className="text-[var(--muted)]">({p.flatMesos} mesos)</span>

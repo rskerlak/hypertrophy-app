@@ -70,7 +70,12 @@ export function evaluatePainSignal(input: {
     }
     // Media semanal de la zona (0 si un reporte no la incluye).
     const byWeek = new Map<number, number[]>();
-    for (const r of reports) byWeek.set(weekKey(r.date), [...(byWeek.get(weekKey(r.date)) ?? []), scoreIn(r, zone)]);
+    for (const r of reports) {
+      const k = weekKey(r.date);
+      const arr = byWeek.get(k);
+      if (arr) arr.push(scoreIn(r, zone));
+      else byWeek.set(k, [scoreIn(r, zone)]);
+    }
     const weeks = [...byWeek.entries()].sort((a, b) => a[0] - b[0]).map(([, xs]) => xs.reduce((a, b) => a + b, 0) / xs.length);
     const w = weeks.slice(-3);
     let trend: PainZoneSignal["trend"] = "flat";

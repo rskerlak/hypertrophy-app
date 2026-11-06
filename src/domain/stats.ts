@@ -134,7 +134,7 @@ export function computeMesoStats(input: ComputeMesoStatsInput): MesoStats {
     const w = sessionWeek.get(l.sessionId);
     if (w === undefined) continue;
     const arr = diffsByWeek.get(w) ?? [];
-    if (!isRirReported(l)) continue; // la deriva de RIR solo con RIR reportado
+    if (!isRirReported(l) || l.amrapTest) continue; // solo RIR reportado; el test es RIR 0 a propósito (A5-05)
     arr.push(l.actualRir - l.targetRir);
     diffsByWeek.set(w, arr);
   }

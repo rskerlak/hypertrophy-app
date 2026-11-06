@@ -21,7 +21,9 @@ function echoMesos(logs: SetLog[], sessions: Map<string, SessionRow>): Set<strin
   for (const l of logs) {
     const s = sessions.get(l.sessionId);
     if (!s || s.status !== "completed" || s.isDeload) continue;
-    byMeso.set(s.mesocycleId, [...(byMeso.get(s.mesocycleId) ?? []), l]);
+    const arr = byMeso.get(s.mesocycleId);
+    if (arr) arr.push(l);
+    else byMeso.set(s.mesocycleId, [l]);
   }
   const out = new Set<string>();
   for (const [id, ls] of byMeso) if (assessRirCalibration(ls, rules).echoDetected) out.add(id);
@@ -47,6 +49,7 @@ export function computeExerciseTrend(args: {
     mesos: args.mesos.map((m) => ({ id: m.id, intent: m.intent })),
     echoMesoIds: echoMesos(args.logs, new Map(args.sessions.map((s) => [s.id, s]))),
     holdLoad: args.exercise.holdLoad,
+    holdSince: args.exercise.holdSince,
     rules,
   });
   return { exercise: args.exercise, points, trend };

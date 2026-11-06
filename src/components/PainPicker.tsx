@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PAIN_ZONES, type PainZone } from "@/domain/types";
 import { PAIN_ZONE_LABELS } from "@/lib/format";
+import { getRules } from "@/lib/rulesLoader";
 import { cn } from "./ui";
 
 export type PainAnswer = Array<{ zone: PainZone; score: number }> | null;
@@ -19,7 +20,8 @@ export function PainPicker({ value, onChange }: { value: PainAnswer; onChange: (
   const said = value !== null && value.length === 0 && !open;
   const toggleZone = (z: PainZone) => {
     const cur = value ?? [];
-    const next = cur.some((p) => p.zone === z) ? cur.filter((p) => p.zone !== z) : [...cur, { zone: z, score: 3 }];
+    // Puntaje inicial = umbral de "a vigilar" del config: tildar la zona ya es reportar algo (ajustable).
+    const next = cur.some((p) => p.zone === z) ? cur.filter((p) => p.zone !== z) : [...cur, { zone: z, score: getRules().pain.watchFrom }];
     onChange(next.length ? next : null);
   };
   const setScore = (z: PainZone, score: number) => onChange((value ?? []).map((p) => (p.zone === z ? { ...p, score } : p)));

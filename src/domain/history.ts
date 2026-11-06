@@ -4,6 +4,7 @@
 import { groupBySession, progressionSessions, progressionTrackKey } from "./progression";
 import type { Rules } from "./rules";
 import {
+  isComparableSet,
   isWorkingSet,
   type DayIntensity,
   type MesocyclePlan,
@@ -34,7 +35,8 @@ export interface TrackMesoRef {
  * Continuidad de la pista:
  *  - same-track: hay historial de la misma pista (de este meso o de otros);
  *  - track-changed: hay sesiones del ejercicio pero de otra pista (otro rango,
- *    otra intensidad del día, otro modelo): no se arrastran reps;
+ *    otra intensidad del día, otra zona DUP o bloques; lineal/doble/APRE
+ *    con el mismo rango comparten pista): no se arrastran reps;
  *  - gap: el ejercicio no se hizo (en ninguna pista) en más de `maxGapDays`;
  *  - none: nunca se hizo el ejercicio.
  */
@@ -187,7 +189,9 @@ export interface PreviousSet {
  * ordenadas por serie, con el sessionId para buscar su fecha. null si no hay.
  */
 export function lastSessionSets(history: SetLog[]): { sessionId: string; sets: PreviousSet[] } | null {
-  const sessions = groupBySession(history.filter(isWorkingSet));
+  // A5-03: sin la serie del test AMRAP (al fallo): "última vez" y "copiar
+  // anterior" deben mostrar series comparables con las de hoy.
+  const sessions = groupBySession(history.filter(isComparableSet));
   const last = sessions[sessions.length - 1];
   if (!last || last.length === 0) return null;
   return {

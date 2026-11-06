@@ -65,7 +65,8 @@ export const rulesSchema = z
             maxGapDays: z.number().int().min(1),
             gapE1rmFactor: z.number().gt(0).max(1),
           })
-          .passthrough(),
+          .passthrough()
+          .default({ enabled: true, maxGapDays: 21, gapE1rmFactor: 0.95 }),
       })
       .passthrough()
       .default({ continuity: { enabled: true, maxGapDays: 21, gapE1rmFactor: 0.95 } }),
@@ -78,7 +79,7 @@ export const rulesSchema = z
         risePoints: z.number().min(0),
         persistWeeks: z.number().int().min(1),
         loadDownPct: z.number().min(0).max(50),
-        repsUpWhenLoadDown: z.number().int().min(0),
+        repsUpWhenLoadDown: z.number().int().min(0).max(10),
         rirPlusOne: z.number().int().min(0).max(3),
         zonesByMuscle: z.record(z.array(z.string())),
       })
@@ -93,7 +94,23 @@ export const rulesSchema = z
         loadDownPct: 10,
         repsUpWhenLoadDown: 3,
         rirPlusOne: 1,
-        zonesByMuscle: {},
+        zonesByMuscle: {
+          chest: ["shoulder", "elbow"],
+          front_delts: ["shoulder"],
+          side_delts: ["shoulder"],
+          rear_delts: ["shoulder"],
+          triceps: ["elbow"],
+          biceps: ["elbow", "wrist"],
+          forearms: ["wrist", "elbow"],
+          back: ["shoulder", "elbow", "lower_back"],
+          traps: ["neck", "shoulder"],
+          quads: ["knee", "hip"],
+          hamstrings: ["knee", "hip", "lower_back"],
+          glutes: ["hip", "lower_back"],
+          adductors: ["hip"],
+          calves: ["ankle"],
+          abs: ["lower_back"],
+        },
       }),
     longTermTrend: z
       .object({

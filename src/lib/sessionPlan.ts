@@ -27,7 +27,8 @@ import {
   type RirCalibration,
 } from "@/domain/rirCalibration";
 import { estimate1RM } from "@/domain/oneRepMax";
-import { exerciseZones } from "@/domain/pain";
+import { exerciseZones, painLoadDownAdjust } from "@/domain/pain";
+import { fmtLoad, unitLabel } from "@/lib/units";
 import { isProgressionSet, isRirReported, type PainZone } from "@/domain/types";
 import { painStatus } from "@/lib/pain";
 import { getRules } from "@/lib/rulesLoader";
@@ -239,6 +240,16 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
       equipment: settings.equipment,
     };
     const baseSets = Math.max(1, planned.sets + setsDelta);
+    // A5.5: ajuste por dolor aceptado. Bajar carga → el rango se corre hacia
+    // arriba (`painLoadDownAdjust`, tope 5–30 del config); RIR +1 → misma carga,
+    // una rep menos por cada punto de RIR (parar antes, no hacer lo mismo).
+    const painRange = painAdj && painAdj.loadFactor < 1 ? painLoadDownAdjust(planned.repRange, rules).repRange : null;
+    if (painRange) planned = { ...planned, repRange: painRange };
+    const painReps = !painAdj
+      ? p.nextReps
+      : painAdj.loadFactor < 1
+        ? Math.min(rules.repRanges.globalValid.max, p.nextReps + painAdj.repsUp)
+        : Math.max(rules.repRanges.globalValid.min, p.nextReps - painAdj.rirDelta);
     const exLogs = await setLogRepo.forExercise(exercise.id);
     const exSessions = await sessionRepo.byIds([...new Set(exLogs.map((l) => l.sessionId))]);
     const amrapTest = amrapTestEligibility({
@@ -264,12 +275,12 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
         : painAdj && painAdj.loadFactor < 1
           ? roundToAvailable(p.nextLoadKg * painAdj.loadFactor, ctxLoad)
           : p.nextLoadKg,
-      suggestedReps: painAdj ? Math.min(rules.repRanges.globalValid.max, p.nextReps + painAdj.repsUp) : p.nextReps,
+      suggestedReps: painReps,
       targetRir,
       rationale: exDeload
         ? `Deload de este ejercicio aplicado hoy (${Math.round(exDeload.setsFactor * 100)}% series, ${Math.round(exDeload.loadFactor * 100)}% carga). ${p.rationale}`
         : painAdj
-          ? `Ajuste por dolor aceptado: ${painAdj.loadFactor < 1 ? `${Math.round((1 - painAdj.loadFactor) * 100)}% menos carga y +${painAdj.repsUp} reps (5–30 reps crecen igual con esfuerzo equiparado)` : `RIR +${painAdj.rirDelta}`}. Sin el ajuste, el motor proponía ${p.nextLoadKg} kg × ${p.nextReps}.`
+          ? `Ajuste por dolor aceptado: ${painAdj.loadFactor < 1 ? `${Math.round((1 - painAdj.loadFactor) * 100)}% menos carga y +${painAdj.repsUp} reps (entre ${rules.repRanges.globalValid.min} y ${rules.repRanges.globalValid.max} reps la hipertrofia es similar con esfuerzo equiparado)` : `RIR +${painAdj.rirDelta}: parar ${painAdj.rirDelta === 1 ? "una rep" : `${painAdj.rirDelta} reps`} antes, misma carga`}. Sin el ajuste, el motor proponía ${fmtLoad(p.nextLoadKg)} ${unitLabel()} × ${p.nextReps}.`
           : p.rationale,
       explain: p.explain,
       previous: prev ? { sets: prev.sets, completedAt: prevSession?.completedAt } : null,

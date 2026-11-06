@@ -39,12 +39,18 @@ export function MonthGrid({
   const byDate = new Map<string, SessionRow[]>();
   for (const s of sessions) {
     const d = sessionDate(s);
-    if (d) byDate.set(d, [...(byDate.get(d) ?? []), s]);
+    if (d) {
+      const arr = byDate.get(d);
+      if (arr) arr.push(s);
+      else byDate.set(d, [s]);
+    }
   }
   const actsByDate = new Map<string, ActivityRow[]>();
   for (const a of activities) {
     const d = a.date.slice(0, 10);
-    actsByDate.set(d, [...(actsByDate.get(d) ?? []), a]);
+    const arr = actsByDate.get(d);
+    if (arr) arr.push(a);
+    else actsByDate.set(d, [a]);
   }
   const first = new Date(cursor.y, cursor.m, 1);
   const offset = (first.getDay() + 6) % 7; // lunes primero

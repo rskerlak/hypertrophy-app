@@ -202,11 +202,11 @@ Dos memorias separadas. **Corta (prescripción):** la pista de progresión (ejer
 **Aceptación:** `continuity.test.ts` y `longTermTrend.test.ts`; la UI etiqueta "aproximado" al comparar rangos distintos y "no confiable" con eco de RIR.
 
 ### F12 — Mantener (A5.4)
-Chip por ejercicio en la sesión y en `/exercise`: el motor no sube la carga (`hold`, `hold-at-ceiling`). Sale solo si en una sesión todas las series de progresión se registraron al menos un paso del equipo por encima de lo prescrito (`holdExitDetected`), y lo avisa.
+Chip por ejercicio en la sesión y en `/exercise`: el motor no sube la carga (`hold`, `hold-at-ceiling`), tampoco al continuar el meso (`createFollowUp`). Las re-estimaciones (cambio de pista, pausa, fase de bloque, sin historial) **sí** se respetan aunque suban la carga: no son progresión sino estimar la carga de un rango nuevo. Sale solo si en una sesión todas las series de progresión se registraron al menos un paso del equipo por encima de lo prescrito (`holdExitDetected`), y lo avisa; nunca en deload ni en slots con carga reducida a propósito (deload del ejercicio, ajuste por dolor).
 **Aceptación:** `hold.test.ts`.
 
 ### F13 — Dolor articular/tendinoso (A5.5)
-Pregunta opcional en el check-in y, si no se respondió, cada `pain.askEverySessions` sesiones. `evaluatePainSignal` marca zonas `watch`/`act` y propone, por ejercicio que carga la zona: menos carga y más reps (dentro de 5–30), RIR +1, variante que no carga la zona, o deload del ejercicio. Aplicar / Descartar; nunca diagnostica ni bloquea; con dolor sostenido `persistWeeks` sugiere consultar a un profesional.
+Pregunta opcional en el check-in y, si no se respondió, cada `pain.askEverySessions` sesiones. `evaluatePainSignal` marca zonas `watch`/`act` y propone, por ejercicio que carga la zona: menos carga y más reps (`painLoadDownAdjust`: el rango se corre hacia arriba dentro de 5–30), RIR +1 (misma carga, una rep menos por punto: parar antes), variante que no carga la zona, o deload del ejercicio. El RIR +1 aceptado **puede pasar la banda de RIR del meso**: es una decisión explícita del usuario por dolor y, como el piso de barra, la seguridad manda. Aplicar / Descartar; nunca diagnostica ni bloquea; con dolor sostenido `persistWeeks` sugiere consultar a un profesional.
 **Aceptación:** `pain.test.ts`; textos sin lenguaje diagnóstico ni culpabilizador.
 
 ### F14 — Actividad externa (A5.6)
