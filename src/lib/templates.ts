@@ -14,91 +14,109 @@ export interface RoutineTemplate {
   days: BaseWeekDay[];
 }
 
-// Rangos por rol del día. Día fuerte: menos reps (más carga); liviano: más
-// reps (menos carga). Normal: lo que usás hoy. Todo editable por slot.
-const NORMAL: RepRange = { min: 8, max: 12 };
-const HEAVY_COMPOUND: RepRange = { min: 6, max: 8 };
-const HEAVY_ISO: RepRange = { min: 8, max: 10 };
-const LIGHT_COMPOUND: RepRange = { min: 10, max: 12 };
-const LIGHT_ISO: RepRange = { min: 12, max: 15 };
-
-const slot = (exerciseId: string, startingLoadKg: number, repRange: RepRange = NORMAL, targetSets = 3) => ({
+const r = (min: number, max: number): RepRange => ({ min, max });
+const slot = (exerciseId: string, startingLoadKg: number, repRange: RepRange, targetSets = 3) => ({
   exerciseId,
   targetSets,
   repRange: { ...repRange },
   startingLoadKg,
 });
 
-const copyDay = (day: BaseWeekDay, label: string): BaseWeekDay => ({
-  ...day,
-  label,
-  slots: day.slots.map((s) => ({ ...s, repRange: { ...s.repRange } })),
-});
+// Rangos por rol del día. Día fuerte: menos reps (más carga); liviano: más
+// reps (menos carga). Normal: los de tu último meso. Todo editable por slot.
+const HEAVY_COMPOUND = r(6, 8);
+const HEAVY_ISO = r(8, 10);
+const LIGHT_COMPOUND = r(10, 12);
+const LIGHT_ISO = r(12, 15);
 
 // ---------------------------------------------------------------------------
-// Plantilla 1: 6 días, A-C-B-A-C-B (empuje · piernas · tracción, dos vueltas)
+// Tu último meso de 6 días (Mesociclo 1 · 2), tal cual: A-C-B-A-C-B
 // ---------------------------------------------------------------------------
 
-// Día A — Empuje. Nota: la apertura + press inclinado con mancuernas se hacen
-// en superserie (una serie de cada, sin descanso entre ambas).
-const DAY_A: BaseWeekDay = {
-  label: "Día A · Empuje",
+const PUSH_1: BaseWeekDay = {
+  label: "Día 1 · A Empuje",
   slots: [
-    slot("bb-bench-press", 95, NORMAL, 4), // 40 kg por lado + barra de 15
-    slot("incline-bb-press", 95, NORMAL, 4),
-    slot("incline-db-fly", 28, NORMAL, 4), // superserie con el press inclinado
-    slot("incline-db-press", 28, NORMAL, 4),
-    slot("db-lateral-raise", 16, NORMAL, 4),
-    slot("front-raise", 16, NORMAL, 4),
-    slot("db-shoulder-press", 14, NORMAL, 4),
-    slot("triceps-pushdown", 37.5, NORMAL, 4),
-    slot("db-overhead-ext", 20, NORMAL, 4),
+    slot("bb-bench-press", 100, r(8, 10)),
+    slot("incline-bb-press", 95, r(8, 10)),
+    slot("incline-db-fly", 28, r(8, 10)),
+    slot("db-lateral-raise", 14, r(10, 12)),
+    slot("db-shoulder-press", 30, r(10, 12)),
+    slot("triceps-pushdown", 37.5, r(10, 12)),
+    slot("db-overhead-ext", 20, r(10, 12)),
+    slot("cable-crunch", 20, r(12, 15), 4),
   ],
 };
 
-// Día B — Tracción.
-const DAY_B: BaseWeekDay = {
-  label: "Día B · Tracción",
+const LEGS_1: BaseWeekDay = {
+  label: "Día 2 · C Piernas",
   slots: [
-    slot("wide-grip-pulldown", 80, NORMAL, 4),
-    slot("close-grip-pulldown", 80, NORMAL, 4),
-    slot("back-extension", 20, NORMAL, 4),
-    slot("seated-cable-row", 80, NORMAL, 4),
-    slot("straight-arm-pulldown", 40, NORMAL, 4),
-    slot("db-curl", 20, NORMAL, 4),
-    slot("hammer-curl", 20, NORMAL, 4),
-    slot("db-shrug", 20, NORMAL, 4),
+    slot("leg-press", 300, r(8, 10)),
+    slot("leg-press-calf-raise", 300, r(12, 15)),
+    slot("lying-leg-curl", 60, r(10, 12)),
+    slot("leg-extension", 60, r(8, 10)),
+    slot("hip-abduction", 125, r(10, 12)),
+    slot("machine-hip-thrust", 20, r(8, 10)),
+    slot("back-extension", 30, r(10, 12)),
   ],
 };
 
-// Día C — Piernas.
-const DAY_C: BaseWeekDay = {
-  label: "Día C · Piernas",
+const PULL_1: BaseWeekDay = {
+  label: "Día 3 · B Tracción",
   slots: [
-    slot("leg-press", 300, NORMAL, 4),
-    slot("lying-leg-curl", 40, NORMAL, 4),
-    slot("leg-extension", 60, NORMAL, 4),
-    slot("hip-adduction", 40, NORMAL, 4),
-    slot("hip-abduction", 40, NORMAL, 4),
-    slot("machine-hip-thrust", 20, NORMAL, 4),
+    slot("pull-up", 0, r(12, 15)),
+    slot("close-grip-pulldown", 80, r(8, 10)),
+    slot("back-extension", 20, r(10, 12)),
+    slot("seated-cable-row", 80, r(8, 10)),
+    slot("straight-arm-pulldown", 40, r(8, 10)),
+    slot("db-curl", 20, r(8, 10), 4),
+    slot("hammer-curl", 20, r(8, 10), 4),
+    slot("db-shrug", 20, r(8, 10)),
+  ],
+};
+
+const PUSH_2: BaseWeekDay = {
+  label: "Día 4 · A Empuje",
+  slots: [
+    slot("bb-bench-press", 95, r(8, 10)),
+    slot("incline-bb-press", 100, r(8, 10)),
+    slot("incline-db-fly", 28, r(10, 12), 4),
+    slot("db-lateral-raise", 15, r(10, 12)),
+    slot("front-raise", 15, r(10, 12)),
+    slot("triceps-pushdown", 37.5, r(10, 12)),
+    slot("db-overhead-ext", 37.5, r(10, 12)),
+  ],
+};
+
+const LEGS_2: BaseWeekDay = {
+  label: "Día 5 · C Piernas",
+  slots: [
+    slot("leg-press", 300, r(8, 10)),
+    slot("leg-press-calf-raise", 300, r(12, 15)),
+    slot("lying-leg-curl", 40, r(8, 10)),
+    slot("leg-extension", 60, r(10, 12)),
+    slot("hip-abduction", 40, r(10, 12)),
+    slot("cable-kickback", 65, r(10, 12)),
+  ],
+};
+
+const PULL_2: BaseWeekDay = {
+  label: "Día 6 · B Tracción",
+  slots: [
+    slot("wide-grip-pulldown", 80, r(8, 10)),
+    slot("seated-cable-row", 75, r(8, 10)),
+    slot("straight-arm-pulldown", 40, r(8, 10)),
+    slot("db-curl", 20, r(8, 10), 4),
+    slot("hammer-curl", 20, r(8, 10), 4),
+    slot("db-shrug", 20, r(10, 12)),
   ],
 };
 
 // ---------------------------------------------------------------------------
-// Plantilla 2: 5 días con día fuerte / día liviano
-//   1 Empuje FUERTE + piernas (cuádriceps/gemelos)
-//   2 Tracción LIVIANO
-//   3 Piernas completo
-//   4 Empuje LIVIANO
-//   5 Tracción FUERTE + piernas (isquios/glúteos)
-//   (+ 2 días de descanso, los que elijas)
-// El segundo día de piernas de la rutina de 6 se parte en dos mitades
-// coherentes por músculo: cuádriceps + gemelos van con el empuje fuerte,
-// isquios + glúteos con la tracción fuerte (ahí ya entra el espinal). Así cada
-// grupo de piernas sigue entrenándose 2 veces por semana.
-// Alternar fuerte/liviano entre días del mismo patrón es equivalente para
-// hipertrofia con volumen igualado (Grgic 2017); es gestión de fatiga, no
-// optimización. Rangos editables por slot.
+// 5 días fuerte / liviano: empuje F + cuádriceps · tracción L · piernas ·
+// empuje L · tracción F + isquios/glúteos. El 2º día de piernas de la de 6 se
+// parte en dos mitades coherentes por músculo; cada grupo de piernas sigue
+// 2×/semana. Alternar fuerte/liviano es equivalente para hipertrofia con
+// volumen igualado (Grgic 2017): gestión de fatiga, no optimización.
 // ---------------------------------------------------------------------------
 
 const PUSH_HEAVY: BaseWeekDay = {
@@ -115,7 +133,7 @@ const PUSH_HEAVY: BaseWeekDay = {
     // mitad de piernas: cuádriceps + gemelos
     slot("leg-press", 300, HEAVY_COMPOUND),
     slot("leg-extension", 60, HEAVY_ISO),
-    slot("leg-press-calf-raise", 300, { min: 10, max: 12 }),
+    slot("leg-press-calf-raise", 300, r(10, 12)),
   ],
 };
 
@@ -133,18 +151,7 @@ const PULL_LIGHT: BaseWeekDay = {
   ],
 };
 
-const LEGS_FULL: BaseWeekDay = {
-  label: "Día 3 · Piernas",
-  slots: [
-    slot("leg-press", 300, { min: 8, max: 10 }),
-    slot("leg-press-calf-raise", 300, { min: 12, max: 15 }),
-    slot("lying-leg-curl", 60, { min: 10, max: 12 }),
-    slot("leg-extension", 60, { min: 8, max: 10 }),
-    slot("hip-abduction", 125, { min: 10, max: 12 }),
-    slot("machine-hip-thrust", 20, { min: 8, max: 10 }),
-    slot("back-extension", 30, { min: 10, max: 12 }),
-  ],
-};
+const LEGS_FULL: BaseWeekDay = { ...LEGS_1, label: "Día 3 · Piernas", slots: LEGS_1.slots.map((s) => ({ ...s, repRange: { ...s.repRange } })) };
 
 const PUSH_LIGHT: BaseWeekDay = {
   label: "Día 4 · Empuje LIVIANO",
@@ -157,7 +164,7 @@ const PUSH_LIGHT: BaseWeekDay = {
     slot("front-raise", 15, LIGHT_ISO),
     slot("triceps-pushdown", 37.5, LIGHT_ISO),
     slot("db-overhead-ext", 37.5, LIGHT_ISO),
-    slot("cable-crunch", 20, { min: 12, max: 15 }, 4),
+    slot("cable-crunch", 20, r(12, 15), 4),
   ],
 };
 
@@ -179,26 +186,25 @@ const PULL_HEAVY: BaseWeekDay = {
   ],
 };
 
+const copyDay = (day: BaseWeekDay, label: string): BaseWeekDay => ({
+  ...day,
+  label,
+  slots: day.slots.map((s) => ({ ...s, repRange: { ...s.repRange } })),
+});
+
 export const ROUTINE_TEMPLATES: RoutineTemplate[] = [
   {
     id: "ppl5-heavy-light",
     name: "5 días · fuerte / liviano (empuje · tracción · piernas · empuje · tracción)",
     description:
-      "Día 1 empuje FUERTE + cuádriceps/gemelos · día 2 tracción LIVIANO · día 3 piernas · día 4 empuje LIVIANO · día 5 tracción FUERTE + isquios/glúteos. Los días fuertes bajan el RIR y los livianos lo suben (acotado a la banda del meso); cada versión progresa por separado. Las cargas se estiman desde tu historial al aplicarla.",
+      "Día 1 empuje FUERTE + cuádriceps/gemelos · día 2 tracción LIVIANO · día 3 piernas · día 4 empuje LIVIANO · día 5 tracción FUERTE + isquios/glúteos. Los días fuertes bajan el RIR y los livianos lo suben (acotado a la banda del meso); cada versión progresa por separado.",
     days: [PUSH_HEAVY, PULL_LIGHT, LEGS_FULL, PUSH_LIGHT, PULL_HEAVY],
   },
   {
-    id: "acb-x2",
-    name: "Empuje · Piernas · Tracción ×2 (A-C-B-A-C-B)",
+    id: "acb-x2-last",
+    name: "6 días · tu último meso (empuje · piernas · tracción ×2)",
     description:
-      "6 días: empuje (pecho/hombros/tríceps), piernas y tracción (espalda/bíceps), dos vueltas por semana. Cargas iniciales precargadas; todo editable después.",
-    days: [
-      copyDay(DAY_A, "Día 1 · A Empuje"),
-      copyDay(DAY_C, "Día 2 · C Piernas"),
-      copyDay(DAY_B, "Día 3 · B Tracción"),
-      copyDay(DAY_A, "Día 4 · A Empuje"),
-      copyDay(DAY_C, "Día 5 · C Piernas"),
-      copyDay(DAY_B, "Día 6 · B Tracción"),
-    ],
+      "Exactamente la estructura de «Mesociclo 1 · 2»: dos días de empuje, dos de piernas y dos de tracción, con tus ejercicios, series y rangos. Las cargas se toman de tu historial.",
+    days: [PUSH_1, LEGS_1, PULL_1, PUSH_2, LEGS_2, PULL_2].map((d) => copyDay(d, d.label)),
   },
 ];

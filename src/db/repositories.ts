@@ -529,6 +529,32 @@ export const sessionRepo = {
     await db.sessions.update(id, { overrides: { ...s.overrides, exercise } });
   },
 
+  /**
+   * Aplica un deload por ejercicio (A2.3) a la PRÓXIMA sesión pendiente del
+   * mismo día del split: series y carga del slot por los factores dados.
+   * Devuelve la sesión afectada o null si no hay otra pendiente de ese día.
+   */
+  async applyExerciseDeloadToNext(
+    sessionId: string,
+    slotIndex: number,
+    setsFactor: number,
+    loadFactor: number,
+  ): Promise<SessionRow | null> {
+    const db = getDb();
+    const s = await db.sessions.get(sessionId);
+    if (!s) return null;
+    const rows = (await db.sessions.where("mesocycleId").equals(s.mesocycleId).toArray())
+      .filter((x) => x.status === "pending" && !x.isDeload && x.dayIndex === s.dayIndex)
+      .sort((a, b) => a.weekIndex - b.weekIndex);
+    const next = rows[0];
+    if (!next) return null;
+    const list = (next.overrides?.exerciseDeload ?? []).filter((x) => x.slotIndex !== slotIndex);
+    await db.sessions.update(next.id, {
+      overrides: { ...next.overrides, exerciseDeload: [...list, { slotIndex, setsFactor, loadFactor }] },
+    });
+    return next;
+  },
+
   /** Suma o resta series SOLO en esta sesión (el plan no cambia). */
   async changeSetsToday(id: string, slotIndex: number, delta: number): Promise<void> {
     const db = getDb();

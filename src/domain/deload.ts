@@ -6,6 +6,7 @@ import type { Rules } from "./rules";
 import { effectiveLandmarks } from "./rules";
 import { roundToAvailable, type RoundingContext } from "./rounding";
 import { isRirReported, isWorkingSet } from "./types";
+import { estimate1RM } from "./oneRepMax";
 import type {
   Checkin,
   DeloadEvaluation,
@@ -72,6 +73,7 @@ export function summarizeSessionPair(
     maxRirIncreaseAtFixedLoad: maxRirIncrease,
     readiness: checkin?.readiness ?? null,
     sleptMinimum: checkin?.sleptMinimum ?? null,
+    perceivedFatigue: checkin?.perceivedFatigue ?? null,
   };
 }
 
@@ -93,6 +95,12 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
   const { rules } = input;
   const cfg = rules.deloadTriggers;
   const reasons: string[] = [];
+  // Cada señal suma su peso (A2.1); la sugerencia sale por puntaje.
+  let score = 0;
+  const add = (weight: number, reason: string) => {
+    score += weight;
+    reasons.push(`${reason} (peso ${weight})`);
+  };
 
   // Durante el propio deload no tiene sentido sugerir un deload (A0.5).
   if (input.isDeload) return { shouldSuggest: false, reasons: [], forced: false };
@@ -117,7 +125,8 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
       );
     });
     if (hit) {
-      reasons.push(
+      add(
+        perf.weight,
         `Caída de reps a carga fija en ${perf.exercisesAffected}+ ejercicios durante ${perf.consecutiveSessions} sesiones seguidas del mismo día`,
       );
     }
@@ -130,7 +139,7 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
       (s) => s.maxRirIncreaseAtFixedLoad >= creep.reps,
     );
     if (hit) {
-      reasons.push(`El RIR reportado subió ≥${creep.reps} a carga fija`);
+      add(creep.weight, `El RIR reportado subió ≥${creep.reps} a carga fija`);
     }
   }
 
@@ -146,7 +155,7 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
       try {
         const lm = effectiveLandmarks(rules, input.profile, m);
         if (vol >= lm.mrv) {
-          reasons.push(`El volumen semanal de ${m} alcanzó el MRV heurístico del perfil`);
+          add(cfg.signals.reachedMrv.weight, `El volumen semanal de ${m} alcanzó el MRV heurístico del perfil`);
           break;
         }
       } catch {
@@ -167,13 +176,24 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
           (typeof s.readiness === "number" && s.readiness <= 2),
       )
     ) {
-      reasons.push("Sueño bajo el mínimo o baja disposición sostenidos en el check-in");
+      add(chronic.weight, "Sueño bajo el mínimo o baja disposición sostenidos en el check-in");
+    }
+  }
+
+  // 5. Fatiga física + mental percibida sostenida (A2.2; consenso Bell 2023).
+  const fat = cfg.signals.perceivedFatigue;
+  if (fat.enabled) {
+    const withValue = input.recentSessions.filter((s) => typeof s.perceivedFatigue === "number");
+    const window = withValue.slice(-fat.windowSessions);
+    if (window.length >= fat.windowSessions && window.every((s) => (s.perceivedFatigue ?? 0) >= fat.threshold)) {
+      add(fat.weight, `Fatiga percibida ≥${fat.threshold}/5 en las últimas ${fat.windowSessions} sesiones con check-in`);
     }
   }
 
   const forced = input.weekIndex >= input.numAccumulationWeeks;
   return {
-    shouldSuggest: reasons.length >= cfg.minSignalsToSuggest || forced,
+    shouldSuggest: score >= cfg.minSignalsToSuggest || forced,
+    score,
     reasons: forced
       ? [...reasons, "Fin de las semanas de acumulación programadas"]
       : reasons,
@@ -225,4 +245,41 @@ export function deloadLoadForDay(args: {
   if (args.week1LoadKg <= 0) return { loadKg: 0, half };
   if (half === "first") return { loadKg: args.week1LoadKg, half };
   return { loadKg: roundToAvailable(args.week1LoadKg * args.secondHalfFraction, args.ctx), half };
+}
+
+export interface ExerciseDeloadSuggestion {
+  suggest: boolean;
+  /** Caída de e1RM entre la primera y la última de la ventana (%). */
+  dropPct?: number;
+  setsFactor?: number;
+  loadFactor?: number;
+  reason?: string;
+}
+
+/**
+ * Deload POR EJERCICIO (A2.3): el e1RM (solo series de trabajo con RIR
+ * reportado) cae ≥ e1rmDropPct en `sessions` sesiones SEGUIDAS de la pista,
+ * cada una peor que la anterior. Heurística sin RCT (práctica de Dr. Muscle):
+ * se sugiere, no se aplica sola. El historial ya viene filtrado por pista.
+ */
+export function evaluateExerciseDeload(history: SetLog[], rules: Rules): ExerciseDeloadSuggestion {
+  const cfg = rules.deloadTriggers.exerciseDeload;
+  if (!cfg.enabled) return { suggest: false };
+  const usable = history.filter((l) => isWorkingSet(l) && isRirReported(l) && l.actualLoadKg > 0);
+  const bySession = new Map<string, SetLog[]>();
+  for (const l of usable) bySession.set(l.sessionId, [...(bySession.get(l.sessionId) ?? []), l]);
+  const ordered = [...bySession.values()].sort((a, b) => a[0].timestamp.localeCompare(b[0].timestamp));
+  if (ordered.length < cfg.sessions + 1) return { suggest: false };
+  const best = (s: SetLog[]) => Math.max(...s.map((l) => estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, rules)));
+  const window = ordered.slice(-(cfg.sessions + 1)).map(best);
+  const monotone = window.every((v, i) => i === 0 || v < window[i - 1]);
+  const dropPct = ((window[0] - window[window.length - 1]) / window[0]) * 100;
+  if (!monotone || dropPct < cfg.e1rmDropPct) return { suggest: false };
+  return {
+    suggest: true,
+    dropPct: Math.round(dropPct * 10) / 10,
+    setsFactor: cfg.setsFactor,
+    loadFactor: cfg.loadFactor,
+    reason: `El 1RM estimado de este ejercicio cayó ${dropPct.toFixed(1)}% en ${cfg.sessions} sesiones seguidas. Sugerencia: la próxima vez ${Math.round(cfg.setsFactor * 100)}% de las series y ${Math.round(cfg.loadFactor * 100)}% de la carga. Heurística sin ensayo clínico; vos decidís.`,
+  };
 }

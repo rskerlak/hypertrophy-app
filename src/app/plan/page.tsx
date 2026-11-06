@@ -176,38 +176,15 @@ export default function PlanPage() {
             hint="Agregá tu primer día de entrenamiento, o arrancá desde una rutina precargada y editala a gusto."
           />
           <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">Rutinas precargadas</h2>
-          {ROUTINE_TEMPLATES.map((t) => (
-            <Card key={t.id} className="mb-3">
-              <p className="font-semibold">{t.name}</p>
-              <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">{t.description}</p>
-              <p className="mt-1.5 text-xs text-[var(--muted)]">
-                {t.days.length} días ·{" "}
-                {t.days.reduce((a, d) => a + d.slots.length, 0)} ejercicios
-              </p>
-              <Button
-                size="sm"
-                className="mt-3 w-full"
-                onClick={async () => {
-                  const r = await baseWeekRepo.applyTemplate(
-                    t.days.map((d) => ({ ...d, slots: d.slots.map((s) => ({ ...s, repRange: { ...s.repRange } })) })),
-                  );
-                  if (r.estimated > 0) {
-                    alert(
-                      `Rutina aplicada. ${r.estimated} carga${r.estimated === 1 ? "" : "s"} estimada${r.estimated === 1 ? "" : "s"} desde tu historial real (1RM de tu última sesión, ajustado al rango y al RIR de cada día)${r.kept > 0 ? `; ${r.kept} sin historial quedaron como en la plantilla` : ""}. Revisalas antes de generar.`,
-                    );
-                  }
-                }}
-              >
-                Usar como base (editable)
-              </Button>
-            </Card>
-          ))}
+          <TemplatesList />
         </>
       )}
 
       <div className="space-y-3">
         {baseWeek.days.map((day, dayIdx) => (
-          <Card key={dayIdx}>
+          // key con la etiqueta: el input del nombre es no controlado y, al
+          // reemplazar o reordenar la semana, mostraba el nombre viejo.
+          <Card key={`${dayIdx}:${day.label}`}>
             <div className="mb-3 flex items-center gap-2">
               <Input
                 defaultValue={day.label}
@@ -351,6 +328,17 @@ export default function PlanPage() {
       <Button variant="secondary" className="mt-3 w-full" onClick={addDay}>
         + Agregar día
       </Button>
+
+      {baseWeek.days.length > 0 && (
+        <details className="mt-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4">
+          <summary className="cursor-pointer text-sm font-semibold">Cambiar a una rutina precargada</summary>
+          <p className="mb-3 mt-2 text-xs leading-relaxed text-[var(--muted)]">
+            Reemplaza tu semana base (los mesos ya generados no cambian). Las cargas se estiman desde
+            tu historial real. Después generás un meso nuevo con «Generar mesociclo».
+          </p>
+          <TemplatesList replace />
+        </details>
+      )}
 
       {hasSlots && (
         <div className="mt-6">
@@ -636,4 +624,39 @@ function safeLandmarks(rules: ReturnType<typeof getRules>, profile: "novice" | "
   } catch {
     return { mv: 0, mev: 0, mav: 0, mrv: 1 };
   }
+}
+
+/** Rutinas precargadas; con `replace`, pide confirmación antes de reemplazar la semana base. */
+function TemplatesList({ replace }: { replace?: boolean }) {
+  return (
+    <>
+      {ROUTINE_TEMPLATES.map((t) => (
+        <Card key={t.id} className="mb-3">
+          <p className="font-semibold">{t.name}</p>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">{t.description}</p>
+          <p className="mt-1.5 text-xs text-[var(--muted)]">
+            {t.days.length} días · {t.days.reduce((a, d) => a + d.slots.length, 0)} ejercicios
+          </p>
+          <Button
+            size="sm"
+            className="mt-3 w-full"
+            onClick={async () => {
+              if (replace && !confirm(`¿Reemplazar tu semana base por «${t.name}»? Tus mesos ya generados no cambian.`)) return;
+              const r = await baseWeekRepo.applyTemplate(
+                t.days.map((d) => ({ ...d, slots: d.slots.map((sl) => ({ ...sl, repRange: { ...sl.repRange } })) })),
+              );
+              if (r.estimated > 0) {
+                alert(
+                  `Rutina aplicada. ${r.estimated} carga${r.estimated === 1 ? "" : "s"} estimada${r.estimated === 1 ? "" : "s"} desde tu historial real (1RM de tu última sesión, ajustado al rango y al RIR de cada día)${r.kept > 0 ? `; ${r.kept} sin historial quedaron como en la plantilla` : ""}. Revisalas antes de generar.`,
+                );
+              }
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
+            {replace ? "Usar esta rutina" : "Usar como base (editable)"}
+          </Button>
+        </Card>
+      ))}
+    </>
+  );
 }

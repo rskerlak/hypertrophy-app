@@ -23,6 +23,7 @@ function SessionDone() {
   const [summary, setSummary] = useState<SessionSummary | null | undefined>(undefined);
   const [dismissed, setDismissed] = useState(false);
   const [applied, setApplied] = useState<Set<number>>(new Set());
+  const [appliedDeload, setAppliedDeload] = useState<Set<number>>(new Set());
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -122,6 +123,31 @@ function SessionDone() {
               </Button>
             </div>
           )}
+        </Card>
+      )}
+
+      {analysis && analysis.exerciseDeloads.length > 0 && (
+        <Card className="mb-4">
+          <p className="mb-2 font-medium">Deload de un ejercicio</p>
+          {analysis.exerciseDeloads.map((d) => (
+            <div key={d.slotIndex} className="mb-2 rounded-lg bg-[var(--surface-2)] p-3 text-sm">
+              <p className="font-medium">{d.exerciseName.replace(/\s*\(.*\)$/, "")}</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">{d.reason}</p>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="mt-2 w-full"
+                disabled={appliedDeload.has(d.slotIndex)}
+                onClick={async () => {
+                  const next = await sessionRepo.applyExerciseDeloadToNext(id, d.slotIndex, d.setsFactor, d.loadFactor);
+                  setAppliedDeload(new Set([...appliedDeload, d.slotIndex]));
+                  setMsg(next ? `Aplicado a la próxima sesión de este día (semana ${next.weekIndex + 1}).` : "No queda otra sesión de este día en el meso.");
+                }}
+              >
+                {appliedDeload.has(d.slotIndex) ? "✓ Aplicado a la próxima" : "Aplicar a la próxima sesión de este día"}
+              </Button>
+            </div>
+          ))}
         </Card>
       )}
 

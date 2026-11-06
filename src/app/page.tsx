@@ -9,6 +9,7 @@ import { PROGRESSION_LABELS } from "@/lib/format";
 import { Onboarding } from "@/components/Onboarding";
 import { MeasurementPrompt } from "@/components/MeasurementPrompt";
 import { BackupPrompt } from "@/components/BackupPrompt";
+import { NewMesoButton } from "@/components/NewMesoSheet";
 
 export default function HomePage() {
   const router = useRouter();
@@ -77,7 +78,7 @@ export default function HomePage() {
           hint="Definí tu semana base y generá un mesociclo nuevo, o reanudá uno existente."
           action={
             <div className="flex gap-2">
-              <Button onClick={() => router.push("/plan")}>Crear plan</Button>
+              <NewMesoButton label="Nuevo meso" variant="primary" size="md" />
               <Button variant="secondary" onClick={() => router.push("/mesos")}>
                 Mis mesociclos
               </Button>
@@ -159,9 +160,7 @@ export default function HomePage() {
             <Button variant="secondary" className="flex-1" onClick={() => router.push(`/stats?meso=${meso.id}`)}>
               Ver stats
             </Button>
-            <Button variant="secondary" className="flex-1" onClick={() => router.push("/plan")}>
-              Nuevo meso
-            </Button>
+            <NewMesoButton label="Nuevo meso" className="flex-1" size="md" />
           </div>
         </Card>
       )}

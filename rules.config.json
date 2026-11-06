@@ -187,8 +187,9 @@
   },
 
   "deloadTriggers": {
-    "_note": "MULTI-SENAL y PROBABILISTICO. Nunca presentar como 'MRV alcanzado' medido. La caida de rendimiento es sobre todo fatiga aguda, no un umbral fisiologico. Se dispara sugerencia (no obligacion) si se cumplen >=minSignals de estas condiciones.",
+    "_note": "MULTI-SENAL y PROBABILISTICO. Nunca presentar como 'MRV alcanzado' medido. La caida de rendimiento es sobre todo fatiga aguda, no un umbral fisiologico. Se dispara sugerencia (no obligacion) si la SUMA DE PESOS de las senales presentes es >= minSignalsToSuggest.",
     "minSignalsToSuggest": 2,
+    "_weightNote": "Pesos (A2.1): la caida sostenida de rendimiento a carga fija pesa 2 porque es el UNICO marcador establecido de fatiga acumulada en entrenamiento de fuerza (Grandou 2020, Sports Med); sola alcanza para sugerir. Las demas pesan 1 y necesitan otra senal. La baja disposicion cronica queda deshabilitada por defecto: no hubo consenso de expertos en usar sueno o motivacion como disparadores (Bell 2023 Delphi, Sports Med Open) ni validez predictiva; se conserva como covariable en stats.",
     "recentWindowSessions": 6,
     "_windowNote": "Sesiones completadas recientes que se evaluan. La ventana efectiva es max(recentWindowSessions, dias del split x consecutiveSessions), para que cada dia tenga suficientes repeticiones: con un split de 6 dias y ventana fija de 6, nunca habia dos sesiones del mismo dia y la caida de rendimiento no podia dispararse. Las comparaciones se hacen contra la sesion previa del mismo dia, calculadas sobre todo el meso (sin deload).",
     "signals": {
@@ -196,24 +197,43 @@
         "enabled": true,
         "consecutiveSessions": 2,
         "exercisesAffected": 2,
-        "_desc": "No igualar reps de la sesion previa a carga fija en >=2 ejercicios por >=2 sesiones."
+        "weight": 2,
+        "_desc": "No igualar reps de la sesion previa DEL MISMO DIA a carga fija en >=2 ejercicios por >=2 sesiones seguidas de ese dia."
       },
       "rirCreepAtFixedLoad": {
         "enabled": true,
         "reps": 2,
-        "_desc": "RIR reportado sube >=2 a carga fija (se pone mas facil = fatiga o mala calibracion)."
+        "weight": 1,
+        "_desc": "RIR REPORTADO sube >=2 a carga fija respecto de la sesion previa del mismo dia."
       },
       "reachedMrv": {
         "enabled": true,
+        "weight": 1,
         "_desc": "El volumen planificado de la semana alcanza MRV del perfil para algun musculo priorizado."
       },
       "chronicPoorReadiness": {
-        "enabled": true,
+        "enabled": false,
+        "weight": 1,
         "windowSessions": 4,
-        "_desc": "Covariable: sueno bajo el minimo y baja disposicion sostenidos (del check-in). Senal debil, solo cuenta junto a otra."
+        "_desc": "Covariable: sueno bajo el minimo y baja disposicion sostenidos (del check-in). Deshabilitada por defecto (ver _weightNote)."
+      },
+      "perceivedFatigue": {
+        "enabled": true,
+        "threshold": 4,
+        "windowSessions": 3,
+        "weight": 1,
+        "_desc": "Fatiga fisica + mental PERCIBIDA (1-5, check-in opcional) >= threshold en las ultimas windowSessions sesiones con check-in. Es el unico disparador subjetivo con consenso de expertos (Bell 2023: 100% 'descargar cuando hay fatiga fisica y mental percibida'); sin validacion predictiva, por eso pesa 1 y necesita otra senal. Nunca modifica la sesion."
       }
     },
-    "_scheduledFallback": "Si no se dispara por senales, forzar deload al terminar las semanas de acumulacion configuradas."
+    "_scheduledFallback": "Si no se dispara por senales, forzar deload al terminar las semanas de acumulacion configuradas.",
+    "exerciseDeload": {
+      "enabled": true,
+      "e1rmDropPct": 5,
+      "sessions": 2,
+      "setsFactor": 0.5,
+      "loadFactor": 0.9,
+      "_note": "Deload POR EJERCICIO (A2.3): si el e1RM (RIR reportado) de un ejercicio cae >= e1rmDropPct% en `sessions` sesiones seguidas de su pista, se sugiere para la proxima sesion de ese slot series x setsFactor y carga x loadFactor. Practica de Dr. Muscle, SIN RCT: heuristica de gestion de fatiga local; solo sugerencia, decide el usuario."
+    }
   },
 
   "deloadStructure": {

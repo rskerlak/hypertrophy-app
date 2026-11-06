@@ -39,13 +39,41 @@ describe("evaluateDeloadTrigger", () => {
     expect(r.forced).toBe(false);
   });
 
-  it("una sola señal no alcanza (minSignalsToSuggest = 2)", () => {
+  it("A2.1: la caída sostenida de rendimiento sola alcanza (pesa 2: único marcador establecido)", () => {
     const r = evaluateDeloadTrigger({
       ...baseInput,
       recentSessions: [droppedSession("a"), droppedSession("b")],
     });
     expect(r.reasons.length).toBe(1);
+    expect(r.score).toBe(rules.deloadTriggers.signals.performanceDropSessions.weight);
+    expect(r.shouldSuggest).toBe(true);
+  });
+
+  it("A2.1: una señal de peso 1 sola no alcanza (RIR creep)", () => {
+    const creep: SessionSummary = { ...okSession("b"), maxRirIncreaseAtFixedLoad: 2 };
+    const r = evaluateDeloadTrigger({ ...baseInput, recentSessions: [okSession("a"), creep] });
+    expect(r.reasons.length).toBe(1);
     expect(r.shouldSuggest).toBe(false);
+  });
+
+  it("A2.1: la baja disposición crónica está deshabilitada por defecto (sin consenso, Bell 2023)", () => {
+    const poor = (id: string): SessionSummary => ({ ...okSession(id), sleptMinimum: false, readiness: 1 });
+    const r = evaluateDeloadTrigger({ ...baseInput, recentSessions: [poor("a"), poor("b"), poor("c"), poor("d")] });
+    expect(r.reasons).toEqual([]);
+  });
+
+  it("A2.2: fatiga percibida sostenida suma 1 y, junto a otra señal, sugiere", () => {
+    const f = rules.deloadTriggers.signals.perceivedFatigue;
+    const tired = (id: string, extra: Partial<SessionSummary> = {}): SessionSummary => ({ ...okSession(id), perceivedFatigue: f.threshold, ...extra });
+    const sessions = Array.from({ length: f.windowSessions }, (_, i) => tired(`t${i}`));
+    const alone = evaluateDeloadTrigger({ ...baseInput, recentSessions: sessions });
+    expect(alone.reasons.some((x) => x.includes("Fatiga percibida"))).toBe(true);
+    expect(alone.shouldSuggest).toBe(false);
+    const withCreep = evaluateDeloadTrigger({
+      ...baseInput,
+      recentSessions: [...sessions.slice(0, -1), tired("z", { maxRirIncreaseAtFixedLoad: 2 })],
+    });
+    expect(withCreep.shouldSuggest).toBe(true);
   });
 
   it("dos señales concurrentes: sugiere (caída de rendimiento + RIR creep)", () => {
@@ -181,5 +209,27 @@ describe("disparador de deload por día del split (A0.4) y nunca durante el delo
 
   it("la ventana de sesiones sale del config", () => {
     expect(rules.deloadTriggers.recentWindowSessions).toBeGreaterThan(0);
+  });
+});
+
+describe("evaluateExerciseDeload (A2.3)", () => {
+  const mk = (id: string, load: number, reps: number, day: number) =>
+    sessionLogs({ sessionId: id, exerciseId: "bench", sets: 2, loadKg: load, reps, rir: 1, timestamp: `2026-02-${String(day).padStart(2, "0")}T10:00:00Z` });
+  it("sugiere cuando el e1RM cae seguido y más que el umbral", async () => {
+    const { evaluateExerciseDeload } = await import("../deload");
+    const r = evaluateExerciseDeload([...mk("a", 100, 10, 1), ...mk("b", 100, 8, 4), ...mk("c", 100, 6, 8)], rules);
+    expect(r.suggest).toBe(true);
+    expect(r.setsFactor).toBe(rules.deloadTriggers.exerciseDeload.setsFactor);
+    expect(r.dropPct).toBeGreaterThanOrEqual(rules.deloadTriggers.exerciseDeload.e1rmDropPct);
+  });
+  it("no sugiere si la caída no es sostenida o es chica", async () => {
+    const { evaluateExerciseDeload } = await import("../deload");
+    expect(evaluateExerciseDeload([...mk("a", 100, 10, 1), ...mk("b", 100, 8, 4), ...mk("c", 100, 9, 8)], rules).suggest).toBe(false);
+    expect(evaluateExerciseDeload([...mk("a", 100, 10, 1), ...mk("b", 100, 10, 4), ...mk("c", 100, 9, 8)], rules).suggest).toBe(false);
+  });
+  it("ignora RIR no reportado y calentamiento", async () => {
+    const { evaluateExerciseDeload } = await import("../deload");
+    const un = [...mk("a", 100, 10, 1), ...mk("b", 100, 8, 4), ...mk("c", 100, 6, 8)].map((l) => ({ ...l, rirReported: false }));
+    expect(evaluateExerciseDeload(un, rules).suggest).toBe(false);
   });
 });

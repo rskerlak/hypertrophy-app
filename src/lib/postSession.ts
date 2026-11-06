@@ -1,10 +1,12 @@
 // Análisis post-sesión: compone los disparadores de deload (F8) y las
 // sugerencias de swap (F9) leyendo de los repos. El cálculo vive en src/domain.
 
-import { evaluateDeloadTrigger, summarizeRecentSessions } from "@/domain/deload";
+import { evaluateDeloadTrigger, evaluateExerciseDeload, summarizeRecentSessions } from "@/domain/deload";
+import { sameProgressionTrack } from "@/domain/progression";
 import { suggestExerciseSwap } from "@/domain/swap";
 import { getRules } from "@/lib/rulesLoader";
-import type { Checkin, DeloadEvaluation, SetLog } from "@/domain/types";
+import type { Checkin, DayIntensity, DeloadEvaluation, PlannedSlot, SetLog } from "@/domain/types";
+import type { MesocycleRow } from "@/db/schema";
 import {
   checkinRepo,
   exerciseRepo,
@@ -24,9 +26,20 @@ export interface SwapHint {
   reason: string;
 }
 
+export interface ExerciseDeloadHint {
+  slotIndex: number;
+  exerciseId: string;
+  exerciseName: string;
+  setsFactor: number;
+  loadFactor: number;
+  reason: string;
+}
+
 export interface PostSessionAnalysis {
   deload: DeloadEvaluation;
   swaps: SwapHint[];
+  /** Deload por ejercicio sugerido (A2.3); se aplica a la próxima sesión de este día. */
+  exerciseDeloads: ExerciseDeloadHint[];
 }
 
 export async function analyzePostSession(sessionId: string): Promise<PostSessionAnalysis | null> {
@@ -85,11 +98,26 @@ export async function analyzePostSession(sessionId: string): Promise<PostSession
   // --- Swap (F9): sobre los ejercicios de esta sesión ---
   const day = meso.plan.weeks[session.weekIndex]?.days[session.dayIndex];
   const swaps: SwapHint[] = [];
-  if (day) {
+  const exerciseDeloads: ExerciseDeloadHint[] = [];
+  if (day && !session.isDeload) {
     for (const slot of day.slots) {
       const exercise = exById.get(slot.exerciseId);
-      if (!exercise || !exercise.isSwappable) continue;
-      const history = await mesoExerciseHistory(slot.exerciseId, sessions);
+      if (!exercise) continue;
+      // Historial de la MISMA pista y sin deload (un día liviano no está
+      // "estancado" respecto del fuerte; el deload es liviano a propósito).
+      const history = await trackHistory(slot, day.intensity, meso, sessions);
+      const ed = evaluateExerciseDeload(history, rules);
+      if (ed.suggest) {
+        exerciseDeloads.push({
+          slotIndex: day.slots.indexOf(slot),
+          exerciseId: exercise.id,
+          exerciseName: exercise.name,
+          setsFactor: ed.setsFactor!,
+          loadFactor: ed.loadFactor!,
+          reason: ed.reason!,
+        });
+      }
+      if (!exercise.isSwappable) continue;
       const candidates = exercise.swapCandidates
         .map((cid) => exById.get(cid))
         .filter((e): e is NonNullable<typeof e> => !!e);
@@ -108,14 +136,25 @@ export async function analyzePostSession(sessionId: string): Promise<PostSession
     }
   }
 
-  return { deload, swaps };
+  return { deload, swaps, exerciseDeloads };
 }
 
-async function mesoExerciseHistory(
-  exerciseId: string,
+async function trackHistory(
+  slot: PlannedSlot,
+  intensity: DayIntensity | undefined,
+  meso: MesocycleRow,
   sessions: Awaited<ReturnType<typeof sessionRepo.forMesocycle>>,
 ): Promise<SetLog[]> {
-  const completedIds = new Set(sessions.filter((s) => s.status === "completed").map((s) => s.id));
-  const all = await setLogRepo.forExercise(exerciseId);
-  return all.filter((l) => completedIds.has(l.sessionId));
+  const ids = new Set(
+    sessions
+      .filter((s) => {
+        if (s.status !== "completed" || s.isDeload) return false;
+        const d = meso.plan.weeks[s.weekIndex]?.days[s.dayIndex];
+        const sl = d?.slots.find((x) => x.exerciseId === slot.exerciseId);
+        return !!d && !!sl && sameProgressionTrack({ slot, intensity }, { slot: sl, intensity: d.intensity }, meso.progressionModel);
+      })
+      .map((s) => s.id),
+  );
+  const all = await setLogRepo.forExercise(slot.exerciseId);
+  return all.filter((l) => ids.has(l.sessionId));
 }

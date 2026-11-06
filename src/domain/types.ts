@@ -132,6 +132,8 @@ export interface Checkin {
   proteinSufficient: boolean | null;
   energyBalance: "surplus" | "maintenance" | "deficit" | null;
   readiness?: number | null;
+  /** Fatiga física + mental percibida 1–5 (A2.2). Covariable; nunca cambia la sesión. */
+  perceivedFatigue?: number | null;
   note?: string;
 }
 
@@ -189,12 +191,15 @@ export interface SessionSummary {
   maxRirIncreaseAtFixedLoad: number;
   readiness?: number | null;
   sleptMinimum?: boolean | null;
+  perceivedFatigue?: number | null;
 }
 
 export interface DeloadEvaluation {
   shouldSuggest: boolean;
   reasons: string[];
   forced: boolean;
+  /** Suma de pesos de las señales presentes (A2.1). */
+  score?: number;
 }
 
 // ---- Stats ----

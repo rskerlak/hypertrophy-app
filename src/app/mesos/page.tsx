@@ -6,6 +6,7 @@ import { mesocycleRepo, sessionRepo } from "@/db/repositories";
 import { PROGRESSION_LABELS } from "@/lib/format";
 import { Badge, Button, Card, EmptyState, HonestNote, PageHeader } from "@/components/ui";
 import type { MesocycleRow } from "@/db/schema";
+import { NewMesoButton } from "@/components/NewMesoSheet";
 
 const STATUS_META: Record<
   MesocycleRow["status"],
@@ -47,9 +48,7 @@ export default function MesosPage() {
         title="Mesociclos"
         subtitle="Todos tus ciclos"
         action={
-          <Button size="sm" variant="secondary" onClick={() => router.push("/plan")}>
-            + Nuevo
-          </Button>
+          <NewMesoButton />
         }
       />
 
@@ -57,7 +56,7 @@ export default function MesosPage() {
         <EmptyState
           title="Sin mesociclos"
           hint="Generá tu primer meso desde el Plan."
-          action={<Button onClick={() => router.push("/plan")}>Ir al Plan</Button>}
+          action={<NewMesoButton label="Nuevo mesociclo" variant="primary" size="md" />}
         />
       ) : (
         <div className="space-y-3">

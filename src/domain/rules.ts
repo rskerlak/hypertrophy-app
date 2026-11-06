@@ -182,17 +182,37 @@ export const rulesSchema = z
                 enabled: z.boolean(),
                 consecutiveSessions: z.number().int(),
                 exercisesAffected: z.number().int(),
+                weight: z.number().min(0).default(2),
               })
               .passthrough(),
             rirCreepAtFixedLoad: z
-              .object({ enabled: z.boolean(), reps: z.number() })
+              .object({ enabled: z.boolean(), reps: z.number(), weight: z.number().min(0).default(1) })
               .passthrough(),
-            reachedMrv: z.object({ enabled: z.boolean() }).passthrough(),
+            reachedMrv: z.object({ enabled: z.boolean(), weight: z.number().min(0).default(1) }).passthrough(),
             chronicPoorReadiness: z
-              .object({ enabled: z.boolean(), windowSessions: z.number().int() })
+              .object({ enabled: z.boolean(), windowSessions: z.number().int(), weight: z.number().min(0).default(1) })
               .passthrough(),
+            perceivedFatigue: z
+              .object({
+                enabled: z.boolean(),
+                threshold: z.number().int().min(1).max(5),
+                windowSessions: z.number().int().min(1),
+                weight: z.number().min(0),
+              })
+              .passthrough()
+              .default({ enabled: true, threshold: 4, windowSessions: 3, weight: 1 }),
           })
           .passthrough(),
+        exerciseDeload: z
+          .object({
+            enabled: z.boolean(),
+            e1rmDropPct: z.number().min(0),
+            sessions: z.number().int().min(1),
+            setsFactor: z.number().gt(0).max(1),
+            loadFactor: z.number().gt(0).max(1),
+          })
+          .passthrough()
+          .default({ enabled: true, e1rmDropPct: 5, sessions: 2, setsFactor: 0.5, loadFactor: 0.9 }),
       })
       .passthrough(),
     deloadStructure: z

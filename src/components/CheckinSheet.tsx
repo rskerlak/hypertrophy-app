@@ -15,6 +15,7 @@ export function CheckinSheet({ sessionId, onDone }: { sessionId: string; onDone:
   const [protein, setProtein] = useState<boolean | null>(null);
   const [energy, setEnergy] = useState<Checkin["energyBalance"]>(null);
   const [readiness, setReadiness] = useState<number | null>(null);
+  const [fatigue, setFatigue] = useState<number | null>(null);
 
   const save = async () => {
     const c: Checkin = {
@@ -25,6 +26,7 @@ export function CheckinSheet({ sessionId, onDone }: { sessionId: string; onDone:
       proteinSufficient: protein,
       energyBalance: energy,
       readiness,
+      perceivedFatigue: fatigue,
     };
     await checkinRepo.put(c);
     onDone();
@@ -58,6 +60,17 @@ export function CheckinSheet({ sessionId, onDone }: { sessionId: string; onDone:
         <div className="grid grid-cols-5 gap-2">
           {[1, 2, 3, 4, 5].map((n) => (
             <Chip key={n} on={readiness === n} onClick={() => setReadiness(readiness === n ? null : n)}>
+              {n}
+            </Chip>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-sm text-[var(--muted)]">Fatiga física y mental acumulada (1 nada – 5 mucha)</p>
+        <div className="grid grid-cols-5 gap-2">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <Chip key={n} on={fatigue === n} onClick={() => setFatigue(fatigue === n ? null : n)}>
               {n}
             </Chip>
           ))}
