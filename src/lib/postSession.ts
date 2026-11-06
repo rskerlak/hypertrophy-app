@@ -5,6 +5,7 @@ import { evaluateDeloadTrigger, evaluateExerciseDeload, summarizeRecentSessions 
 import { suggestExerciseSwap } from "@/domain/swap";
 import { getRules } from "@/lib/rulesLoader";
 import { slotTrackHistory, trackMesoRefs } from "@/lib/sessionPlan";
+import { plateausFor } from "@/lib/trends";
 import type { Checkin, DeloadEvaluation } from "@/domain/types";
 import {
   checkinRepo,
@@ -39,6 +40,8 @@ export interface PostSessionAnalysis {
   swaps: SwapHint[];
   /** Deload por ejercicio sugerido (A2.3); se aplica a la próxima sesión de este día. */
   exerciseDeloads: ExerciseDeloadHint[];
+  /** A5.2: al cerrar el meso, ejercicios con "techo sugerido" entre mesos (observación). */
+  plateaus: Array<{ exerciseId: string; exerciseName: string; flatMesos: number }>;
 }
 
 export async function analyzePostSession(sessionId: string): Promise<PostSessionAnalysis | null> {
@@ -149,5 +152,15 @@ export async function analyzePostSession(sessionId: string): Promise<PostSession
     }
   }
 
-  return { deload, swaps, exerciseDeloads };
+  // --- Memoria larga (A5.2): solo al cerrar el meso, como observación ---
+  const closed = (await mesocycleRepo.get(meso.id))?.status === "completed";
+  const plateaus = closed
+    ? (await plateausFor(meso.plan.weeks.flatMap((w) => w.days.flatMap((d) => d.slots.map((x) => x.exerciseId))))).map((t) => ({
+        exerciseId: t.exercise.id,
+        exerciseName: t.exercise.name,
+        flatMesos: t.trend.flatMesos,
+      }))
+    : [];
+
+  return { deload, swaps, exerciseDeloads, plateaus };
 }

@@ -50,6 +50,10 @@ export interface Exercise {
    * nombre, músculos y volumen.
    */
   archived?: boolean;
+  /** A5.4: "Mantener" — el motor no sube la carga de este ejercicio. */
+  holdLoad?: boolean;
+  /** Desde cuándo está en Mantener (ISO). */
+  holdSince?: string;
 }
 
 /**
@@ -158,6 +162,12 @@ export interface Checkin {
   perceivedFatigue?: number | null;
   note?: string;
 }
+
+/**
+ * Intención declarada de un meso (A5.3): la memoria larga no cuenta mesos de
+ * mantenimiento o recuperación como estancamiento. No cambia la prescripción.
+ */
+export type MesoIntent = "hypertrophy" | "strength" | "maintenance" | "recovery";
 
 // ---- Plan de mesociclo (output de generateMesocycle) ----
 

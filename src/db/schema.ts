@@ -9,6 +9,7 @@ import type {
   Exercise,
   ExperienceProfileId,
   MesocyclePlan,
+  MesoIntent,
   ProgressionModel,
   SetLog,
 } from "@/domain/types";
@@ -88,6 +89,8 @@ export interface MesocycleRow {
   plan: MesocyclePlan;
   /** id del meso del que este es continuación (progresión de cargas heredada). */
   continuedFromId?: string;
+  /** Intención declarada (A5.3); ausente = hipertrofia. Solo la usa la memoria larga. */
+  intent?: MesoIntent;
 }
 
 /**

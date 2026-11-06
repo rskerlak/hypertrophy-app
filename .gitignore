@@ -50,3 +50,7 @@ files.zip
 *.tmp.*
 myonoesis-*.json
 *.xlsx
+
+# Notas de investigación (se publica solo el informe en docs/research)
+research_notes/
+reports/

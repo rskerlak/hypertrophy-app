@@ -33,6 +33,8 @@ import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
 import { CORRELATION_LABELS, PROGRESSION_LABELS } from "@/lib/format";
 import Link from "next/link";
 import { fmtLoad, unitLabel } from "@/lib/units";
+import { allExerciseTrends, type ExerciseTrend } from "@/lib/trends";
+import { TrendCard } from "@/components/TrendCard";
 
 const CORRELATION_VARS = [
   "d1rmPct", "adherencePct", "sleepOkPct", "proteinOkPct", "energyBalanceAvg",
@@ -80,6 +82,15 @@ export default function StatsPage() {
     observations: MesoObservation[];
     result: CorrelationResult;
   } | null>(null);
+
+  // Memoria larga (A5.2): tendencia por ejercicio entre mesos.
+  const [trends, setTrends] = useState<{ list: ExerciseTrend[]; mesoNames: Map<string, string> } | null>(null);
+  useEffect(() => {
+    (async () => {
+      const [list, all] = await Promise.all([allExerciseTrends(), mesocycleRepo.all()]);
+      setTrends({ list, mesoNames: new Map(all.map((m) => [m.id, m.name])) });
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -437,6 +448,37 @@ export default function StatsPage() {
           </>
         )}
       </Card>
+
+      <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">Entre mesos: 1RM estimado por ejercicio</h2>
+      {!trends ? null : trends.list.length === 0 ? (
+        <Card className="mb-4">
+          <p className="text-sm leading-relaxed text-[var(--muted)]">
+            Cuando repitas un ejercicio en 2 mesos o más vas a ver acá su tendencia de ciclo a ciclo.
+          </p>
+        </Card>
+      ) : (
+        <>
+          <div className="mb-2 space-y-2">
+            {trends.list.map((t) => (
+              <TrendCard
+                key={t.exercise.id}
+                compact
+                trend={t.trend}
+                mesoNames={trends.mesoNames}
+                title={t.exercise.name.replace(/\s*\(.*\)$/, "")}
+                href={`/exercise?id=${t.exercise.id}`}
+              />
+            ))}
+          </div>
+          <div className="mb-4">
+            <HonestNote>
+              Mediana de tus mejores sesiones por meso, con RIR reportado. * = no cuenta (mantenimiento,
+              Mantener, eco de RIR o sin RIR reportado). El «techo sugerido» es heurístico: con pocos
+              ciclos es mayormente ruido. Tocá un ejercicio para ver el detalle.
+            </HonestNote>
+          </div>
+        </>
+      )}
 
       <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">
         Comparativa entre mesociclos

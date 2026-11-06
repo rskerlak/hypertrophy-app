@@ -69,6 +69,26 @@ export const rulesSchema = z
       })
       .passthrough()
       .default({ continuity: { enabled: true, maxGapDays: 21, gapE1rmFactor: 0.95 } }),
+    longTermTrend: z
+      .object({
+        minMesos: z.number().int().min(2),
+        flatSlopePctPerMeso: z.number().min(0),
+        nearFailureRirMax: z.number().min(0),
+        nearFailureShareMin: z.number().min(0).max(1),
+        repBandWidth: z.number().min(0),
+        highRepUnreliableFrom: z.number().int().min(1),
+        topSessionsPerMeso: z.number().int().min(1),
+      })
+      .passthrough()
+      .default({
+        minMesos: 3,
+        flatSlopePctPerMeso: 1,
+        nearFailureRirMax: 1,
+        nearFailureShareMin: 0.5,
+        repBandWidth: 4,
+        highRepUnreliableFrom: 12,
+        topSessionsPerMeso: 3,
+      }),
     measurements: z
       .object({ weightTrendAlpha: z.number().gt(0).max(1) })
       .passthrough()

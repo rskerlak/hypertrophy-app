@@ -94,3 +94,11 @@ export const CORRELATION_LABELS: Record<string, string> = {
   d_quadCm: "Δ Cuádriceps",
   d_calfCm: "Δ Gemelo",
 };
+
+/** Intención declarada del meso (A5.3). */
+export const INTENT_LABELS: Record<"hypertrophy" | "strength" | "maintenance" | "recovery", string> = {
+  hypertrophy: "Hipertrofia",
+  strength: "Fuerza",
+  maintenance: "Mantenimiento",
+  recovery: "Recuperación",
+};

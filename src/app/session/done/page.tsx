@@ -86,6 +86,29 @@ function SessionDone() {
 
       {analysis === undefined && <Card>Analizando…</Card>}
 
+      {analysis && analysis.plateaus.length > 0 && (
+        <Card className="mb-4">
+          <div className="mb-2 flex items-center gap-2">
+            <Badge tone="warning">Techo sugerido</Badge>
+          </div>
+          <p className="mb-2 text-sm">Cerraste el meso. Estos ejercicios no subieron en varios mesos y venís cerca del fallo:</p>
+          <ul className="mb-3 space-y-1 text-sm">
+            {analysis.plateaus.map((p) => (
+              <li key={p.exerciseId}>
+                <a className="underline" href={`/exercise?id=${p.exerciseId}`}>
+                  {p.exerciseName.replace(/\s*\(.*\)$/, "")}
+                </a>{" "}
+                <span className="text-[var(--muted)]">({p.flatMesos} mesos)</span>
+              </li>
+            ))}
+          </ul>
+          <HonestNote>
+            Es una observación heurística, no un límite medido. Para el próximo meso podés mantener la
+            carga, rotar a una variante o seguir empujando.
+          </HonestNote>
+        </Card>
+      )}
+
       {analysis && analysis.deload.shouldSuggest && !dismissed && (
         <Card className="mb-4">
           <div className="mb-2 flex items-center gap-2">

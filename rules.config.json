@@ -104,6 +104,17 @@
     }
   },
 
+  "longTermTrend": {
+    "minMesos": 3,
+    "flatSlopePctPerMeso": 1,
+    "nearFailureRirMax": 1,
+    "nearFailureShareMin": 0.5,
+    "repBandWidth": 4,
+    "highRepUnreliableFrom": 12,
+    "topSessionsPerMeso": 3,
+    "_note": "A5.2 (memoria larga). Por meso, e1RM = mediana de las topSessionsPerMeso mejores sesiones del ejercicio (Epley ajustado por RIR REPORTADO). 'Techo sugerido' si en minMesos mesos contables seguidos el e1RM cambio menos de flatSlopePctPerMeso % por meso y al menos nearFailureShareMin de las series reportadas fueron a RIR <= nearFailureRirMax. No cuentan mesos de mantenimiento o recuperacion, ejercicios en Mantener, ni mesos con eco de RIR o rango con tope > highRepUnreliableFrom (Epley se degrada a reps altas). Si los rangos comparados difieren en mas de repBandWidth reps, la comparacion se marca 'aproximada'. HEURISTICO: no existe un modelo validado que prediga el techo individual (Latella 2020: la mejora se desacelera con los anos y aparece un efecto techo en los mas fuertes; observacional). Es probabilistico, como el deload."
+  },
+
   "measurements": {
     "weightTrendAlpha": 0.1,
     "_note": "Tendencia del peso corporal por media movil exponencial (A3.5). MacroFactor y Dr. Muscle usan ~10%: heuristica de suavizado para leer tendencia por encima del ruido diario (agua, sal, glucogeno), no fisiologia."

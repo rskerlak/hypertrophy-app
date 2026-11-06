@@ -5,7 +5,7 @@ import type { Rules } from "./rules";
 import { estimate1RM } from "./oneRepMax";
 import { progressionTrackKey } from "./progression";
 import { addExerciseVolume, emptyVolume } from "./volume";
-import { isRirReported, isWorkingSet, type Checkin, type Exercise, type MesocyclePlan, type SetLog } from "./types";
+import { isRirReported, isWorkingSet, type Checkin, type Exercise, type MesocyclePlan, type MesoIntent, type SetLog } from "./types";
 
 export interface SessionRef {
   id: string;
@@ -32,6 +32,8 @@ export interface ExercisePoint {
   e1rmFromReported: boolean;
   topLoadKg: number;
   repsAtTopLoad: number;
+  /** Rango de reps del slot en el plan (A5.2: comparabilidad entre mesos). */
+  repRange?: { min: number; max: number };
   sets: Array<{ loadKg: number; reps: number; rir: number; rirReported: boolean; kind?: string }>;
 }
 
@@ -80,6 +82,7 @@ export function exerciseTimeline(input: {
       e1rmKg: Math.round(e1rm * 10) / 10,
       e1rmFromReported: reported.length > 0,
       topLoadKg: top,
+      repRange: slot ? { ...slot.repRange } : undefined,
       repsAtTopLoad: Math.max(...sets.filter((l) => l.actualLoadKg === top).map((l) => l.actualReps)),
       sets: [...sets]
         .sort((a, b) => a.setIndex - b.setIndex)
@@ -87,6 +90,133 @@ export function exerciseTimeline(input: {
     });
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ---------------------------------------------------------------- A5.2
+
+export interface TrendPoint {
+  mesocycleId: string;
+  intent: MesoIntent;
+  /** Fecha de la primera sesión del ejercicio en ese meso (orden). */
+  firstDate: string;
+  e1rmKg: number;
+  repBand: { min: number; max: number } | null;
+  /** Fracción de las series con RIR reportado que fueron a RIR <= nearFailureRirMax. */
+  nearFailureShare: number;
+  sessions: number;
+  /** false con eco de RIR, sin RIR reportado o con tope de reps alto. */
+  reliable: boolean;
+  /** false en mesos de mantenimiento/recuperación o con el ejercicio en Mantener. */
+  countable: boolean;
+}
+
+export interface LongTermTrend {
+  points: TrendPoint[];
+  /** Pendiente (regresión lineal) del e1RM en % por meso sobre los puntos usables. */
+  slopePctPerMeso: number | null;
+  /** Mesos usables seguidos, al final, con cambio de e1RM < flatSlopePctPerMeso. */
+  flatMesos: number;
+  plateauSuggested: boolean;
+  /** Los rangos de reps comparados difieren en más de repBandWidth. */
+  approximate: boolean;
+  reasons: string[];
+}
+
+const median = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+/**
+ * Memoria larga (A5.2): tendencia del e1RM de un ejercicio por meso, para
+ * detectar un "techo sugerido". Nunca prescribe: produce un aviso
+ * probabilístico. Ver `rules.longTermTrend`.
+ */
+export function longTermTrend(input: {
+  points: ExercisePoint[];
+  mesos: Array<{ id: string; intent?: MesoIntent }>;
+  /** Mesos con eco de RIR (el RIR no mide percepción): sus e1RM no son confiables. */
+  echoMesoIds?: Set<string>;
+  /** El ejercicio está en Mantener (A5.4): no cuenta para estancamiento. */
+  holdLoad?: boolean;
+  rules: Rules;
+}): LongTermTrend {
+  const cfg = input.rules.longTermTrend;
+  const intentOf = new Map(input.mesos.map((m) => [m.id, m.intent ?? "hypertrophy"]));
+  const byMeso = new Map<string, ExercisePoint[]>();
+  for (const p of input.points) {
+    if (!intentOf.has(p.mesocycleId)) continue;
+    byMeso.set(p.mesocycleId, [...(byMeso.get(p.mesocycleId) ?? []), p]);
+  }
+  const points: TrendPoint[] = [];
+  for (const [mesocycleId, ps] of byMeso) {
+    const intent = intentOf.get(mesocycleId)!;
+    const reportedPs = ps.filter((p) => p.e1rmFromReported);
+    const use = reportedPs.length ? reportedPs : ps;
+    const top = [...use].sort((a, b) => b.e1rmKg - a.e1rmKg).slice(0, cfg.topSessionsPerMeso);
+    const ranges = ps.map((p) => p.repRange).filter((r): r is { min: number; max: number } => !!r);
+    const repBand = ranges.length
+      ? { min: Math.min(...ranges.map((r) => r.min)), max: Math.max(...ranges.map((r) => r.max)) }
+      : null;
+    const reportedSets = ps.flatMap((p) => p.sets.filter((s) => s.rirReported));
+    const near = reportedSets.filter((s) => s.rir <= cfg.nearFailureRirMax).length;
+    const echo = input.echoMesoIds?.has(mesocycleId) ?? false;
+    points.push({
+      mesocycleId,
+      intent,
+      firstDate: ps.map((p) => p.date).sort()[0],
+      e1rmKg: Math.round(median(top.map((p) => p.e1rmKg)) * 10) / 10,
+      repBand,
+      nearFailureShare: reportedSets.length ? near / reportedSets.length : 0,
+      sessions: ps.length,
+      reliable: !echo && reportedPs.length > 0 && (repBand === null || repBand.max <= cfg.highRepUnreliableFrom),
+      countable: !input.holdLoad && intent !== "maintenance" && intent !== "recovery",
+    });
+  }
+  points.sort((a, b) => a.firstDate.localeCompare(b.firstDate));
+
+  const usable = points.filter((p) => p.reliable && p.countable && p.e1rmKg > 0);
+  const reasons: string[] = [];
+  const skipped = points.length - usable.length;
+  if (skipped > 0) reasons.push(`${skipped} meso${skipped > 1 ? "s" : ""} no cuenta${skipped > 1 ? "n" : ""} (mantenimiento, Mantener, eco de RIR o sin RIR reportado).`);
+
+  let slopePctPerMeso: number | null = null;
+  if (usable.length >= 2) {
+    const n = usable.length;
+    const xs = usable.map((_, i) => i);
+    const ys = usable.map((p) => p.e1rmKg);
+    const mx = (n - 1) / 2;
+    const my = ys.reduce((a, b) => a + b, 0) / n;
+    const num = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0);
+    const den = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+    slopePctPerMeso = Math.round((num / den / my) * 1000) / 10;
+  }
+
+  // Racha final de mesos usables con cambio menor al umbral respecto del anterior usable.
+  let flatMesos = usable.length ? 1 : 0;
+  for (let i = usable.length - 1; i > 0; i--) {
+    const pct = (Math.abs(usable[i].e1rmKg - usable[i - 1].e1rmKg) / usable[i - 1].e1rmKg) * 100;
+    if (pct < cfg.flatSlopePctPerMeso) flatMesos++;
+    else break;
+  }
+  if (usable.length && flatMesos === 1 && usable.length > 1) flatMesos = 0;
+  const run = flatMesos > 0 ? usable.slice(-flatMesos) : [];
+  const nearShare = run.length ? run.reduce((a, p) => a + p.nearFailureShare, 0) / run.length : 0;
+  const plateauSuggested = flatMesos >= cfg.minMesos && nearShare >= cfg.nearFailureShareMin;
+  const bands = usable.map((p) => p.repBand).filter((b): b is { min: number; max: number } => !!b);
+  const mids = bands.map((b) => (b.min + b.max) / 2);
+  const approximate = mids.length > 1 && Math.max(...mids) - Math.min(...mids) > cfg.repBandWidth;
+
+  if (plateauSuggested) {
+    reasons.push(
+      `En ${flatMesos} mesos el e1RM cambió menos de ${cfg.flatSlopePctPerMeso}% por meso y el ${Math.round(nearShare * 100)}% de tus series reportadas fueron a RIR ${cfg.nearFailureRirMax} o menos.`,
+    );
+  } else if (usable.length < cfg.minMesos) {
+    reasons.push(`Hacen falta ${cfg.minMesos} mesos comparables para evaluar un techo (hay ${usable.length}).`);
+  }
+  if (approximate) reasons.push("Los rangos de reps comparados son distintos: la comparación del e1RM es aproximada.");
+  return { points, slopePctPerMeso, flatMesos, plateauSuggested, approximate, reasons };
 }
 
 // ---------------------------------------------------------------- A3.3

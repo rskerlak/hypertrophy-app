@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { exerciseRepo, mesocycleRepo, sessionRepo, setLogRepo } from "@/db/repositories";
-import { exerciseTimeline, loadAdherence, type ExercisePoint, type LoadAdherence } from "@/domain/analytics";
-import { getRules } from "@/lib/rulesLoader";
+import { loadAdherence, type ExercisePoint, type LoadAdherence, type LongTermTrend } from "@/domain/analytics";
+import { computeExerciseTrend } from "@/lib/trends";
+import { TrendCard } from "@/components/TrendCard";
 import { muscleLabel } from "@/lib/format";
 import { Badge, Button, Card, EmptyState, HonestNote, PageHeader } from "@/components/ui";
 import type { Exercise } from "@/domain/types";
@@ -27,7 +28,14 @@ function ExerciseHistory() {
   const id = useSearchParams().get("id") ?? "";
   const router = useRouter();
   const [data, setData] = useState<
-    { ex: Exercise | undefined; points: ExercisePoint[]; mesoNames: Map<string, string>; adherence: LoadAdherence | null } | undefined
+    | {
+        ex: Exercise | undefined;
+        points: ExercisePoint[];
+        mesoNames: Map<string, string>;
+        adherence: LoadAdherence | null;
+        trend: LongTermTrend | null;
+      }
+    | undefined
   >();
 
   useEffect(() => {
@@ -35,18 +43,16 @@ function ExerciseHistory() {
     (async () => {
       const [exById, logs, mesos] = await Promise.all([exerciseRepo.byId(), setLogRepo.forExercise(id), mesocycleRepo.all()]);
       const sessions = await sessionRepo.byIds([...new Set(logs.map((l) => l.sessionId))]);
-      const points = exerciseTimeline({
-        exerciseId: id,
-        logs,
-        sessions,
-        plansByMeso: new Map(mesos.map((m) => [m.id, m.plan])),
-        rules: getRules(),
-      });
+      const ex = exById.get(id);
+      // Timeline por sesión (A3.1) y tendencia por meso (A5.2) con los mismos datos.
+      const t = ex ? computeExerciseTrend({ exercise: ex, logs, sessions, mesos }) : null;
+      const points = t?.points ?? [];
       // Adherencia a la carga prescrita de este ejercicio (A3.4), sin deload.
       const deload = new Set(sessions.filter((s) => s.isDeload || s.status !== "completed").map((s) => s.id));
       setData({
-        ex: exById.get(id),
+        ex,
         points,
+        trend: t && t.trend.points.length >= 2 ? t.trend : null,
         mesoNames: new Map(mesos.map((m) => [m.id, m.name])),
         adherence: loadAdherence(logs.filter((l) => !deload.has(l.sessionId))),
       });
@@ -60,7 +66,7 @@ function ExerciseHistory() {
   }, [data]);
 
   if (!data) return null;
-  const { ex, points, mesoNames, adherence } = data;
+  const { ex, points, mesoNames, adherence, trend } = data;
   if (!ex) return <EmptyState title="Ejercicio no encontrado" />;
 
   const r1 = (kg: number) => Math.round(toDisplay(kg) * 10) / 10;
@@ -118,6 +124,19 @@ function ExerciseHistory() {
               estimación: sirve para tendencia, no como 1RM real. Sin deload ni calentamiento.
             </HonestNote>
           </div>
+
+          {trend && (
+            <>
+              <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">Entre mesos</h2>
+              <TrendCard trend={trend} mesoNames={mesoNames} />
+              <div className="mb-4">
+                <HonestNote>
+                  1RM estimado por meso (mediana de tus mejores sesiones, con RIR reportado). El «techo
+                  sugerido» es una heurística, no una medición: no hay modelo validado que prediga tu límite.
+                </HonestNote>
+              </div>
+            </>
+          )}
 
           <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">Carga tope por sesión</h2>
           <Card className="mb-4">
