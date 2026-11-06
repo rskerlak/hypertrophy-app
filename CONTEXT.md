@@ -116,7 +116,10 @@ Tipar todo con TypeScript. IDs `string` (uuid). Índices donde se filtra.
 - `targetLoadKg`, `targetReps`, `targetRir`
 - `actualLoadKg`, `actualReps`, `actualRir`
 - `rirReported?`: `false` = RIR precargado con el objetivo y no tocado (no informa percepción); `true` = elegido o ajustado; ausente = dato anterior (se asume reportado, la detección de eco lo cubre). En sesión la **última serie de cada ejercicio** exige elegir el RIR (selector 0 · 1 · 2 · 3 · 4+); las demás se precargan y cuentan como reportadas solo si se tocan. Calibración, ajuste de reps por RIR, RIR creep, deriva de RIR y e1RM de Stats usan solo RIR reportado (`isRirReported`).
+- `kind?`: `"warmup" | "working" | "drop" | "failure" | "partial"` (ausente = working). **`warmup` no cuenta** para progresión, calibración, eco, deload, stats ni récords (`isWorkingSet`); drop/failure/partial sí son estímulo. `slotIndex?` (posición del slot en el día; distingue el mismo ejercicio dos veces), `side?` (`"L" | "R"`), `note?`.
 - `timestamp`
+
+Campos agregados en A1. **`sessions`**: `startedAt?` (primera serie de trabajo; "en curso" en Home y duración), `lastSetAt?` (ancla del timer de descanso, sobrevive recargas), `overrides?` (`exercise` = swap solo hoy por slot, `setsDelta` = series ± solo hoy, `exerciseDeload` = deload por ejercicio aplicado). **`exercises`**: `note?` persistente y `restSec?` propio (si falta, `rest.defaultCompoundSec`/`defaultIsolationSec`). **Slots**: `supersetGroup?` (se hereda al plan y al deload; el descanso corre al cerrar el último ejercicio del grupo).
 
 **`bugReports`** (v4)
 - `id`, `createdAt` (índice), `status: "open" | "resolved"`, `category: "engine" | "ui" | "data" | "other"`, `text`, `route`, `buildSha`, `context { activeMesocycleId?, sessionId?, sessionWeekIndex?, sessionDayLabel?, viewport?, visualViewport?, standalone?, userAgent? }`
@@ -212,6 +215,8 @@ Despacha a la progresión:
 - **double:** si las reps logradas < tope del rango al RIR objetivo → subir reps en `repStepWhenBelowCeiling`, misma carga. Si se alcanzó el tope → subir carga al **mínimo alcanzable** (`nextAchievableLoad`) y volver al piso del rango. **El rango configurado por el usuario es un límite duro**: nunca se prescriben más reps que el tope, aunque el salto mínimo de carga exceda el % objetivo (`loadIncrementPctOnRepCeiling`); en ese caso se sube igual y la razón avisa que el salto es grande. Si con la carga nueva no se llega al piso, la rama "debajo del tope" repite la carga hasta consolidar. `maxRepsOverCeiling` (default 0) permite opcionalmente un colchón de N reps sobre el tope solo para saltos desproporcionados; si es >0 la UI lo muestra como `+N`.
 - **dup:** elegir `dayType` según el día; aplicar su `repRange` y `targetRirOffset`; dentro de eso, doble progresión.
 - **block:** determinar la fase por `week / totalWeeks` vs `fractionOfMeso`; aplicar `repRange` y `rirBias` de la fase; dentro, doble progresión.
+
+**`Prescription.explain`** (chip "¿por qué?", A1.10): `{ rule, inputs }`. Reglas: `no-history`, `linear-hit`, `linear-no-jump`, `linear-stalled`, `linear-miss`, `double-below-ceiling`, `double-consolidate` (llegó a las reps más cerca del fallo que el objetivo), `double-no-jump`, `double-cushion`, `double-ceiling`, `double-ceiling-large-jump`, `deload-first-half`, `deload-second-half`. `inputs` son los números que decidieron la regla, en unidades legibles.
 
 ### `roundToAvailable`
 ```ts
