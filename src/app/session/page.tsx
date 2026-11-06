@@ -4,6 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { buildSessionView, type SessionView, type SlotPrescription } from "@/lib/sessionPlan";
+import { painQuestionDue } from "@/lib/pain";
+import { PainAskCard } from "@/components/PainAskCard";
 import { prsForSet } from "@/lib/sessionExtras";
 import { checkinRepo, exerciseRepo, mesocycleRepo, sessionRepo, setLogRepo, settingsRepo } from "@/db/repositories";
 import { useWakeLock } from "@/lib/useWakeLock";
@@ -86,6 +88,14 @@ function SessionRunner() {
     if (existingCheckin === undefined) return;
     if (existingCheckin === null && logs.length === 0) setShowCheckin(true);
   }, [existingCheckin, logs.length]);
+
+  // A5.5: pregunta periódica de dolor cuando el check-in no la respondió.
+  const [askPain, setAskPain] = useState(false);
+  useEffect(() => {
+    if (existingCheckin === undefined || showCheckin || logs.length > 0) return;
+    if (existingCheckin && Array.isArray(existingCheckin.pain)) return;
+    painQuestionDue().then(setAskPain);
+  }, [existingCheckin, showCheckin, logs.length]);
 
   // Reloj de la sesión (duración) a resolución de minuto.
   useEffect(() => {
@@ -221,6 +231,12 @@ function SessionRunner() {
       {showCheckin && !done && (
         <div className="mt-4">
           <CheckinSheet sessionId={id} onDone={() => setShowCheckin(false)} />
+        </div>
+      )}
+
+      {askPain && !showCheckin && !done && (
+        <div className="mt-4">
+          <PainAskCard sessionId={id} onDone={() => setAskPain(false)} />
         </div>
       )}
 

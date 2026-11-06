@@ -35,6 +35,9 @@ import Link from "next/link";
 import { fmtLoad, unitLabel } from "@/lib/units";
 import { allExerciseTrends, type ExerciseTrend } from "@/lib/trends";
 import { TrendCard } from "@/components/TrendCard";
+import { painReports } from "@/lib/pain";
+import type { PainReport } from "@/domain/pain";
+import { PAIN_ZONE_LABELS } from "@/lib/format";
 
 const CORRELATION_VARS = [
   "d1rmPct", "adherencePct", "sleepOkPct", "proteinOkPct", "energyBalanceAvg",
@@ -82,6 +85,12 @@ export default function StatsPage() {
     observations: MesoObservation[];
     result: CorrelationResult;
   } | null>(null);
+
+  // A5.5: dolor reportado por zona (covariable; nunca cambia la sesión por sí solo).
+  const [pain, setPain] = useState<PainReport[] | null>(null);
+  useEffect(() => {
+    painReports().then(setPain);
+  }, []);
 
   // Memoria larga (A5.2): tendencia por ejercicio entre mesos.
   const [trends, setTrends] = useState<{ list: ExerciseTrend[]; mesoNames: Map<string, string> } | null>(null);
@@ -448,6 +457,29 @@ export default function StatsPage() {
           </>
         )}
       </Card>
+
+      {pain && pain.some((r) => r.pain.length > 0) && (
+        <>
+          <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">Dolor articular reportado</h2>
+          <Card className="mb-2 space-y-1.5">
+            {[...new Set(pain.flatMap((r) => r.pain.map((p) => p.zone)))].map((z) => {
+              const seq = [...pain].sort((a, b) => a.date.localeCompare(b.date)).slice(-10).map((r) => r.pain.find((p) => p.zone === z)?.score ?? 0);
+              return (
+                <div key={z} className="flex items-center justify-between gap-2 text-sm">
+                  <span>{PAIN_ZONE_LABELS[z]}</span>
+                  <span className="tabular-nums text-[var(--muted)]">{seq.join(" · ")}</span>
+                </div>
+              );
+            })}
+          </Card>
+          <div className="mb-4">
+            <HonestNote>
+              Últimos reportes (0 = sin dolor en esa zona ese día). Es un registro para ver tendencia, no un diagnóstico;
+              con n chico no permite atribuir causas.
+            </HonestNote>
+          </div>
+        </>
+      )}
 
       <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">Entre mesos: 1RM estimado por ejercicio</h2>
       {!trends ? null : trends.list.length === 0 ? (

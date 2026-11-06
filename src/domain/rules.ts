@@ -69,6 +69,32 @@ export const rulesSchema = z
       })
       .passthrough()
       .default({ continuity: { enabled: true, maxGapDays: 21, gapE1rmFactor: 0.95 } }),
+    pain: z
+      .object({
+        askEverySessions: z.number().int().min(1),
+        watchFrom: z.number().min(0).max(10),
+        acceptableMax: z.number().min(0).max(10),
+        persistSessions: z.number().int().min(1),
+        risePoints: z.number().min(0),
+        persistWeeks: z.number().int().min(1),
+        loadDownPct: z.number().min(0).max(50),
+        repsUpWhenLoadDown: z.number().int().min(0),
+        rirPlusOne: z.number().int().min(0).max(3),
+        zonesByMuscle: z.record(z.array(z.string())),
+      })
+      .passthrough()
+      .default({
+        askEverySessions: 4,
+        watchFrom: 3,
+        acceptableMax: 5,
+        persistSessions: 2,
+        risePoints: 2,
+        persistWeeks: 3,
+        loadDownPct: 10,
+        repsUpWhenLoadDown: 3,
+        rirPlusOne: 1,
+        zonesByMuscle: {},
+      }),
     longTermTrend: z
       .object({
         minMesos: z.number().int().min(2),

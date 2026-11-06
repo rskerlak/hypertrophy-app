@@ -110,3 +110,23 @@ export const INTENT_LABELS: Record<"hypertrophy" | "strength" | "maintenance" | 
   maintenance: "Mantenimiento",
   recovery: "Recuperación",
 };
+
+/** Zonas de dolor (A5.5). Lenguaje de lugar, nunca de lesión. */
+export const PAIN_ZONE_LABELS: Record<"shoulder" | "elbow" | "wrist" | "hip" | "knee" | "ankle" | "lower_back" | "neck" | "other", string> = {
+  shoulder: "Hombro",
+  elbow: "Codo",
+  wrist: "Muñeca",
+  hip: "Cadera",
+  knee: "Rodilla",
+  ankle: "Tobillo",
+  lower_back: "Zona lumbar",
+  neck: "Cuello",
+  other: "Otra",
+};
+
+export const PAIN_OPTION_LABELS: Record<"load-down-reps-up" | "rir-plus-one" | "swap-candidate" | "exercise-deload", string> = {
+  "load-down-reps-up": "Bajar carga y subir reps",
+  "rir-plus-one": "Dejar una rep más en reserva (RIR +1)",
+  "swap-candidate": "Cambiar a una variante que no cargue esa zona",
+  "exercise-deload": "Deload de este ejercicio la próxima vez",
+};

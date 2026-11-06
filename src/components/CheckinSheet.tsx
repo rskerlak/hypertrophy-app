@@ -5,6 +5,7 @@ import { checkinRepo } from "@/db/repositories";
 import { uuid } from "@/lib/id";
 import { Button, Card } from "./ui";
 import type { Checkin } from "@/domain/types";
+import { PainPicker, type PainAnswer } from "./PainPicker";
 
 /**
  * Check-in neutral opcional (F7). NUNCA modifica la sesión ni la bloquea;
@@ -16,6 +17,7 @@ export function CheckinSheet({ sessionId, onDone }: { sessionId: string; onDone:
   const [energy, setEnergy] = useState<Checkin["energyBalance"]>(null);
   const [readiness, setReadiness] = useState<number | null>(null);
   const [fatigue, setFatigue] = useState<number | null>(null);
+  const [pain, setPain] = useState<PainAnswer>(null);
 
   const save = async () => {
     const c: Checkin = {
@@ -27,6 +29,7 @@ export function CheckinSheet({ sessionId, onDone }: { sessionId: string; onDone:
       energyBalance: energy,
       readiness,
       perceivedFatigue: fatigue,
+      ...(pain !== null ? { pain } : {}),
     };
     await checkinRepo.put(c);
     onDone();
@@ -76,6 +79,8 @@ export function CheckinSheet({ sessionId, onDone }: { sessionId: string; onDone:
           ))}
         </div>
       </div>
+
+      <PainPicker value={pain} onChange={setPain} />
 
       <div className="flex gap-2">
         <Button variant="secondary" className="flex-1" onClick={onDone}>

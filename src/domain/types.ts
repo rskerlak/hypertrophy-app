@@ -50,6 +50,8 @@ export interface Exercise {
    * nombre, músculos y volumen.
    */
   archived?: boolean;
+  /** A5.5: zonas que este movimiento carga (si falta, se deriva del músculo con `pain.zonesByMuscle`). */
+  loadedZones?: PainZone[];
   /** A5.4: "Mantener" — el motor no sube la carga de este ejercicio. */
   holdLoad?: boolean;
   /** Desde cuándo está en Mantener (ISO). */
@@ -150,10 +152,16 @@ export function isRirReported(l: Pick<SetLog, "rirReported">): boolean {
   return l.rirReported !== false;
 }
 
+/** Zona articular/tendinosa para el registro de dolor (A5.5). No es un diagnóstico. */
+export type PainZone = "shoulder" | "elbow" | "wrist" | "hip" | "knee" | "ankle" | "lower_back" | "neck" | "other";
+export const PAIN_ZONES: PainZone[] = ["shoulder", "elbow", "wrist", "hip", "knee", "ankle", "lower_back", "neck", "other"];
+
 export interface Checkin {
   id: string;
   sessionId: string;
   date: string;
+  /** A5.5: dolor articular/tendinoso por zona (0–10). [] = "no me duele nada". */
+  pain?: Array<{ zone: PainZone; score: number }>;
   sleptMinimum: boolean | null;
   proteinSufficient: boolean | null;
   energyBalance: "surplus" | "maintenance" | "deficit" | null;

@@ -6,6 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { mesocycleRepo, sessionRepo, settingsRepo } from "@/db/repositories";
 import { Badge, Button, Card, EmptyState, PageHeader } from "@/components/ui";
 import { INTENT_LABELS, PROGRESSION_LABELS } from "@/lib/format";
+import { PainSuggestions } from "@/components/PainSuggestions";
 import { Onboarding } from "@/components/Onboarding";
 import { MeasurementPrompt } from "@/components/MeasurementPrompt";
 import { BackupPrompt } from "@/components/BackupPrompt";
@@ -109,6 +110,7 @@ export default function HomePage() {
 
       <MeasurementPrompt />
       <BackupPrompt />
+      <PainSuggestions mesocycleId={meso.id} />
 
       <Card className="mb-4">
         <div className="mb-3 flex items-center justify-between text-sm text-[var(--muted)]">

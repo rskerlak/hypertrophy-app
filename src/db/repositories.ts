@@ -77,6 +77,12 @@ export const settingsRepo = {
     await db.settings.put(d);
     return d;
   },
+  /** A5.5: no volver a proponer lo mismo durante la racha de dolor actual. */
+  async dismissPain(exerciseId: string, zone: string): Promise<void> {
+    const cur = await settingsRepo.get();
+    const list = (cur.dismissedPainSuggestions ?? []).filter((x) => !(x.exerciseId === exerciseId && x.zone === zone));
+    await getDb().settings.update("default", { dismissedPainSuggestions: [...list, { exerciseId, zone, at: new Date().toISOString() }] });
+  },
   async update(patch: Partial<Omit<SettingsRow, "id">>): Promise<void> {
     const db = getDb();
     // A4.5: editar el inventario activo lo guarda también en su perfil.
@@ -716,6 +722,11 @@ export const sessionRepo = {
   async get(id: string): Promise<SessionRow | undefined> {
     return getDb().sessions.get(id);
   },
+  /** Sesiones completadas (todos los mesos) después de `iso`; todas si no hay fecha. */
+  async completedCountSince(iso?: string): Promise<number> {
+    const done = await getDb().sessions.where("status").equals("completed").toArray();
+    return done.filter((s) => !iso || (s.completedAt ?? "") > iso).length;
+  },
   /** Primera sesión pendiente del meso (en orden semana/día). */
   async nextPending(mesocycleId: string): Promise<SessionRow | undefined> {
     const rows = await sessionRepo.forMesocycle(mesocycleId);
@@ -808,13 +819,17 @@ export const sessionRepo = {
     slotIndex: number,
     setsFactor: number,
     loadFactor: number,
+    /** true = `sessionId` YA es la sesión destino (A5.5). */
+    isTarget = false,
   ): Promise<SessionRow | null> {
     const db = getDb();
     const s = await db.sessions.get(sessionId);
     if (!s) return null;
-    const rows = (await db.sessions.where("mesocycleId").equals(s.mesocycleId).toArray())
-      .filter((x) => x.status === "pending" && !x.isDeload && x.dayIndex === s.dayIndex)
-      .sort((a, b) => a.weekIndex - b.weekIndex);
+    const rows = isTarget
+      ? [s]
+      : (await db.sessions.where("mesocycleId").equals(s.mesocycleId).toArray())
+          .filter((x) => x.status === "pending" && !x.isDeload && x.dayIndex === s.dayIndex)
+          .sort((a, b) => a.weekIndex - b.weekIndex);
     const next = rows[0];
     if (!next) return null;
     const list = (next.overrides?.exerciseDeload ?? []).filter((x) => x.slotIndex !== slotIndex);
@@ -822,6 +837,54 @@ export const sessionRepo = {
       overrides: { ...next.overrides, exerciseDeload: [...list, { slotIndex, setsFactor, loadFactor }] },
     });
     return next;
+  },
+
+  /**
+   * A5.5: aplica una opción aceptada por dolor a las próximas sesiones
+   * pendientes (sin deload) que tienen este ejercicio: una por día del split.
+   * El swap reemplaza el ejercicio en el plan desde la primera semana pendiente
+   * de ese día (lo entrenado no se reescribe; la carga sale de loadEstimator).
+   */
+  async applyPainOption(
+    mesocycleId: string,
+    exerciseId: string,
+    option: "load-down-reps-up" | "rir-plus-one" | "swap-candidate" | "exercise-deload",
+    zone: string,
+    swapCandidateId?: string,
+  ): Promise<number> {
+    const db = getDb();
+    const rules = getRules();
+    const meso = await db.mesocycles.get(mesocycleId);
+    if (!meso) return 0;
+    const pending = (await db.sessions.where("mesocycleId").equals(mesocycleId).toArray())
+      .filter((x) => x.status === "pending" && !x.isDeload)
+      .sort((a, b) => a.weekIndex - b.weekIndex || a.dayIndex - b.dayIndex);
+    const nextByDay = new Map<number, SessionRow>();
+    for (const s of pending) if (!nextByDay.has(s.dayIndex)) nextByDay.set(s.dayIndex, s);
+    let touched = 0;
+    for (const [dayIndex, s] of nextByDay) {
+      const day = meso.plan.weeks[s.weekIndex]?.days[dayIndex];
+      const slots = (day?.slots ?? []).flatMap((x, i) => (x.exerciseId === exerciseId ? [i] : []));
+      for (const slotIndex of slots) {
+        if (option === "swap-candidate") {
+          if (!swapCandidateId) continue;
+          await mesocycleRepo.swapExerciseInPlan(mesocycleId, dayIndex, slotIndex, swapCandidateId, s.weekIndex);
+        } else if (option === "exercise-deload") {
+          const cfg = rules.deloadTriggers.exerciseDeload;
+          await sessionRepo.applyExerciseDeloadToNext(s.id, slotIndex, cfg.setsFactor, cfg.loadFactor, true);
+        } else {
+          const fresh = await db.sessions.get(s.id);
+          const list = (fresh?.overrides?.painAdjust ?? []).filter((x) => x.slotIndex !== slotIndex);
+          const adj =
+            option === "load-down-reps-up"
+              ? { slotIndex, loadFactor: 1 - rules.pain.loadDownPct / 100, repsUp: rules.pain.repsUpWhenLoadDown, rirDelta: 0, zone }
+              : { slotIndex, loadFactor: 1, repsUp: 0, rirDelta: rules.pain.rirPlusOne, zone };
+          await db.sessions.update(s.id, { overrides: { ...fresh?.overrides, painAdjust: [...list, adj] } });
+        }
+        touched++;
+      }
+    }
+    return touched;
   },
 
   /** Suma o resta series SOLO en esta sesión (el plan no cambia). */
@@ -890,6 +953,22 @@ export const setLogRepo = {
 export const checkinRepo = {
   async forSession(sessionId: string): Promise<Checkin | undefined> {
     return getDb().checkins.where("sessionId").equals(sessionId).first();
+  },
+  /** A5.5: guarda solo la respuesta de dolor (crea el check-in si no existe). */
+  async setPain(sessionId: string, pain: NonNullable<Checkin["pain"]>): Promise<void> {
+    const db = getDb();
+    const existing = await db.checkins.where("sessionId").equals(sessionId).first();
+    if (existing) await db.checkins.update(existing.id, { pain });
+    else
+      await db.checkins.put({
+        id: uuid(),
+        sessionId,
+        date: new Date().toISOString(),
+        sleptMinimum: null,
+        proteinSufficient: null,
+        energyBalance: null,
+        pain,
+      });
   },
   async put(checkin: Checkin): Promise<void> {
     await getDb().checkins.put(checkin);

@@ -10,6 +10,7 @@ import { Badge, Button, Card, HonestNote, PageHeader } from "@/components/ui";
 import { askConfirm } from "@/store/dialogs";
 import { fmtLoad, unitLabel } from "@/lib/units";
 import { fmtSets } from "@/lib/format";
+import { PainSuggestions } from "@/components/PainSuggestions";
 
 export default function SessionDonePage() {
   return (
@@ -29,6 +30,7 @@ function SessionDone() {
   const [appliedDeload, setAppliedDeload] = useState<Set<number>>(new Set());
   const [msg, setMsg] = useState<string | null>(null);
   const [holdExits, setHoldExits] = useState<string[]>([]);
+  const [mesoId, setMesoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -36,6 +38,7 @@ function SessionDone() {
     sessionSummary(id).then(setSummary);
     (async () => {
       const s = await sessionRepo.get(id);
+      if (s) setMesoId(s.mesocycleId);
       if (!s?.holdExits?.length) return;
       const ex = await exerciseRepo.byId();
       setHoldExits(s.holdExits.map((x) => (ex.get(x)?.name ?? "un ejercicio").replace(/\s*\(.*\)$/, "")));
@@ -99,6 +102,8 @@ function SessionDone() {
           </p>
         </Card>
       )}
+
+      {mesoId && <PainSuggestions mesocycleId={mesoId} />}
 
       {analysis === undefined && <Card>Analizando…</Card>}
 

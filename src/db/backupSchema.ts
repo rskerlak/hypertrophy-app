@@ -112,6 +112,7 @@ const exerciseRow = z
     custom: z.boolean().optional(),
     archived: z.boolean().optional(),
     holdLoad: z.boolean().optional(),
+    loadedZones: list(z.enum(["shoulder", "elbow", "wrist", "hip", "knee", "ankle", "lower_back", "neck", "other"]), 9).optional(),
     holdSince: isoDate.optional(),
     note: longText.optional(),
     restSec: z.number().finite().min(0).max(DATA_LIMITS.maxRestSec).optional(),
@@ -188,6 +189,18 @@ const sessionRow = z
           z.object({ slotIndex: index, setsFactor: z.number().min(0).max(1), loadFactor: z.number().min(0).max(1) }).passthrough(),
           DATA_LIMITS.maxSlotsPerDay,
         ).optional(),
+        painAdjust: list(
+          z
+            .object({
+              slotIndex: index,
+              loadFactor: z.number().min(0.5).max(1),
+              repsUp: z.number().int().min(0).max(10),
+              rirDelta: z.number().int().min(0).max(3),
+              zone: shortText,
+            })
+            .passthrough(),
+          DATA_LIMITS.maxSlotsPerDay,
+        ).optional(),
       })
       .passthrough()
       .optional(),
@@ -225,6 +238,7 @@ const checkinRow = z
     energyBalance: z.enum(["surplus", "maintenance", "deficit"]).nullable(),
     readiness: z.number().int().min(1).max(5).nullable().optional(),
     perceivedFatigue: z.number().int().min(1).max(5).nullable().optional(),
+    pain: list(z.object({ zone: z.enum(["shoulder", "elbow", "wrist", "hip", "knee", "ankle", "lower_back", "neck", "other"]), score: z.number().int().min(0).max(10) }).passthrough(), 9).optional(),
     note: longText.optional(),
   })
   .passthrough();

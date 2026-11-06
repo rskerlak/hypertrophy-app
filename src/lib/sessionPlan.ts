@@ -47,6 +47,8 @@ export interface SlotPrescription {
   restSec: number;
   /** true si hoy hay un deload por ejercicio aplicado a este slot. */
   exerciseDeload?: boolean;
+  /** A5.5: hoy hay un ajuste por dolor aceptado en este slot. */
+  painAdjusted?: boolean;
   /** A5.1: de dónde viene el historial de la pista (continúa entre mesos, cambió, pausa). */
   continuity: TrackContinuity;
 }
@@ -113,6 +115,7 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
     }
     const setsDelta = overrides.setsDelta?.find((x) => x.slotIndex === i)?.delta ?? 0;
     const exDeload = overrides.exerciseDeload?.find((x) => x.slotIndex === i);
+    const painAdj = overrides.painAdjust?.find((x) => x.slotIndex === i);
 
     // Historial de la PISTA anterior a la sesión actual, también de otros mesos
     // (A5.1): mismo ejercicio, rango e intensidad del día. En DUP el mismo
@@ -200,7 +203,9 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
 
     // Piso de RIR si el reporte no está calibrado: no prescribir 0 RIR cuando
     // no sabemos dónde está realmente el fallo para este usuario.
-    const targetRir = rirFloor !== null ? Math.max(planned.targetRir, rirFloor) : planned.targetRir;
+    const baseRir = rirFloor !== null ? Math.max(planned.targetRir, rirFloor) : planned.targetRir;
+    // A5.5: ajuste aceptado por dolor (RIR +1); nunca por debajo del piso.
+    const targetRir = baseRir + (painAdj?.rirDelta ?? 0);
     // "Última vez" (solo para mostrar, A1.1): la pista (que ya cruza mesos); si
     // no hay, la última vez que se hizo el ejercicio en la misma pista en
     // cualquier meso aunque haya pausa. La progresión NO usa este respaldo.
@@ -228,18 +233,25 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
       plannedExercise: swapId && plannedExercise && plannedExercise.id !== exercise.id ? plannedExercise : undefined,
       planned,
       sets: exDeload ? Math.max(1, Math.round(baseSets * exDeload.setsFactor)) : baseSets,
-      suggestedLoadKg: exDeload ? roundToAvailable(p.nextLoadKg * exDeload.loadFactor, ctxLoad) : p.nextLoadKg,
-      suggestedReps: p.nextReps,
+      suggestedLoadKg: exDeload
+        ? roundToAvailable(p.nextLoadKg * exDeload.loadFactor, ctxLoad)
+        : painAdj && painAdj.loadFactor < 1
+          ? roundToAvailable(p.nextLoadKg * painAdj.loadFactor, ctxLoad)
+          : p.nextLoadKg,
+      suggestedReps: painAdj ? Math.min(rules.repRanges.globalValid.max, p.nextReps + painAdj.repsUp) : p.nextReps,
       targetRir,
       rationale: exDeload
         ? `Deload de este ejercicio aplicado hoy (${Math.round(exDeload.setsFactor * 100)}% series, ${Math.round(exDeload.loadFactor * 100)}% carga). ${p.rationale}`
-        : p.rationale,
+        : painAdj
+          ? `Ajuste por dolor aceptado: ${painAdj.loadFactor < 1 ? `${Math.round((1 - painAdj.loadFactor) * 100)}% menos carga y +${painAdj.repsUp} reps (5–30 reps crecen igual con esfuerzo equiparado)` : `RIR +${painAdj.rirDelta}`}. Sin el ajuste, el motor proponía ${p.nextLoadKg} kg × ${p.nextReps}.`
+          : p.rationale,
       explain: p.explain,
       previous: prev ? { sets: prev.sets, completedAt: prevSession?.completedAt } : null,
       restSec:
         exercise.restSec ??
         (exercise.secondaryMuscles.length > 0 ? rules.rest.defaultCompoundSec : rules.rest.defaultIsolationSec),
       exerciseDeload: !!exDeload,
+      painAdjusted: !!painAdj,
       continuity: track.result.continuity,
     });
   }

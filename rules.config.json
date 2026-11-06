@@ -350,6 +350,36 @@
     "modifiesSession": false
   },
 
+  "pain": {
+    "askEverySessions": 4,
+    "watchFrom": 3,
+    "acceptableMax": 5,
+    "persistSessions": 2,
+    "risePoints": 2,
+    "persistWeeks": 3,
+    "loadDownPct": 10,
+    "repsUpWhenLoadDown": 3,
+    "rirPlusOne": 1,
+    "zonesByMuscle": {
+      "chest": ["shoulder", "elbow"],
+      "front_delts": ["shoulder"],
+      "side_delts": ["shoulder"],
+      "rear_delts": ["shoulder"],
+      "triceps": ["elbow"],
+      "biceps": ["elbow", "wrist"],
+      "forearms": ["wrist", "elbow"],
+      "back": ["shoulder", "elbow", "lower_back"],
+      "traps": ["neck", "shoulder"],
+      "quads": ["knee", "hip"],
+      "hamstrings": ["knee", "hip", "lower_back"],
+      "glutes": ["hip", "lower_back"],
+      "adductors": ["hip"],
+      "calves": ["ankle"],
+      "abs": ["lower_back"]
+    },
+    "_note": "A5.5. Manejo de sintomas, NO diagnostico. Dolor ARTICULAR/TENDINOSO por zona (0-10), distinto del dolor muscular post-entreno (DOMS), que sigue sin usarse como senal (statsPolicy). Con tendinopatia, seguir cargando bajo un modelo de monitoreo del dolor no tuvo efectos negativos frente a reposo (Silbernagel 2007, Aquiles, n=38). Umbrales tomados de guias clinicas, no de RCTs (HEURISTICOS): hasta 5/10 durante el ejercicio es aceptable, debe calmar en ~24 h y no empeorar semana a semana. 'act' = score > acceptableMax, o la zona en persistSessions sesiones seguidas, o la media semanal subiendo risePoints en dos semanas. Opciones: bajar carga loadDownPct% y subir reps (5-30 reps crecen igual con esfuerzo equiparado, SCIENCE 3), RIR +1, variante que no cargue la zona, deload del ejercicio. zonesByMuscle: mapeo heuristico editable por ejercicio (Exercise.loadedZones). La app nunca nombra una lesion y sugiere consultar a un profesional si persiste."
+  },
+
   "checkin": {
     "_note": "Neutral y no culpabilizador para evitar efecto nocebo. Opcional. Nunca bloquea el inicio de la sesion.",
     "optional": true,

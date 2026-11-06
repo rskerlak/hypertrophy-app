@@ -35,6 +35,8 @@ export interface SettingsRow {
   onboarded: boolean;
   /** Versión de la biblioteca de ejercicios sembrada; dispara re-seed al cambiar. */
   seedVersion?: number;
+  /** A5.5: propuestas de dolor descartadas (no se repiten durante la misma racha). */
+  dismissedPainSuggestions?: Array<{ exerciseId: string; zone: string; at: string }>;
   /** Altura en cm (se pide una vez en el onboarding; editable en Ajustes). */
   heightCm?: number;
   /** ISO datetime del último respaldo exportado (para el recordatorio). */
@@ -144,6 +146,8 @@ export interface SessionRow {
     setsDelta?: Array<{ slotIndex: number; delta: number }>;
     /** Deload por ejercicio aplicado a esta sesión: factor de series y carga. */
     exerciseDeload?: Array<{ slotIndex: number; setsFactor: number; loadFactor: number }>;
+    /** A5.5: ajuste aceptado por dolor (bajar carga y subir reps, o RIR +1). */
+    painAdjust?: Array<{ slotIndex: number; loadFactor: number; repsUp: number; rirDelta: number; zone: string }>;
   };
 }
 

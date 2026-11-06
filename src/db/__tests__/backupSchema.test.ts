@@ -78,6 +78,19 @@ describe("validateBackup (A4.1)", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/mesocycles\[0\]\.intent/);
   });
+  it("A5.5: dolor por zona 0–10 y ajuste por dolor con topes de cordura", () => {
+    const b = valid() as unknown as { data: { checkins: Array<Record<string, unknown>>; sessions: Array<Record<string, unknown>> } };
+    b.data.checkins[0].pain = [{ zone: "elbow", score: 4 }];
+    b.data.sessions[0].overrides = { painAdjust: [{ slotIndex: 0, loadFactor: 0.9, repsUp: 3, rirDelta: 0, zone: "elbow" }] };
+    expect(validateBackup(b).ok).toBe(true);
+    b.data.checkins[0].pain = [{ zone: "rodilla", score: 4 }];
+    expect(validateBackup(b).ok).toBe(false);
+    b.data.checkins[0].pain = [{ zone: "knee", score: 11 }];
+    expect(validateBackup(b).ok).toBe(false);
+    b.data.checkins[0].pain = [];
+    b.data.sessions[0].overrides = { painAdjust: [{ slotIndex: 0, loadFactor: 0.1, repsUp: 3, rirDelta: 0, zone: "elbow" }] };
+    expect(validateBackup(b).ok).toBe(false);
+  });
   it("R-01: overrides de sesión con factores imposibles se rechazan", () => {
     const b = valid() as unknown as { data: { sessions: Array<Record<string, unknown>> } };
     b.data.sessions[0].overrides = { exerciseDeload: [{ slotIndex: 0, setsFactor: 0.5, loadFactor: 1e9 }] };
