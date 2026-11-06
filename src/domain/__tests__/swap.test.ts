@@ -48,3 +48,12 @@ describe("suggestExerciseSwap", () => {
     expect(r.reason).toContain("estiramiento");
   });
 });
+
+describe("swap sin candidatos configurados (auditoría N5)", () => {
+  it("sugiere el cambio por estancamiento pero sin candidato, y lo explica", () => {
+    const r = suggestExerciseSwap({ exercise: { ...bench, swapCandidates: [] }, candidates, history: stagnantHistory(80, 8), rules });
+    expect(r.suggest).toBe(true);
+    expect(r.candidateId).toBeUndefined();
+    expect(r.reason).toMatch(/No hay candidatos/);
+  });
+});

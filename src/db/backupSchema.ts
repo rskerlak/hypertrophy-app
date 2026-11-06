@@ -168,6 +168,21 @@ const sessionRow = z
     completedAt: isoDate.optional(),
     startedAt: isoDate.optional(),
     lastSetAt: isoDate.optional(),
+    // Cambios "solo hoy" (A1): sin validar, un factor de 1e9 rompe el redondeo (R-01).
+    overrides: z
+      .object({
+        exercise: list(z.object({ slotIndex: index, exerciseId: id }).passthrough(), DATA_LIMITS.maxSlotsPerDay).optional(),
+        setsDelta: list(
+          z.object({ slotIndex: index, delta: z.number().int().min(-DATA_LIMITS.maxSetsPerSlot).max(DATA_LIMITS.maxSetsPerSlot) }).passthrough(),
+          DATA_LIMITS.maxSlotsPerDay,
+        ).optional(),
+        exerciseDeload: list(
+          z.object({ slotIndex: index, setsFactor: z.number().min(0).max(1), loadFactor: z.number().min(0).max(1) }).passthrough(),
+          DATA_LIMITS.maxSlotsPerDay,
+        ).optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
@@ -261,25 +276,62 @@ export type BackupValidation = { ok: true; backup: ValidatedBackup } | { ok: fal
  * Valida un respaldo y devuelve un mensaje legible que nombra tabla, fila y
  * campo del primer problema (ej. `setLogs[12].actualReps: reps fuera de rango`).
  */
+const TABLES = {
+  settings: { row: settingsRow, max: 1, required: true },
+  baseWeek: { row: baseWeekRow, max: 1, required: true },
+  exercises: { row: exerciseRow, max: 10_000, required: true },
+  mesocycles: { row: mesocycleRow, max: 10_000, required: true },
+  sessions: { row: sessionRow, max: DATA_LIMITS.maxRows, required: true },
+  setLogs: { row: setLogRow, max: DATA_LIMITS.maxRows, required: true },
+  checkins: { row: checkinRow, max: DATA_LIMITS.maxRows, required: true },
+  measurements: { row: datedRow, max: DATA_LIMITS.maxRows, required: false },
+  activities: { row: datedRow, max: DATA_LIMITS.maxRows, required: false },
+  bugReports: { row: bugReportRow, max: 10_000, required: false },
+} as const;
+
+function fail(where: string, issue: z.ZodIssue, missingWhat: string): BackupValidation {
+  const missing = issue.code === "invalid_type" && issue.received === "undefined";
+  return { ok: false, error: `Respaldo inválido en ${where}: ${missing ? missingWhat : issue.message}.` };
+}
+
+/**
+ * Valida un respaldo y devuelve un mensaje legible que nombra tabla, fila y
+ * campo del primer problema (ej. `setLogs[12].actualReps: reps fuera de rango`).
+ * Fila por fila y cortando en el primer error: Zod 3 acumula issues de TODAS
+ * las filas antes de aplicar `.max()`, y un archivo armado de pocos MB podía
+ * usar más de 1 GB de memoria (auditoría R-02).
+ */
 export function validateBackup(raw: unknown): BackupValidation {
-  const r = backupFileSchema.safeParse(raw);
-  if (r.success) return { ok: true, backup: r.data };
-  const issue = r.error.issues[0];
-  const path = issue.path;
-  let where = "";
-  if (path[0] === "data" && typeof path[1] === "string") {
-    where = String(path[1]);
-    if (typeof path[2] === "number") where += `[${path[2]}]`;
-    const rest = path.slice(3).join(".");
-    if (rest) where += `.${rest}`;
-  } else {
-    where = path.join(".") || "archivo";
+  const header = z
+    .object({
+      app: backupFileSchema.shape.app,
+      backupVersion: backupFileSchema.shape.backupVersion,
+      exportedAt: backupFileSchema.shape.exportedAt,
+      data: z.record(z.unknown()),
+    })
+    .safeParse(raw);
+  if (!header.success) {
+    const issue = header.error.issues[0];
+    return fail(issue.path.join(".") || "archivo", issue, "falta el campo");
   }
-  const msg =
-    issue.code === "invalid_type" && issue.received === "undefined"
-      ? path.length === 2 && path[0] === "data"
-        ? "falta la tabla"
-        : "falta el campo"
-      : issue.message;
-  return { ok: false, error: `Respaldo inválido en ${where}: ${msg}.` };
+  const data: Record<string, unknown[]> = {};
+  for (const [table, spec] of Object.entries(TABLES)) {
+    const rows = header.data.data[table];
+    if (rows === undefined && !spec.required) continue;
+    if (!Array.isArray(rows)) return { ok: false, error: `Respaldo inválido en ${table}: ${rows === undefined ? "falta la tabla" : "no es una lista"}.` };
+    if (rows.length > spec.max) return { ok: false, error: `Respaldo inválido en ${table}: demasiadas filas.` };
+    const out: unknown[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const r = (spec.row as z.ZodTypeAny).safeParse(rows[i]);
+      if (!r.success) {
+        const issue = r.error.issues[0];
+        const rest = issue.path.join(".");
+        return fail(`${table}[${i}]${rest ? `.${rest}` : ""}`, issue, "falta el campo");
+      }
+      out.push(r.data);
+    }
+    data[table] = out;
+  }
+  const backup = { ...header.data, data } as unknown as ValidatedBackup;
+  return { ok: true, backup };
 }

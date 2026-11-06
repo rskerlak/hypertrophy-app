@@ -31,6 +31,11 @@ export interface NextPrescriptionInput {
   weekIndex?: number;
   numAccumulationWeeks?: number;
   /**
+   * Solo block: semana de la última sesión del historial. El re-anclaje de fase
+   * corre solo si esa semana y `weekIndex` caen en fases distintas (N1/N2).
+   */
+  historyWeekIndex?: number;
+  /**
    * Tope del ajuste por RIR ya corregido por la calibración medida del usuario
    * (ver rirCalibration). Si se omite, se usa el del config por rango de reps.
    */
@@ -490,11 +495,18 @@ function blockPhaseReanchor(
   repRange: RepRange,
   targetRir: number,
 ): Prescription | null {
+  // Peso corporal: no hay carga que re-anclar (la UI guarda el peso corporal
+  // como carga, así que no alcanza con mirar actualLoadKg; N1).
+  if (input.equipmentType === "bodyweight" || input.currentLoadKg === 0) return null;
+  const { weekIndex, historyWeekIndex, numAccumulationWeeks } = input;
+  if (weekIndex === undefined || historyWeekIndex === undefined || numAccumulationWeeks === undefined) return null;
+  const before = blockPhaseForWeek(input.rules, historyWeekIndex, numAccumulationWeeks);
+  const now = blockPhaseForWeek(input.rules, weekIndex, numAccumulationWeeks);
+  if (before.name === now.name) return null; // misma fase: progresión normal (N2)
   const last = sessions[sessions.length - 1];
   const prescribed = Math.max(...last.map((l) => l.targetReps));
-  if (prescribed >= repRange.min && prescribed <= repRange.max) return null;
   const loaded = last.filter((l) => l.actualLoadKg > 0);
-  if (loaded.length === 0) return null; // peso corporal: no hay carga que re-anclar
+  if (loaded.length === 0) return null;
   const e1rm = Math.max(...loaded.map((l) => estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, input.rules)));
   const ctx = { type: input.equipmentType, equipment: input.equipment };
   const next = loadForTarget(e1rm, repRange.min, Math.max(0, targetRir), input.rules, ctx);

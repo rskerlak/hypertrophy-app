@@ -94,14 +94,24 @@ describe("H2 — drop, parciales y bajadas de carga no deciden la progresión", 
 describe("M2 — bloques re-anclan la carga al cambiar de fase", () => {
   it("de acumulación (8–15) a intensificación (5–10) la carga sube según el e1RM", () => {
     const h = sessionLogs({ sessionId: "b", exerciseId: "x", sets: 3, loadKg: 62.5, reps: 11, rir: 3, targetReps: 11, targetRir: 3, timestamp: ts() });
-    const p = nextPrescription({ ...base, model: "block", equipmentType: "barbell", currentLoadKg: 62.5, exerciseHistory: h, weekIndex: 3, numAccumulationWeeks: 5 });
+    const p = nextPrescription({ ...base, model: "block", equipmentType: "barbell", currentLoadKg: 62.5, exerciseHistory: h, weekIndex: 3, historyWeekIndex: 2, numAccumulationWeeks: 5 });
     expect(p.explain.rule).toBe("block-phase-reanchor");
     expect(p.nextReps).toBe(5);
     expect(p.nextLoadKg).toBeGreaterThan(70);
   });
   it("dentro de la misma fase no re-ancla", () => {
     const h = sessionLogs({ sessionId: "b", exerciseId: "x", sets: 3, loadKg: 62.5, reps: 11, rir: 3, targetReps: 11, targetRir: 3, timestamp: ts() });
-    const p = nextPrescription({ ...base, model: "block", equipmentType: "barbell", currentLoadKg: 62.5, exerciseHistory: h, weekIndex: 1, numAccumulationWeeks: 5 });
+    const p = nextPrescription({ ...base, model: "block", equipmentType: "barbell", currentLoadKg: 62.5, exerciseHistory: h, weekIndex: 1, historyWeekIndex: 0, numAccumulationWeeks: 5 });
+    expect(p.explain.rule).not.toBe("block-phase-reanchor");
+  });
+  it("N1: peso corporal (guardado con el peso del usuario como carga) nunca re-ancla", () => {
+    const h = sessionLogs({ sessionId: "bw", exerciseId: "x", sets: 3, loadKg: 80, reps: 16, rir: 2, targetReps: 16, targetRir: 2, timestamp: ts() });
+    const p = nextPrescription({ ...base, model: "block", equipmentType: "bodyweight", currentLoadKg: 0, exerciseHistory: h, weekIndex: 3, historyWeekIndex: 2, numAccumulationWeeks: 5 });
+    expect(p.explain.rule).not.toBe("block-phase-reanchor");
+  });
+  it("N2: reps sobre el tope dentro de la misma fase no re-anclan", () => {
+    const h = sessionLogs({ sessionId: "c", exerciseId: "x", sets: 3, loadKg: 60, reps: 16, rir: 2, targetReps: 16, targetRir: 2, timestamp: ts() });
+    const p = nextPrescription({ ...base, model: "block", equipmentType: "barbell", currentLoadKg: 60, exerciseHistory: h, weekIndex: 1, historyWeekIndex: 1, numAccumulationWeeks: 5 });
     expect(p.explain.rule).not.toBe("block-phase-reanchor");
   });
 });
@@ -164,7 +174,8 @@ describe("Simulación: 20 sesiones de un usuario que cumple exacto (auditoría P
             ...base,
             model: v.model,
             dayType: v.dayType,
-            weekIndex: Math.min(4, Math.floor(i / 4)),
+            weekIndex: Math.min(4, Math.floor((i + 1) / 4)),
+            historyWeekIndex: Math.min(4, Math.floor(i / 4)),
             numAccumulationWeeks: 5,
             equipment: e.eq,
             equipmentType: e.type,

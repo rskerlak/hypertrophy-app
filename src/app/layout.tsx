@@ -45,10 +45,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {/* CSP por meta (GitHub Pages no permite headers; auditoría S-04). Lo que más
             importa es connect-src 'self': ningún dato puede salir a otro origen.
             Scripts inline permitidos porque Next exporta el payload RSC inline. */}
+        {/* Solo en el build: `next dev` necesita eval para el refresco en caliente (R-04). */}
+        {process.env.NODE_ENV === "production" && (
         <meta
           httpEquiv="Content-Security-Policy"
           content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
         />
+        )}
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>

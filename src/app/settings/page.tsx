@@ -32,6 +32,10 @@ export default function SettingsPage() {
     settingsRepo.update({ prioritizedMuscles: [...set] });
   };
 
+  // El inventario se valida al guardar (topes de cordura): si falla, avisar (N4).
+  const saveEquipment = (equipment: typeof settings.equipment) =>
+    settingsRepo.update({ equipment }).catch((e: unknown) => showToast(e instanceof Error ? e.message : "Inventario inválido.", "danger"));
+
   const editList = (key: "platesKg" | "dumbbellsKg" | "dumbbellPlatesKg", raw: string) => {
     const original = settings.equipment[key] ?? [];
     const nums = parseLoadList(raw, original);
@@ -154,7 +158,7 @@ export default function SettingsPage() {
             step={2.5}
             min={5}
             load
-            onChange={(v) => settingsRepo.update({ equipment: { ...settings.equipment, barWeightKg: v } })}
+            onChange={(v) => saveEquipment({ ...settings.equipment, barWeightKg: v })}
           />
         </div>
         <div>
@@ -206,7 +210,7 @@ export default function SettingsPage() {
                 min={0}
                 load
                 onChange={(v) =>
-                  settingsRepo.update({ equipment: { ...settings.equipment, dumbbellHandleKg: v } })
+                  saveEquipment({ ...settings.equipment, dumbbellHandleKg: v })
                 }
               />
               <p className="mt-1.5 text-xs text-[var(--muted)]">
@@ -237,7 +241,7 @@ export default function SettingsPage() {
             step={1}
             min={fromDisplay(1)}
             load
-            onChange={(v) => settingsRepo.update({ equipment: { ...settings.equipment, machineStepKg: v } })}
+            onChange={(v) => saveEquipment({ ...settings.equipment, machineStepKg: v })}
           />
         </div>
       </Card>

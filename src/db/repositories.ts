@@ -167,10 +167,19 @@ export const exerciseRepo = {
       for (const m of mesos) {
         if (countExerciseInPlan(m.plan, id) === 0) continue;
         // Solo desde la primera semana con sesiones pendientes: lo entrenado no se reescribe (M4).
-        const pending = await db.sessions.where("mesocycleId").equals(m.id).filter((s) => s.status === "pending").toArray();
+        const rows = await db.sessions.where("mesocycleId").equals(m.id).toArray();
+        const pending = rows.filter((s) => s.status === "pending");
         const fromWeek = pending.length ? Math.min(...pending.map((s) => s.weekIndex)) : m.plan.weeks.length;
+        const trained = new Set(rows.filter((s) => s.status !== "pending").map((s) => `${s.weekIndex}:${s.dayIndex}`));
         await db.mesocycles.update(m.id, {
-          plan: replaceExerciseInPlan(m.plan, id, replacementId, fromWeek, (sl) => loadFor(sl.repRange.min, sl.targetRir, sl.targetLoadKg)),
+          plan: replaceExerciseInPlan(
+            m.plan,
+            id,
+            replacementId,
+            fromWeek,
+            (sl) => loadFor(sl.repRange.min, sl.targetRir, sl.targetLoadKg),
+            (w, d) => trained.has(`${w}:${d}`),
+          ),
         });
       }
       const bw = await db.baseWeek.get("default");
@@ -641,6 +650,7 @@ export const mesocycleRepo = {
           equipment: settings.equipment,
           dayType: slot.dayType,
           weekIndex: 0,
+          historyWeekIndex: sessionById.get(lastSession[0].sessionId)?.weekIndex,
           numAccumulationWeeks: source.plan.numAccumulationWeeks,
           // Mismos parámetros que la sesión (auditoría M5): APRE y confianza en el RIR.
           slotProgression: slot.progression,

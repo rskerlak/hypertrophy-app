@@ -113,3 +113,72 @@ No hay hallazgos Altos.
 ## Veredicto
 
 **APROBADO CON OBSERVACIONES.** Sin Altos abiertos, la fase pasa el gate. Los 6 Medios (S-01…S-06) son de la Pista 3. En Plan A la Pista 3 no es principal, así que no bloquean el cierre de A, pero **deben cerrarse antes de empezar Plan B**: S-01, S-02 y S-04 condicionan el sync, y S-06 el deploy de B. Plan B puede empezar en paralelo con estas correcciones como primera tarea.
+
+---
+
+## Re-auditoría (HEAD 5858d9c)
+
+Fecha: 2026-11-06. Commit: `5858d9c`. `out/` se reconstruyó a partir de HEAD: el chunk `633-9b4645e73dd7a46b.js` contiene `5858d9c`.
+
+**Método:**
+- Diff `aca8391..5858d9c` de los archivos de seguridad.
+- Test descartable `src/db/__tests__/secaudit2.tmp.test.ts` con los casos R1–R5, ya borrado.
+- Dos scripts Playwright (Edge headless) en el scratchpad contra el build estático, en orígenes aislados `127.0.0.1:4191` y `:4192`, que no tocan la base de `localhost:3000`:
+  - `csp.mjs`: recorrido completo.
+  - `errb.mjs`: import de un respaldo armado.
+- `npm audit`.
+- `gh api`, solo lectura.
+- GET al sitio publicado.
+
+### Estado de cada hallazgo
+
+| id | estado | verificación |
+|---|---|---|
+| S-01 | **Cerrado en lo reportado; queda un residual (R-01, R-03)** | `backupSchema.ts` tipa ahora el plan completo (`plannedSlot`, `:115-127`), `bugReports` (`:211-234`), `note`, `restSec`, `units`, `theme` y `equipmentProfiles`. Los cuatro casos S2/S3 de la auditoría original ahora dan `ok: false` (R1). `BugListCard` usa `b.context?.` (`BugReport.tsx:171`). Existe `src/app/error.tsx` con `BackupCard` y está en el build (chunk `app/error-*.js`). Quedan sin validar `sessions.overrides` (R-01) y campos escalares de settings y del slot base (R-03). |
+| S-02 | **Cerrado en lo reportado; queda un residual (R-02)** | El tope de 25 MB se aplica antes de `file.text()` (`BackupCard.tsx:25`). Hay `.max()` en filas, series (≤ 50), semanas (≤ 52) y textos (200/4000). En R1, `sets = 1e9`, `numAccumulationWeeks = 1e9` y `name` de 2 MB → `ok: false`. Pero el tope en bytes no acota la memoria de Zod (R-02), y `overrides.setsDelta` sigue sin techo (R-01). |
+| S-03 | **Cerrado** (con un camino residual vía R-01) | `equipmentSchema` (`:52-61`): barra ≤ 100, discos ≤ 100, mancuernas ≤ 200, inventario ≤ 200. `platesKg: [1e7]` → `ok: false`. `settingsRepo.update` valida `equipment` (`repositories.ts:82`). El mismo `RangeError` sigue alcanzable por `overrides.exerciseDeload.loadFactor` (R-01). |
+| S-04 | **Cerrado** | Hay meta CSP en `layout.tsx:49`, presente en `out/*.html` y en el sitio publicado (`curl` → 1 coincidencia). Playwright, con `securitypolicyviolation` registrada desde `addInitScript`, recorrió: onboarding → plan → generar meso → SW controlando → sesión → Log → Finalizar → resumen → `/calendar`, `/stats`, `/mesos`, `/exercises`, `/measurements`, `/activities` y `/settings`. También probó la descarga del respaldo (`myonoesis-respaldo-2026-11-06.json`) y del Excel (`Mesociclo 1.xlsx`). **0 violaciones y 0 errores de consola.** El único bloqueo fue el `fetch("https://example.com/")` que provoqué a propósito, que confirma que `connect-src 'self'` se aplica. Hay dos observaciones, en R-04 y R-06. |
+| S-05 | **Parcial** | `next` y `eslint-config-next` = 15.5.29 (instalado). `npm audit --omit=dev`: **0 críticos**, 11 altos, 4 moderados. `next` solo queda por `postcss` (moderado, build). Los altos restantes son de build (`@serwist/*`, `sharp`, `postcss`, `browserslist`, `nanoid`, `source-map-js`, `brace-expansion`), más `xlsx` y `zod`. **`xlsx`:** documentarlo como solo-escritura **alcanza**. La app no llama a `XLSX.read` (grep) y las dos vulnerabilidades son del parser. Falta escribir esa excepción en `README`/`CONTEXT`: no está documentada. **`zod`:** documentarlo como "acotado" **no alcanza**. GHSA-mrhx se reproduce con los `.max()` nuevos (R-02). |
+| S-06 | **Cerrado en el código; pendiente de configuración de cuenta** | `checkout@11d5960a…` = v4.4.0, `setup-node@49933ea5…` = v4.4.0 y `peaceiris/actions-gh-pages@84c30a85…` = v4.1.0, todos verificados con `gh api repos/*/tags`. Ambos workflows tienen `persist-credentials: false`, y `a11y.yml` declara `permissions: contents: read`. El deploy de `5858d9c` terminó `success`, así que fijar por SHA no rompió nada. **Pendiente:** `main` sin protección (`gh api …/protection` → 404). |
+| S-07 | **Cerrado** | `backupRepo.import` escribe `v.backup.data` (`repositories.ts:1021`). En R2, `__proto__` en el primer nivel y en `equipment` no aparece como propiedad propia en la salida, y `Object.assign({}, ex).polluted === undefined`. |
+| S-08 | **Cerrado con observación** | `BackupCard` avisa que el respaldo lleva todo. El UA se sigue guardando entero (`BugReport.tsx:27`, ≤ 400). Es aceptable para un uso de un solo usuario: dejarlo así fue una decisión explícita. |
+| S-09 | **Cerrado** | `git check-ignore -v` confirma que `*.tmp.*`, `myonoesis-*.json` y `*.xlsx` quedan ignorados (`.gitignore:50-52`). |
+| S-10 | **Abierto (cuenta)** | `protected_domain_state` sigue en `null`. Lo tiene que resolver el usuario en *Settings → Pages → Verified domains*. |
+| S-11 | **Abierto (Plan B)** | Sin cambios y sin impacto mientras no haya pedidos a otros orígenes. La CSP nueva ya bloquea `connect-src` hacia otros orígenes. |
+| S-12 | **Cerrado** | `serve … -l tcp://127.0.0.1:3013`: `http://127.0.0.1` → 200 y `http://localhost` → 200 (resuelve a 127.0.0.1, así que el origen del usuario en el `.bat` no cambia). La IP de la LAN → conexión rechazada. |
+| S-13 | **Cerrado** | 8 usos de `encodeURIComponent`. La única interpolación que queda sin codificar es `MeasurementPrompt.tsx:22` (`trigger`, que es un enum interno). |
+| S-14 | **Sospecha (mitigada)** | El revoke ahora espera 10 s (`backup.ts:19-20`). En Edge, Playwright recibió la descarga `myonoesis-pre-import-…json` antes del import. iOS sigue sin verificarse. |
+
+### Hallazgos nuevos o residuales
+
+| id | severidad | archivo:línea | descripción | reproducción | sugerencia |
+|---|---|---|---|---|---|
+| R-01 | **Media** | `src/db/backupSchema.ts:158-172` (sin `overrides`); `src/lib/sessionPlan.ts:88,102-103,203,210`; `src/app/session/page.tsx:648` | **`sessions.overrides` sigue pasando sin validar** por `passthrough`. `setsDelta: 1e9` llega a `Math.max(1, planned.sets + setsDelta)` y de ahí a `Array.from({ length: slot.sets })`. `exerciseDeload.loadFactor: 1e9` hace que `roundToAvailable` lance `RangeError`, el mismo camino de S-03. `overrides.exercise` no-array provoca `TypeError: r.find is not a function`. Ese error es **asíncrono**: `error.tsx` no lo atrapa y la sesión queda en blanco, solo con la barra inferior. | **Unit R3:** `validateBackup` da `ok` con esos `overrides`, y `roundToAvailable(8e10, barbell)` lanza `RangeError`. **E2E (`errb.mjs`, 127.0.0.1:4192):** export → `sessions[0].overrides = {exercise: "no-es-array"}` → import con confirmación y copia `pre-import` descargada → `/session?id=…` queda en blanco (no aparece "Algo falló") con `pageerror` `r.find is not a function`. Para recuperar: Ajustes → importar el original → la sesión vuelve a renderizar. | Agregar a `sessionRow` `overrides: z.object({ exercise: list({slotIndex: index, exerciseId: id}, 40), setsDelta: list({slotIndex: index, delta: z.number().int().min(-50).max(50)}, 40), exerciseDeload: list({slotIndex: index, setsFactor: z.number().min(0).max(1), loadFactor: z.number().min(0).max(1)}, 40) }).optional()`. |
+| R-02 | **Media** | `src/db/backupSchema.ts:47` (`list = z.array(item).max(n)`), `:243-252`; `DATA_LIMITS.maxFileBytes` (`:28`) | **El tope de 25 MB no acota la memoria** (GHSA-mrhx, Zod 3.25.76). `.max()` no corta antes de tiempo: Zod parsea y genera un issue por **cada** elemento antes de rechazar. Un archivo chico con un array largo en una tabla de tope 1 multiplica el heap ≈ 150 veces. Extrapolando, 25 MB ≈ 3,8 GB, que cierra la pestaña en el móvil. No se pierden datos porque se valida antes de borrar. | **R5:** `data.settings = new Array(N).fill(0)`. Con N = 1,5 M (3,0 MB) → `ok: false`, 3,1 s, heap Δ ≈ **464 MB**. Con N = 5 M (10,0 MB) → 6,3 s, heap Δ ≈ **1535 MB**. | Revisar los largos antes de parsear filas. Una opción es `const list = (item, max) => z.array(z.unknown()).max(max).pipe(z.array(item))`: en Zod 3, `ZodPipeline` no corre el `out` si el `in` queda dirty. La otra es un chequeo manual de `Array.isArray(x) && x.length <= max` por tabla antes de `safeParse`. Opcional: bajar `maxFileBytes` a ~10 MB. |
+| R-03 | Baja | `src/db/backupSchema.ts:63-76`, `:87` | Siguen pasando crudos: en settings, `proteinTargetGperKg`, `minSleepHours`, `wakeLockEnabled` y `barbellFailureAllowed`; en el slot base, `anchorSet`, `supersetGroup` y `progression`. No se observó un crash con esos campos. | **R4:** `proteinTargetGperKg: {x: 1}`, `minSleepHours: "mucho"`, `wakeLockEnabled: "si"`, `anchorSet: {rirDelta: 1e9}`, `supersetGroup: {a: 1}` → `ok: true`. | Tiparlos como `.optional()` con rangos de cordura. |
+| R-04 | sospecha | `src/app/layout.tsx:47-52`; `node_modules/next/dist/build/webpack/config/blocks/base.js:45` | La meta CSP se aplica también en `next dev`. En dev, Next envuelve los módulos en `eval` (`eval-source-map`) y React 19 dev usa `eval`, pero la CSP no tiene `'unsafe-eval'`, así que `npm run dev` probablemente no hidrate. No pude reproducirlo: el `next dev` temporal (puerto 3012) dio 500 porque `.next` cambió en medio de la prueba, posiblemente por un build simultáneo. Lo cerré enseguida. | No reproducido. | Emitir la meta solo si `process.env.NODE_ENV === "production"`, o agregar `'unsafe-eval'` solo en dev. |
+| R-05 | Baja | `src/app/error.tsx` | `error.tsx` solo atrapa errores de **render**. Las fallas en cargas asíncronas (por ejemplo `sessionPlan`) dejan la pantalla en blanco, como mostró R-01. Además no hay `global-error.tsx` para errores del layout (`AppProviders`, `BottomNav`). Hoy se puede recuperar porque la barra inferior sigue viva. | E2E R-01. | Capturar el error de carga en la página y re-lanzarlo en render (`if (loadError) throw loadError`) para que lo tome `error.tsx`. Agregar `src/app/global-error.tsx` con `BackupCard`. |
+| R-06 | Baja | `out/index.html:29` (por líneas) | Next ubica la meta CSP **después** de la hoja de estilos y de los 10 `<script async src>` del `<head>`, y la política solo rige desde que se parsea. Esos recursos son de `'self'`, así que no hay una brecha práctica. `connect-src` sí se aplica: el fetch a otro origen quedó bloqueado. | `sed 's/></>\n</g' out/index.html \| grep -n "<meta\|<script"`. | Aceptar y documentar, o inyectar la meta como primer hijo de `<head>` en un paso `postbuild`. |
+
+**Conteo actualizado:**
+- Alta: 0.
+- Media: 2 (R-01, R-02).
+- Baja: 6 abiertas.
+  - S-10 (cuenta), S-11 (Plan B), R-03, R-05, R-06.
+  - Protección de `main` (de S-06).
+  - Más una tarea de documentación: la excepción de `xlsx` como solo-escritura.
+- Sospecha: 2 (S-14, R-04).
+
+**Archivos temporales:** borré `secaudit2.tmp.test.ts` y los JSON del E2E. No quedan archivos de auditoría en el repo. El intento de `next dev` dejó `.next` en estado de desarrollo; `out/` quedó intacto (build de HEAD) y el próximo `npm run build` regenera `.next`.
+
+### Veredicto de la re-auditoría
+
+**APROBADO CON OBSERVACIONES.**
+- Sin Altos abiertos.
+- De los seis Medios originales, tres quedan cerrados (S-03, S-04, S-06 en el código) y S-05 queda parcial: `next` corregido, falta documentar `xlsx`, y `zod` pasa a R-02. Entre los Bajos se cerraron S-07, S-08, S-09, S-12 y S-13.
+- S-01 y S-02 están cerrados en lo que se reportó, pero dejan dos residuales de la misma clase:
+  - R-01: `overrides` sin validar.
+  - R-02: amplificación de memoria de Zod.
+- Los dos son Medios de la Pista 3 y no bloquean el cierre de Plan A.
+- Antes de que Plan B use el import, o el mismo esquema, para el sync, hay que cerrar R-01 y R-02.
+- Las tareas de cuenta (verificar el dominio, proteger `main`) quedan en manos del usuario.

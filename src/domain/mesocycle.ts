@@ -515,8 +515,10 @@ export function replaceExerciseInPlan(
   fromWeekIndex = 0,
   /** Carga del ejercicio nuevo por slot (M3); sin esto se conserva la del plan. */
   loadFor?: (slot: PlannedSlot) => number,
+  /** Días ya entrenados (completados o saltados) que no se tocan aunque su semana esté a medias (N3). */
+  isTrained?: (weekIndex: number, dayIndex: number) => boolean,
 ): MesocyclePlan {
-  return withSlotChange(plan, fromWeekIndex, (_di, _si, sl) => sl.exerciseId === fromId, toId, loadFor);
+  return withSlotChange(plan, fromWeekIndex, (_di, _si, sl, wi) => sl.exerciseId === fromId && !isTrained?.(wi, _di), toId, loadFor);
 }
 
 /**
@@ -529,7 +531,7 @@ export function replaceExerciseInPlan(
 function withSlotChange(
   plan: MesocyclePlan,
   fromWeekIndex: number,
-  match: (dayIndex: number, slotIndex: number, slot: PlannedSlot) => boolean,
+  match: (dayIndex: number, slotIndex: number, slot: PlannedSlot, weekIndex: number) => boolean,
   exerciseId: string,
   loadFor?: (slot: PlannedSlot) => number,
 ): MesocyclePlan {
@@ -540,7 +542,7 @@ function withSlotChange(
       w.days.forEach((d, di) =>
         d.slots.forEach((sl, si) => {
           const k = `${di}:${si}`;
-          if (match(di, si, sl) && !loads.has(k)) loads.set(k, loadFor(sl));
+          if (match(di, si, sl, w.weekIndex) && !loads.has(k)) loads.set(k, loadFor(sl));
         }),
       );
     }
@@ -555,7 +557,7 @@ function withSlotChange(
             days: w.days.map((d, di) => ({
               ...d,
               slots: d.slots.map((sl, si) => {
-                if (!match(di, si, sl)) return sl;
+                if (!match(di, si, sl, w.weekIndex)) return sl;
                 const load = loads.get(`${di}:${si}`) ?? (loadFor ? loadFor(sl) : undefined);
                 return load === undefined ? { ...sl, exerciseId } : { ...sl, exerciseId, targetLoadKg: load };
               }),

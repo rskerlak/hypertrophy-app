@@ -125,3 +125,67 @@ Archivos más bajos: `swap.ts` 82 %, `deload.ts` 91.2 % (`chronicPoorReadiness` 
 ## Veredicto
 
 **RECHAZADO.** Quedan abiertos 2 hallazgos Altos (H1 y H2, prescripción incorrecta). La fase A4 no se aprueba y el Plan A no puede cerrarse hasta corregirlos. Para cerrar el plan también hay que resolver los 8 Medios de esta pista, que es pista principal de A. Ninguna fase de Plan B debería empezar antes de cerrar H1 y H2 y de que esta pista vuelva a auditarse.
+
+---
+
+## Re-auditoría (HEAD 5858d9c)
+
+Fecha: 2026-11-06. Mismas reglas que la auditoría original. Para reproducir usé tests descartables (`*.tmp.test.ts`), ya borrados.
+
+### Verificación base
+
+| Comando | Resultado |
+|---|---|
+| `npm run typecheck` | limpio |
+| `npm run lint` | limpio |
+| `npm run test` | 24 archivos, **279 tests** en verde |
+| `npm run build` | En el repo falló (`ENOENT …/_not-found/page.js.nft.json`, después `no direct app page entry found for /_not-found`) porque otro proceso tenía `next dev -p 3012` abierto sobre el mismo `.next`. En una copia aislada de `HEAD` (`git archive` + junction a `node_modules`): **OK**. Es un problema del entorno, no del código. |
+| Cobertura `src/domain` | **96.62 %** de líneas (antes 95.95), 88.09 % de ramas, 99.04 % de funciones |
+
+Volví a correr la simulación original, ampliada: 6 variantes de modelo × 11 equipos (incluye polea de 5 kg, rack sobre su tope y peso corporal con la carga que realmente guarda la UI, o sea el peso corporal). También corrí las reproducciones de H2 y M2 y una de casos nuevos.
+
+### Estado de cada hallazgo
+
+| id | estado | verificación |
+|---|---|---|
+| H1 | **CERRADO** | `progression.ts` `linearProgression`: si el salto mínimo supera el crédito (reps sobre el piso × %), aplica `linear-add-rep` hasta el tope y recién ahí `linear-hit-large-jump`. Simulación: barra con discos de 1.25 alterna 8/9 reps con saltos de 4.2 %. Polea de 5 kg sube reps 8→12 antes del +100 %, el mismo criterio documentado para doble (rango = límite duro, salto avisado). Ningún salto mayor al 15 % sin regla `*-large-jump`. Tests `auditPlanA.test.ts` H1 y `progression.test.ts` actualizado. |
+| H2 | **CERRADO** | `isProgressionSet` (`types.ts`) y `progressionSessions` (series de trabajo o fallo con la carga máxima de la sesión). Reproducción: 3 series que cumplen exacto, más un drop al 75 % y una parcial por sesión, da `60x8 … 60x12 → 62.5x8`; ya no se congela. `lastLoggedLoad` usa la misma definición. |
+| M1 | **CERRADO** | `EditableNumber` no confirma si el borrador es igual al texto mostrado. `parseLoadList` conserva el kg exacto de cada token que no cambió, y `editList` no escribe si nada cambió. Test `units.test.ts` M1. |
+| M2 | **CERRADO para equipo cargable** | `blockPhaseReanchor`: 62.5×11 @RIR3 pasa a 72.5×5 (`block-phase-reanchor`); dentro de la misma fase no re-ancla. **Introdujo N1** (abajo). |
+| M3 | **CERRADO** | `loadEstimator` (historial real sin deload → Epley invertido; sin historial → `baseWeekDefaults.startingLoadKg` redondeado; peso corporal → 0) usado en reemplazo, swap en el plan y swap solo hoy (`sessionPlan.ts`). Puro: `replaceExerciseInPlan(..., loadFor)` testeado. |
+| M4 | **CERRADO** (con residual Baja N3) | Con historial, el ejercicio se archiva (`archived`, fuera de listas y selectores; `byId`/`all` lo siguen resolviendo para stats). El reemplazo arranca en la primera semana con sesiones pendientes. Test `unknownMuscle.test.ts`. |
+| M5 | **CERRADO** | `createFollowUp` pasa `slotProgression: slot.progression` y `rirCapOverride` calibrado (lectura de código; el efecto en el dominio ya estaba reproducido). |
+| M6 | **CERRADO** | `bodyweightReps` topea en `globalValid.max` y emite `bodyweight-cap`. Simulación: DUP liviano en peso corporal llega a 30 y se queda ahí. |
+| M7 | **CERRADO** | `rirScheduleForLength` usa `selectableBand.max`; `chronicPoorReadiness.readinessMax` y `baseWeekDefaults.{slotSets,startingLoadKg}` en el config, con nota `_` y `.default` en Zod. No encontré literales nuevos de entrenamiento en el diff. |
+| M8 | **CERRADO** (residual Baja N5) | Tests nuevos para `linear-add-rep/miss/no-jump`, `double-no-jump`, `bodyweight-cap`, `block-phase-reanchor`, drop/parcial/bajada de carga, y la simulación permanente de 20 sesiones (5 variantes × 6 equipos). Fixture `src/db/__fixtures__/backup-v1.json` con su test. |
+| B1 | **CERRADO** | `removeExerciseTx` corre dentro de la transacción de `replaceAndRemove`. |
+| B2 | **CERRADO** | `schedule` lee y escribe `sessions` y `settings` en una sola transacción. |
+| B3 | **CERRADO** (lectura) | Solo responde la hoja `[role=dialog][aria-modal]` de más arriba, con `stopImmediatePropagation`. |
+| B4 | **CERRADO** | `window` local renombrada a `recent`. |
+| B5 | **CERRADO** | SCIENCE.md cita Hickmott 2022 una sola vez, con PMID. |
+| B6 | **CERRADO** | `rulesDefaults.test.ts` compara los `.default` de Zod con el config para 8 secciones. |
+| S1 | **CERRADO** (lectura, sin test) | `exerciseHistoryBefore` (`sessionPlan.ts`) y `createFollowUp` filtran por `slotIndex` (los logs viejos sin `slotIndex` solo cuentan si el ejercicio no se repite ese día). La lógica es correcta, pero no tiene test porque vive en `lib`/`db` (ver la nota de N5). |
+
+### Hallazgos nuevos introducidos por las correcciones
+
+| id | sev. | archivo:línea | descripción | reproducción | sugerencia |
+|---|---|---|---|---|---|
+| N1 | **Alta** | `src/domain/progression.ts` `blockPhaseReanchor` (guardia `loaded = last.filter(l => l.actualLoadKg > 0)`) | Bloques más peso corporal. La UI guarda las series de peso corporal con `actualLoadKg = bodyweightKg` (`session/page.tsx:908`), así que la guardia "peso corporal: no hay carga que re-anclar" nunca se cumple. Además el disparador es "reps **prescritas** fuera del rango de la fase", y en peso corporal las reps superan el tope a propósito (M6). Resultado: dentro de la **misma** fase, al pasar de 15 reps, el motor re-ancla, vuelve a 8 reps y calcula una carga fantasma. Las reps quedan en un bucle 8→16 y nunca progresan más allá. | `nextPrescription(block, bodyweight, currentLoadKg 0, historial 3×16 @ 80 kg, semana 1 de 5, rango 8–15)` da `93.65 kg × 8 (block-phase-reanchor)`. Simulación de 20 sesiones: re-ancla en s9 y s13 con carga 93.6/92.96 en un slot de peso corporal. | Ver propuesta abajo. |
+| N2 | Baja | `src/domain/progression.ts` `blockPhaseReanchor` | Con `maxRepsOverCeiling > 0` (colchón; el default es 0), la rep de colchón deja las reps prescritas en tope+1 y dispara un re-anclaje espurio dentro de la misma fase. | Config con `maxRepsOverCeiling: 2`, 60 kg × 16 (rango 8–15, misma fase) da `70 × 8 (block-phase-reanchor)`, +16.7 %. | Detectar el cambio de fase comparando la fase de la sesión anterior (`weekIndex` del log o `PlannedSlot.phase`) con la actual, no las reps prescritas. |
+| N3 | Baja | `src/db/repositories.ts` `replaceAndRemove` (`fromWeek = min(weekIndex pendientes)`) | Si la semana actual está a medias, se reescriben también los días ya completados de esa semana: sus logs pierden la pista en stats (`trackKey "?"`). El volumen se conserva porque el ejercicio queda archivado. | Lectura de código. | Reemplazar por sesión (días con sesión pendiente) o desde la semana siguiente para los días ya hechos. |
+| N4 | Baja | `src/db/repositories.ts` `settingsRepo.update` + `src/app/settings/page.tsx:157, 209, 240` | `update` ahora lanza error ante un inventario inválido, pero los `Stepper` de barra, mango y paso de máquina no lo atrapan: rechazo sin feedback (solo `editList` muestra un toast). | Lectura de código. | `.catch(showToast)` como en `editList`, o un `max` en esos Steppers. |
+| N5 | Baja | `src/domain/swap.ts:48-56`, `src/domain/deload.ts:170-181`; `src/lib/sessionPlan.ts`, `src/db/repositories.ts` | (a) Siguen sin test el swap sin candidatos y `chronicPoorReadiness` (con la clave nueva `readinessMax`; la señal está desactivada por defecto). (b) Repositorios sin tests por no tener IndexedDB falsa. | Cobertura v8 (líneas listadas). | (a) Dos tests chicos. (b) Ver la nota abajo. |
+
+**Sobre los tests de repositorio sin IndexedDB falsa.** Mi criterio es que **eso solo ya no debería ser Medio**. El protocolo define como Medio el "test faltante en **dominio**", y `src/db` no es dominio; además, sumar `fake-indexeddb` es una dependencia nueva que tiene que aprobar el usuario. Lo dejo en **Baja** (N5b) como riesgo aceptado, con una condición: la lógica que decide prescripciones y hoy vive en `lib`/`db` sin tests tiene que pasarse a funciones puras con test. Concretamente: el filtrado por pista y slot de `exerciseHistoryBefore` y `createFollowUp` (S1), el `fromWeek` de `replaceAndRemove` y la elección de carga de `loadEstimator`. Si esa lógica sigue creciendo en `db`, el riesgo vuelve a ser Medio.
+
+### Propuesta de corrección para N1 (≤ 5 líneas)
+
+En `blockPhaseReanchor`, devolver `null` si `input.equipmentType === "bodyweight" || input.currentLoadKg === 0` (es el modo peso corporal que usa `sessionPlan`). Además, disparar solo cuando cambia la **fase** (la de la última sesión contra la actual, por `weekIndex`/`phase` del plan) y no por reps fuera de rango, lo que también cierra N2. Test: bloques + peso corporal, 3×16 a peso corporal en la misma fase, debe dar `double-no-jump` con 17 reps y carga 0.
+
+### Simulación (re-corrida)
+
+Equipo cargable en los 6 modelos y variantes: nunca se congela, nunca baja (salvo `block-phase-reanchor`, que es intencional), reps ≤ tope de la fase. Los saltos > 15 % aparecen solo con `*-large-jump`, cuando el paso mínimo del equipo ya es tan grande (polea 5/20 kg, armable 12 kg, rack 26→30), o con el re-anclaje de fase (+16 %). Peso corporal: lineal, doble y DUP OK (tope 30). Bloques más peso corporal: **falla (N1)**.
+
+### Veredicto actualizado
+
+**RECHAZADO.** De los hallazgos originales están cerrados todos los Altos y Medios (H1, H2, M1–M8), todos los Bajos (B1–B6) y la sospecha S1. Pero la corrección de M2 introdujo **N1 (Alta)**, una prescripción incorrecta en bloques con peso corporal, que es acotada y se corrige con un cambio chico. Además quedan 4 Bajos nuevos (N2–N5). Con N1 corregido y su test agregado, esta pista quedaría **APROBADA CON OBSERVACIONES**; los Bajos no bloquean el cierre del Plan A.

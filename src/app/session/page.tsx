@@ -325,7 +325,7 @@ function SessionRunner() {
 
       {toast && (
         <div className="pointer-events-none fixed inset-x-0 bottom-28 z-[65] flex justify-center px-6" role="status">
-          <div className="pointer-events-auto rounded-full border border-[var(--success)]/40 bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--success)] shadow-[var(--pop-shadow)]">
+          <div className="rounded-full border border-[var(--success)]/40 bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--success)] shadow-[var(--pop-shadow)]">
             ★ {toast}
           </div>
         </div>
@@ -381,6 +381,8 @@ interface Draft {
   reps: number;
   rir: number | null;
   rirTouched: boolean;
+  /** Se cambió la carga a mano (UX-R2): solo entonces deja de seguir a la propuesta. */
+  loadTouched?: boolean;
   kind: SetKind;
   side?: "L" | "R";
   note?: string;
@@ -536,7 +538,7 @@ function ExerciseBlock({
       )}
       {previous && previous.sets.length > 0 && (
         <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-          Última vez{daysAgo !== null ? ` (hace ${daysAgo === 0 ? "hoy" : `${daysAgo} d`})` : ""}:{" "}
+          Última vez{daysAgo !== null ? ` (${daysAgo === 0 ? "hoy" : `hace ${daysAgo} d`})` : ""}:{" "}
           {previous.sets
             .map((s) => `${isBodyweight ? "BW" : fmtLoad(s.loadKg)}×${s.reps}${s.rirReported ? ` @${s.rir}` : ""}`)
             .join(", ")}
@@ -786,7 +788,7 @@ function SetRow({
   const [busy, setBusy] = useState(false);
   // UX-07: mientras no se toque la carga, sigue a la propuesta (que puede cambiar
   // cuando la serie anterior se registra con otra carga).
-  const loadTouched = useRef(!!existing || draft?.load !== undefined);
+  const loadTouched = useRef(!!existing || !!draft?.loadTouched);
   useEffect(() => {
     if (!existing && !loadTouched.current) setLoadS(defaultLoad);
   }, [defaultLoad, existing]);
@@ -798,10 +800,10 @@ function SetRow({
   const persist = (patch: Partial<Draft>) => {
     if (logged) return;
     writeDraft(sessionId, slotIndex, index, {
-      load, reps, rir, rirTouched, kind, side, note, ...patch,
+      load, reps, rir, rirTouched, loadTouched: loadTouched.current, kind, side, note, ...patch,
     });
   };
-  const setLoad = (v: number) => ((loadTouched.current = true), setLoadS(v), persist({ load: v }));
+  const setLoad = (v: number) => ((loadTouched.current = true), setLoadS(v), persist({ load: v, loadTouched: true }));
   const setReps = (v: number) => (setRepsS(v), persist({ reps: v }));
   const setRir = (v: number) => (setRirS(v), setRirTouched(true), persist({ rir: v, rirTouched: true }));
 
@@ -860,7 +862,7 @@ function SetRow({
         />
         {/* RIR: celda compacta que abre el selector 0·1·2·3·4+ (la fila no
             entra con tres pares de −/+ en 360–390 px y los botones se pisaban). */}
-        <div className="w-11 shrink-0">
+        <div className="w-10 shrink-0">
           <p className={cn("mb-0.5 text-center text-[10px] uppercase", needsRir ? "text-[var(--primary-ink)]" : "text-[var(--muted)]")}>
             RIR{needsRir ? " ↓" : ""}
           </p>
@@ -882,7 +884,7 @@ function SetRow({
           size="sm"
           variant={logged ? "secondary" : "primary"}
           disabled={disabled || needsRir || busy}
-          className="h-11 w-12 shrink-0 px-0"
+          className="h-11 w-11 shrink-0 px-0"
           aria-label={logged ? `Serie ${index + 1} registrada: editar` : `Registrar serie ${index + 1}`}
           title={logged ? "Editar esta serie" : needsRir ? "Elegí el RIR de esta serie" : "Registrar serie"}
           onClick={async () => {
@@ -1085,13 +1087,13 @@ function Field({
   wide?: boolean;
 }) {
   return (
-    <div className={cn("min-w-0", wide ? "flex-[1.35]" : "flex-1")}>
+    <div className={cn("min-w-0", wide ? "flex-[1.2]" : "flex-1")}>
       <p className="mb-0.5 text-center text-[10px] uppercase text-[var(--muted)]">{label}</p>
-      <div className="flex items-center justify-center gap-0.5">
+      <div className="flex min-w-0 items-center justify-center gap-0.5">
         <button
           type="button"
           disabled={disabled}
-          className="h-11 w-7 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"
+          className="h-11 w-6 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"
           onClick={() => onChange(+down(value).toFixed(3))}
           aria-label={`Bajar ${label}`}
         >
@@ -1106,7 +1108,7 @@ function Field({
           ariaLabel={isLoad ? "Carga" : label}
           disabled={disabled}
           className={cn(
-            "h-11 w-full min-w-[34px] text-sm",
+            "h-11 w-full min-w-0 flex-1 px-0 text-[13px]",
             tone === "up" && "text-[var(--success)]",
             tone === "down" && "text-[var(--warning)]",
           )}
@@ -1114,7 +1116,7 @@ function Field({
         <button
           type="button"
           disabled={disabled}
-          className="h-11 w-7 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"
+          className="h-11 w-6 shrink-0 rounded bg-[var(--surface)] text-base disabled:opacity-40"
           onClick={() => onChange(+up(value).toFixed(3))}
           aria-label={`Subir ${label}`}
         >

@@ -70,7 +70,9 @@ export function RestTimer({
     <div
       className={cn(
         "rounded-xl border px-4 py-1 shadow-[var(--pop-shadow)] transition-colors",
-        done ? "border-[var(--success)]/40 bg-[var(--success)]/10" : "border-[var(--border)] bg-[var(--surface-2)]",
+        done
+          ? "border-[var(--success)]/40 bg-[color-mix(in_srgb,var(--success)_14%,var(--surface))]"
+          : "border-[var(--border)] bg-[var(--surface-2)]",
       )}
     >
       <div className="flex items-center justify-between gap-2">

@@ -233,3 +233,19 @@ describe("evaluateExerciseDeload (A2.3)", () => {
     expect(evaluateExerciseDeload(un, rules).suggest).toBe(false);
   });
 });
+
+describe("chronicPoorReadiness con readinessMax del config (auditoría N5)", () => {
+  const cfg = rules.deloadTriggers.signals.chronicPoorReadiness;
+  const on = { ...rules, deloadTriggers: { ...rules.deloadTriggers, signals: { ...rules.deloadTriggers.signals, chronicPoorReadiness: { ...cfg, enabled: true } } } };
+  const sess = (id: string, readiness: number): SessionSummary => ({ ...okSession(id), readiness, sleptMinimum: true });
+  it("cuenta la señal con disposición ≤ readinessMax sostenida", () => {
+    const recent = Array.from({ length: cfg.windowSessions }, (_, i) => sess(`r${i}`, cfg.readinessMax));
+    const r = evaluateDeloadTrigger({ ...baseInput, rules: on, recentSessions: recent });
+    expect(r.reasons.some((x) => /disposición/.test(x))).toBe(true);
+  });
+  it("no la cuenta por encima del umbral", () => {
+    const recent = Array.from({ length: cfg.windowSessions }, (_, i) => sess(`r${i}`, cfg.readinessMax + 1));
+    const r = evaluateDeloadTrigger({ ...baseInput, rules: on, recentSessions: recent });
+    expect(r.reasons.some((x) => /disposición/.test(x))).toBe(false);
+  });
+});

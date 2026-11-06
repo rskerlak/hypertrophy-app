@@ -69,4 +69,23 @@ describe("validateBackup (A4.1)", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/baseWeek\[0\]\.days\.0\.slots\.0\.repRange/);
   });
+  it("R-01: overrides de sesión con factores imposibles se rechazan", () => {
+    const b = valid() as unknown as { data: { sessions: Array<Record<string, unknown>> } };
+    b.data.sessions[0].overrides = { exerciseDeload: [{ slotIndex: 0, setsFactor: 0.5, loadFactor: 1e9 }] };
+    const r = validateBackup(b);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/sessions\[0\]\.overrides\.exerciseDeload\.0\.loadFactor/);
+    b.data.sessions[0].overrides = { exercise: "no-es-lista" };
+    expect(validateBackup(b).ok).toBe(false);
+  });
+  it("R-02: con miles de filas inválidas corta en la primera (memoria acotada)", () => {
+    const b = valid();
+    const bad = { ...b.data.setLogs[0], actualReps: -1 };
+    b.data.setLogs = Array.from({ length: 200_000 }, (_, i) => ({ ...bad, id: `x${i}` }));
+    const t0 = performance.now();
+    const r = validateBackup(b);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe("Respaldo inválido en setLogs[0].actualReps: reps negativas.");
+    expect(performance.now() - t0).toBeLessThan(500);
+  });
 });

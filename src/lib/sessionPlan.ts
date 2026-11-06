@@ -168,6 +168,7 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
           dayType: planned.dayType,
           slotProgression: planned.progression,
           weekIndex: session.weekIndex,
+          historyWeekIndex: lastHistoryWeek(history, mesoSessions),
           numAccumulationWeeks: meso.numAccumulationWeeks,
           rirCapOverride: calibratedRirCap(
             rules.progressionModels.double.rirAdjustmentCapReps,
@@ -230,6 +231,14 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
     rirCalibration,
     intensity: day.intensity,
   };
+}
+
+/** Semana de la última sesión (por fecha) presente en el historial; undefined sin historial. */
+function lastHistoryWeek(history: SetLog[], sessions: SessionRow[]): number | undefined {
+  const sessions_ = progressionSessions(history);
+  const last = sessions_[sessions_.length - 1];
+  if (!last) return undefined;
+  return sessions.find((s) => s.id === last[0].sessionId)?.weekIndex;
 }
 
 /** Filtra logs (de cualquier meso) a los de sesiones cuyo slot es de la misma pista. */
