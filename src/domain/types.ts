@@ -159,6 +159,8 @@ export interface DeloadEvaluation {
 export interface MesoStats {
   perExercise: Array<{
     exerciseId: string;
+    /** Etiqueta de la pista ("fuerte", "liviano" o "8–10") si el ejercicio tiene más de una. */
+    track?: string;
     firstEst1RmKg: number;
     lastEst1RmKg: number;
     deltaPct: number;

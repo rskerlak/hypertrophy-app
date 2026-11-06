@@ -4,13 +4,15 @@
 import type { Rules } from "./rules";
 import type { Checkin, Exercise, MesoStats, MesocyclePlan, SetLog } from "./types";
 import { estimate1RM } from "./oneRepMax";
-import { groupBySession } from "./progression";
+import { groupBySession, progressionTrackKey } from "./progression";
 
 export interface ComputeMesoStatsInput {
   plan: MesocyclePlan;
   sessions: Array<{
     id: string;
     weekIndex: number;
+    /** Necesario para separar pistas (día fuerte/liviano, rangos distintos). */
+    dayIndex?: number;
     status: "pending" | "completed" | "skipped";
   }>;
   setLogs: SetLog[];
@@ -23,25 +25,64 @@ export function computeMesoStats(input: ComputeMesoStatsInput): MesoStats {
   const { plan, sessions, setLogs, exercises, rules } = input;
   const exercisesById = new Map(exercises.map((e) => [e.id, e]));
   const sessionWeek = new Map(sessions.map((s) => [s.id, s.weekIndex]));
+  const sessionById = new Map(sessions.map((s) => [s.id, s]));
 
-  // --- Progresión de carga estimada por ejercicio ---
+  // Logs que cuentan como progreso: ni deload (cargas deliberadamente bajas,
+  // A0.3) ni sesiones saltadas (el motor tampoco las usa).
+  const isProgressLog = (l: SetLog) => {
+    const s = sessionById.get(l.sessionId);
+    if (!s || s.status === "skipped") return false;
+    return !plan.weeks[s.weekIndex]?.isDeload;
+  };
+  const progressLogs = setLogs.filter(isProgressLog);
+
+  // Pista de cada log: misma definición que el motor (progressionTrackKey).
+  const trackOf = (l: SetLog): { key: string; intensity?: string; range?: string } => {
+    const s = sessionById.get(l.sessionId);
+    const day = s?.dayIndex !== undefined ? plan.weeks[s.weekIndex]?.days[s.dayIndex] : undefined;
+    const slot = day?.slots.find((x) => x.exerciseId === l.exerciseId);
+    if (!day || !slot) return { key: "?" };
+    return {
+      key: progressionTrackKey({ slot, intensity: day.intensity }, plan.progressionModel),
+      intensity: day.intensity,
+      range: `${slot.repRange.min}–${slot.repRange.max}`,
+    };
+  };
+
+  // --- Progresión de carga estimada por ejercicio y pista ---
   const logsByExercise = new Map<string, SetLog[]>();
-  for (const l of setLogs) {
+  const logsByTrack = new Map<string, { exerciseId: string; intensity?: string; range?: string; logs: SetLog[] }>();
+  for (const l of progressLogs) {
     const arr = logsByExercise.get(l.exerciseId) ?? [];
     arr.push(l);
     logsByExercise.set(l.exerciseId, arr);
+    const t = trackOf(l);
+    const k = `${l.exerciseId}|${t.key}`;
+    const entry = logsByTrack.get(k) ?? { exerciseId: l.exerciseId, intensity: t.intensity, range: t.range, logs: [] };
+    entry.logs.push(l);
+    logsByTrack.set(k, entry);
+  }
+  const tracksPerExercise = new Map<string, number>();
+  for (const t of logsByTrack.values()) {
+    tracksPerExercise.set(t.exerciseId, (tracksPerExercise.get(t.exerciseId) ?? 0) + 1);
   }
 
   const perExercise: MesoStats["perExercise"] = [];
-  for (const [exerciseId, logs] of logsByExercise) {
-    const bySession = groupBySession(logs);
+  for (const t of logsByTrack.values()) {
+    const bySession = groupBySession(t.logs);
     if (bySession.length < 2) continue;
     const best = (s: SetLog[]) =>
       Math.max(...s.map((l) => estimate1RM(l.actualLoadKg, l.actualReps, l.actualRir, rules)));
     const first = best(bySession[0]);
     const last = best(bySession[bySession.length - 1]);
+    const multi = (tracksPerExercise.get(t.exerciseId) ?? 0) > 1;
     perExercise.push({
-      exerciseId,
+      exerciseId: t.exerciseId,
+      track: multi
+        ? t.intensity === "heavy" || t.intensity === "light"
+          ? rules.dayIntensity[t.intensity].label.toLowerCase()
+          : t.range
+        : undefined,
       firstEst1RmKg: round1(first),
       lastEst1RmKg: round1(last),
       deltaPct: first > 0 ? round1(((last - first) / first) * 100) : 0,

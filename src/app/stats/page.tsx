@@ -93,7 +93,7 @@ export default function StatsPage() {
       const activities = await activityRepo.all();
       const stats = computeMesoStats({
         plan: meso.plan,
-        sessions: sessions.map((s) => ({ id: s.id, weekIndex: s.weekIndex, status: s.status })),
+        sessions: sessions.map((s) => ({ id: s.id, weekIndex: s.weekIndex, dayIndex: s.dayIndex, status: s.status })),
         setLogs,
         checkins,
         exercises,
@@ -164,8 +164,11 @@ export default function StatsPage() {
           <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">Progresión de carga estimada (1RM)</h2>
           <Card className="mb-4 space-y-2">
             {stats.perExercise.map((e) => (
-              <div key={e.exerciseId} className="flex items-center justify-between text-sm">
-                <span className="truncate">{exNames.get(e.exerciseId) ?? e.exerciseId}</span>
+              <div key={`${e.exerciseId}|${e.track ?? ""}`} className="flex items-center justify-between text-sm">
+                <span className="truncate">
+                  {exNames.get(e.exerciseId) ?? e.exerciseId}
+                  {e.track && <span className="text-[var(--muted)]"> · {e.track}</span>}
+                </span>
                 <span className="flex items-center gap-2">
                   <span className="tabular-nums text-[var(--muted)]">
                     {fmtKg(e.firstEst1RmKg)}→{fmtKg(e.lastEst1RmKg)} kg

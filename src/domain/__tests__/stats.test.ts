@@ -61,3 +61,58 @@ describe("computeMesoStats", () => {
     expect(json).not.toContain("soreness");
   });
 });
+
+describe("computeMesoStats — Δ1RM sin deload y por pista (A0.3)", () => {
+  // Meso de 3 semanas + deload (semana índice 3). Día A con intensidad
+  // fuerte y la misma semana base repetida como día liviano.
+  const bw = {
+    days: [
+      { ...baseWeek.days[0], label: "Fuerte", intensity: "heavy" as const },
+      { ...baseWeek.days[0], label: "Liviano", intensity: "light" as const },
+    ],
+  };
+  const p = generateMesocycle({
+    baseWeek: bw, exercises, profile: "intermediate", progressionModel: "double",
+    numAccumulationWeeks: 3, prioritizedMuscles: [], rules,
+  });
+  const deloadWeek = p.weeks.findIndex((w) => w.isDeload);
+  const ses = (id: string, weekIndex: number, dayIndex: number) => ({ id, weekIndex, dayIndex, status: "completed" as const });
+  const sessions2 = [ses("h0", 0, 0), ses("l0", 0, 1), ses("h1", 1, 0), ses("l1", 1, 1), ses("d0", deloadWeek, 0)];
+  const logs = [
+    ...sessionLogs({ sessionId: "h0", exerciseId: "bench", sets: 3, loadKg: 90, reps: 6, rir: 1, timestamp: "2026-01-01T10:00:00Z" }),
+    ...sessionLogs({ sessionId: "l0", exerciseId: "bench", sets: 3, loadKg: 70, reps: 12, rir: 3, timestamp: "2026-01-03T10:00:00Z" }),
+    ...sessionLogs({ sessionId: "h1", exerciseId: "bench", sets: 3, loadKg: 92.5, reps: 6, rir: 1, timestamp: "2026-01-08T10:00:00Z" }),
+    ...sessionLogs({ sessionId: "l1", exerciseId: "bench", sets: 3, loadKg: 72.5, reps: 12, rir: 3, timestamp: "2026-01-10T10:00:00Z" }),
+    // deload: liviano a propósito; NO debe aparecer como retroceso
+    ...sessionLogs({ sessionId: "d0", exerciseId: "bench", sets: 2, loadKg: 45, reps: 5, rir: 3, timestamp: "2026-01-22T10:00:00Z" }),
+  ];
+  const s = computeMesoStats({ plan: p, sessions: sessions2, setLogs: logs, checkins: [], exercises, rules });
+  const bench = s.perExercise.filter((e) => e.exerciseId === "bench");
+
+  it("una entrada por pista, etiquetada, ambas con Δ positivo (el deload no cuenta)", () => {
+    expect(bench).toHaveLength(2);
+    expect(bench.map((b) => b.track).sort()).toEqual(
+      [rules.dayIntensity.heavy.label.toLowerCase(), rules.dayIntensity.light.label.toLowerCase()].sort(),
+    );
+    for (const b of bench) expect(b.deltaPct).toBeGreaterThan(0);
+  });
+
+  it("sin dayIndex (llamadas viejas) cae a una sola pista por ejercicio y sin etiqueta", () => {
+    const legacy = computeMesoStats({
+      plan: p, sessions: sessions2.map(({ dayIndex: _d, ...r }) => r), setLogs: logs, checkins: [], exercises, rules,
+    });
+    const b = legacy.perExercise.filter((e) => e.exerciseId === "bench");
+    expect(b).toHaveLength(1);
+    expect(b[0].track).toBeUndefined();
+  });
+
+  it("las sesiones saltadas no cuentan para el Δ", () => {
+    const withSkip = computeMesoStats({
+      plan: p,
+      sessions: sessions2.map((x) => (x.id === "h1" ? { ...x, status: "skipped" as const } : x)),
+      setLogs: logs, checkins: [], exercises, rules,
+    });
+    const heavy = withSkip.perExercise.find((e) => e.exerciseId === "bench" && e.track === rules.dayIntensity.heavy.label.toLowerCase());
+    expect(heavy).toBeUndefined(); // queda una sola sesión fuerte válida: sin Δ posible
+  });
+});

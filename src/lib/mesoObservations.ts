@@ -66,7 +66,7 @@ export async function buildMesoObservations(): Promise<MesoObservation[]> {
 
     const stats = computeMesoStats({
       plan: meso.plan,
-      sessions: sessions.map((s) => ({ id: s.id, weekIndex: s.weekIndex, status: s.status })),
+      sessions: sessions.map((s) => ({ id: s.id, weekIndex: s.weekIndex, dayIndex: s.dayIndex, status: s.status })),
       setLogs,
       checkins,
       exercises,

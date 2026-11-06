@@ -76,10 +76,25 @@ export function sameProgressionTrack(
   b: { slot: { repRange: RepRange; dayType?: DupDayType }; intensity?: DayIntensity },
   model: ProgressionModel,
 ): boolean {
-  if ((a.intensity ?? null) !== (b.intensity ?? null)) return false;
-  if (model === "dup") return a.slot.dayType === b.slot.dayType;
-  if (model === "block") return true;
-  return a.slot.repRange.min === b.slot.repRange.min && a.slot.repRange.max === b.slot.repRange.max;
+  return progressionTrackKey(a, model) === progressionTrackKey(b, model);
+}
+
+/**
+ * Clave estable de la pista de progresión de un slot (sin el ejercicio).
+ * Dos slots comparten pista ⇔ comparten clave: es la ÚNICA definición, usada
+ * por el motor (historial, herencia de cargas) y por las estadísticas.
+ */
+export function progressionTrackKey(
+  x: { slot: { repRange: RepRange; dayType?: DupDayType }; intensity?: DayIntensity },
+  model: ProgressionModel,
+): string {
+  const zone =
+    model === "dup"
+      ? `dup:${x.slot.dayType ?? "-"}`
+      : model === "block"
+        ? "block"
+        : `${x.slot.repRange.min}-${x.slot.repRange.max}`;
+  return `${x.intensity ?? "normal"}|${zone}`;
 }
 
 /** Reps "logradas" de una sesión: el mínimo entre sus series (criterio conservador). */
