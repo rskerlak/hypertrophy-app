@@ -140,6 +140,12 @@ export interface MesocyclePlan {
 /** Resumen por sesión que consume evaluateDeloadTrigger. Se construye con summarizeSessionPair. */
 export interface SessionSummary {
   sessionId: string;
+  /**
+   * Día del split al que pertenece la sesión (ej. dayIndex del plan). Las
+   * comparaciones de rendimiento se hacen contra la sesión previa del MISMO
+   * día: comparar empuje con piernas no dice nada de fatiga.
+   */
+  dayKey?: string;
   /** nº de ejercicios que no igualaron reps de la sesión previa a carga fija */
   exercisesWithRepDropAtFixedLoad: number;
   /** mayor aumento de RIR reportado a carga fija vs sesión previa */

@@ -27,8 +27,6 @@ export interface PostSessionAnalysis {
   swaps: SwapHint[];
 }
 
-const RECENT_WINDOW = 6;
-
 export async function analyzePostSession(sessionId: string): Promise<PostSessionAnalysis | null> {
   const rules = getRules();
   const session = await sessionRepo.get(sessionId);
@@ -43,26 +41,42 @@ export async function analyzePostSession(sessionId: string): Promise<PostSession
   if (!meso) return null;
 
   // --- Deload (F8) ---
-  const completed = sessions.filter((s) => s.status === "completed");
-  const recent = completed.slice(-RECENT_WINDOW);
+  // Resúmenes sobre TODO el meso (sin deload) para que cada sesión se compare
+  // con la previa de su mismo día aunque esa quede fuera de la ventana.
+  const order = (s: { weekIndex: number; dayIndex: number }) => s.weekIndex * 1000 + s.dayIndex;
+  const completed = sessions
+    .filter((s) => s.status === "completed" && !s.isDeload)
+    .sort((a, b) => order(a) - order(b));
   const logsBySession = await Promise.all(
-    recent.map(async (s) => ({
+    completed.map(async (s) => ({
       sessionId: s.id,
+      dayKey: String(s.dayIndex),
       logs: await setLogRepo.forSession(s.id),
       checkin: (await checkinRepo.forSession(s.id)) as Checkin | null,
     })),
   );
-  const summaries = summarizeRecentSessions(logsBySession);
+  const daysPerWeek = meso.plan.weeks.find((w) => !w.isDeload)?.days.length ?? 1;
+  const cfgTriggers = rules.deloadTriggers;
+  const window = Math.max(
+    cfgTriggers.recentWindowSessions,
+    daysPerWeek * cfgTriggers.signals.performanceDropSessions.consecutiveSessions,
+  );
+  const summaries = summarizeRecentSessions(logsBySession).slice(-window);
+  const recentCheckins = logsBySession
+    .slice(-window)
+    .map((l) => l.checkin)
+    .filter((c): c is Checkin => !!c);
 
   const currentWeek = meso.plan.weeks[session.weekIndex];
   const deload = evaluateDeloadTrigger({
     recentSessions: summaries,
-    checkins: logsBySession.map((l) => l.checkin).filter((c): c is Checkin => !!c),
+    checkins: recentCheckins,
     currentWeeklyVolumeByMuscle: currentWeek?.targetVolumeByMuscle ?? {},
     prioritizedMuscles: settings.prioritizedMuscles,
     profile: settings.experienceProfile,
     weekIndex: session.weekIndex,
     numAccumulationWeeks: meso.numAccumulationWeeks,
+    isDeload: session.isDeload,
     rules,
   });
 

@@ -78,6 +78,8 @@ export interface EvaluateDeloadInput {
   profile: ExperienceProfileId;
   weekIndex: number;
   numAccumulationWeeks: number;
+  /** true si la sesión evaluada ya es de deload: nunca se sugiere otro. */
+  isDeload?: boolean;
   rules: Rules;
 }
 
@@ -86,16 +88,31 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
   const cfg = rules.deloadTriggers;
   const reasons: string[] = [];
 
-  // 1. Caída de rendimiento sostenida.
+  // Durante el propio deload no tiene sentido sugerir un deload (A0.5).
+  if (input.isDeload) return { shouldSuggest: false, reasons: [], forced: false };
+
+  // 1. Caída de rendimiento sostenida: N sesiones seguidas DEL MISMO DÍA del
+  //    split con caída de reps a carga fija (Grandou 2020: único marcador
+  //    establecido de fatiga acumulada). Sin dayKey: N sesiones seguidas.
   const perf = cfg.signals.performanceDropSessions;
   if (perf.enabled) {
-    const recent = input.recentSessions.slice(-perf.consecutiveSessions);
-    if (
-      recent.length >= perf.consecutiveSessions &&
-      recent.every((s) => s.exercisesWithRepDropAtFixedLoad >= perf.exercisesAffected)
-    ) {
+    const byDay = new Map<string, SessionSummary[]>();
+    for (const s of input.recentSessions) {
+      const k = s.dayKey ?? "*";
+      const arr = byDay.get(k) ?? [];
+      arr.push(s);
+      byDay.set(k, arr);
+    }
+    const hit = [...byDay.values()].some((list) => {
+      const recent = list.slice(-perf.consecutiveSessions);
+      return (
+        recent.length >= perf.consecutiveSessions &&
+        recent.every((s) => s.exercisesWithRepDropAtFixedLoad >= perf.exercisesAffected)
+      );
+    });
+    if (hit) {
       reasons.push(
-        `Caída de reps a carga fija en ${perf.exercisesAffected}+ ejercicios durante ${perf.consecutiveSessions} sesiones seguidas`,
+        `Caída de reps a carga fija en ${perf.exercisesAffected}+ ejercicios durante ${perf.consecutiveSessions} sesiones seguidas del mismo día`,
       );
     }
   }
@@ -158,21 +175,27 @@ export function evaluateDeloadTrigger(input: EvaluateDeloadInput): DeloadEvaluat
   };
 }
 
-/** Utilidad para armar SessionSummary a partir del historial completo de logs. */
+/**
+ * Arma SessionSummary a partir del historial (orden cronológico). Si cada
+ * entrada trae `dayKey`, cada sesión se compara con la sesión previa del MISMO
+ * día del split (A0.4); sin `dayKey`, con la inmediatamente anterior (legado).
+ */
 export function summarizeRecentSessions(
-  logsBySession: Array<{ sessionId: string; logs: SetLog[]; checkin?: Checkin | null }>,
+  logsBySession: Array<{ sessionId: string; logs: SetLog[]; checkin?: Checkin | null; dayKey?: string }>,
 ): SessionSummary[] {
   const out: SessionSummary[] = [];
+  const lastByDay = new Map<string, SetLog[]>();
   for (let i = 0; i < logsBySession.length; i++) {
-    const prev = i > 0 ? logsBySession[i - 1].logs : [];
-    out.push(
-      summarizeSessionPair(
-        prev,
-        logsBySession[i].logs,
-        logsBySession[i].sessionId,
-        logsBySession[i].checkin,
-      ),
-    );
+    const cur = logsBySession[i];
+    const prev =
+      cur.dayKey !== undefined
+        ? (lastByDay.get(cur.dayKey) ?? [])
+        : i > 0
+          ? logsBySession[i - 1].logs
+          : [];
+    const summary = summarizeSessionPair(prev, cur.logs, cur.sessionId, cur.checkin);
+    out.push(cur.dayKey !== undefined ? { ...summary, dayKey: cur.dayKey } : summary);
+    if (cur.dayKey !== undefined) lastByDay.set(cur.dayKey, cur.logs);
   }
   return out;
 }

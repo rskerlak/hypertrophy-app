@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deloadLoadForDay, evaluateDeloadTrigger, summarizeSessionPair } from "../deload";
+import { deloadLoadForDay, evaluateDeloadTrigger, summarizeRecentSessions, summarizeSessionPair } from "../deload";
 import type { SessionSummary } from "../types";
 import { equipment, rules, sessionLogs } from "./fixtures";
 
@@ -120,5 +120,66 @@ describe("deloadLoadForDay — política de carga de la semana de deload (A0.2)"
   it("la fracción sale del config, no de un literal", () => {
     expect(rules.deloadStructure.loadSecondHalf).toBeGreaterThan(0);
     expect(rules.deloadStructure.loadSecondHalf).toBeLessThan(1);
+  });
+});
+
+describe("disparador de deload por día del split (A0.4) y nunca durante el deload (A0.5)", () => {
+  // Helpers: una sesión con banca a 80 kg y N reps.
+  let n = 0;
+  const sess = (dayKey: string, reps: number) => {
+    n++;
+    return {
+      sessionId: `s${n}`,
+      dayKey,
+      logs: sessionLogs({
+        sessionId: `s${n}`, exerciseId: dayKey === "A" ? "bench" : "squat", sets: 3, loadKg: 80,
+        reps, rir: 2, timestamp: `2026-02-${String(n).padStart(2, "0")}T10:00:00Z`,
+      }).concat(
+        sessionLogs({
+          sessionId: `s${n}`, exerciseId: dayKey === "A" ? "row" : "db-press", sets: 3, loadKg: 60,
+          reps, rir: 2, timestamp: `2026-02-${String(n).padStart(2, "0")}T10:30:00Z`,
+        }),
+      ),
+    };
+  };
+
+  it("compara con la sesión previa del MISMO día, no con la anterior cronológica", () => {
+    // A(10) B(6) A(9): con la lógica vieja, A(9) se comparaba contra B (otros ejercicios) → sin dato.
+    const sums = summarizeRecentSessions([sess("A", 10), sess("B", 6), sess("A", 9)]);
+    expect(sums[2].dayKey).toBe("A");
+    expect(sums[2].exercisesWithRepDropAtFixedLoad).toBe(2); // bench y row cayeron vs la A previa
+    expect(sums[1].exercisesWithRepDropAtFixedLoad).toBe(0); // B no tiene previa propia
+  });
+
+  it("caída sostenida en el mismo día dispara aunque otros días intercalen", () => {
+    const sums = summarizeRecentSessions([sess("A", 10), sess("B", 8), sess("A", 9), sess("B", 9), sess("A", 8)]);
+    const perf = rules.deloadTriggers.signals.performanceDropSessions;
+    const r = evaluateDeloadTrigger({ ...baseInput, recentSessions: sums });
+    const hasPerf = r.reasons.some((x) => x.includes("mismo día"));
+    expect(perf.consecutiveSessions).toBe(2); // el escenario asume el default del config
+    expect(hasPerf).toBe(true);
+  });
+
+  it("una sola caída del día no dispara la señal", () => {
+    const sums = summarizeRecentSessions([sess("A", 10), sess("B", 8), sess("A", 9), sess("B", 9)]);
+    const r = evaluateDeloadTrigger({ ...baseInput, recentSessions: sums });
+    expect(r.reasons.some((x) => x.includes("mismo día"))).toBe(false);
+  });
+
+  it("sin dayKey se conserva el comportamiento anterior (legado)", () => {
+    const r = evaluateDeloadTrigger({ ...baseInput, recentSessions: [droppedSession("a"), droppedSession("b")] });
+    expect(r.reasons.some((x) => x.includes("Caída de reps"))).toBe(true);
+  });
+
+  it("durante la semana de deload nunca sugiere otro deload, ni forzado", () => {
+    const r = evaluateDeloadTrigger({
+      ...baseInput, weekIndex: 5, isDeload: true,
+      recentSessions: [droppedSession("a"), droppedSession("b")],
+    });
+    expect(r).toEqual({ shouldSuggest: false, reasons: [], forced: false });
+  });
+
+  it("la ventana de sesiones sale del config", () => {
+    expect(rules.deloadTriggers.recentWindowSessions).toBeGreaterThan(0);
   });
 });

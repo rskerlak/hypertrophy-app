@@ -156,6 +156,7 @@ export const rulesSchema = z
     deloadTriggers: z
       .object({
         minSignalsToSuggest: z.number().int(),
+        recentWindowSessions: z.number().int().min(1).default(6),
         signals: z
           .object({
             performanceDropSessions: z

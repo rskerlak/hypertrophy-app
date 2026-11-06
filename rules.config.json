@@ -170,6 +170,8 @@
   "deloadTriggers": {
     "_note": "MULTI-SENAL y PROBABILISTICO. Nunca presentar como 'MRV alcanzado' medido. La caida de rendimiento es sobre todo fatiga aguda, no un umbral fisiologico. Se dispara sugerencia (no obligacion) si se cumplen >=minSignals de estas condiciones.",
     "minSignalsToSuggest": 2,
+    "recentWindowSessions": 6,
+    "_windowNote": "Sesiones completadas recientes que se evaluan. La ventana efectiva es max(recentWindowSessions, dias del split x consecutiveSessions), para que cada dia tenga suficientes repeticiones: con un split de 6 dias y ventana fija de 6, nunca habia dos sesiones del mismo dia y la caida de rendimiento no podia dispararse. Las comparaciones se hacen contra la sesion previa del mismo dia, calculadas sobre todo el meso (sin deload).",
     "signals": {
       "performanceDropSessions": {
         "enabled": true,
