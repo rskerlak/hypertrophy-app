@@ -46,7 +46,7 @@ export function suggestLoadFromHistory(input: {
   rules: Rules;
   ctx: RoundingContext;
 }): number | null {
-  const sessions = groupBySession(input.history.filter((l) => l.actualLoadKg > 0));
+  const sessions = groupBySession(input.history.filter((l) => l.actualLoadKg > 0 && l.kind !== "warmup"));
   if (sessions.length === 0) return null;
   const last = sessions[sessions.length - 1];
   const best = Math.max(

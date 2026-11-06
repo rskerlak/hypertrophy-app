@@ -52,6 +52,22 @@ export const rulesSchema = z
           .default({ min: 0, max: 4 }),
       })
       .passthrough(),
+    warmup: z
+      .object({
+        enabled: z.boolean(),
+        scheme: z.array(z.object({ pct: z.number().gt(0).lt(1), reps: z.number().int().min(1) })),
+        minWorkingLoadKg: z.number().min(0),
+      })
+      .passthrough()
+      .default({ enabled: true, scheme: [{ pct: 0.5, reps: 8 }, { pct: 0.75, reps: 4 }], minWorkingLoadKg: 40 }),
+    rest: z
+      .object({
+        defaultCompoundSec: z.number().int().min(0),
+        defaultIsolationSec: z.number().int().min(0),
+        minSec: z.number().int().min(0),
+      })
+      .passthrough()
+      .default({ defaultCompoundSec: 120, defaultIsolationSec: 90, minSec: 60 }),
     dayIntensity: z
       .object({
         heavy: z.object({ label: z.string(), rirOffset: z.number().int() }).passthrough(),

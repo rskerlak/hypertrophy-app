@@ -117,6 +117,7 @@ export function deriveBaseWeekFromPlan(
       ...(day.intensity ? { intensity: day.intensity } : {}),
       slots: day.slots.map((slot, slotIndex) => ({
         exerciseId: slot.exerciseId,
+        ...(slot.supersetGroup ? { supersetGroup: slot.supersetGroup } : {}),
         targetSets: slot.sets,
         repRange: { ...slot.repRange },
         startingLoadKg:
@@ -287,6 +288,7 @@ function buildAccumulationWeek(args: {
 
       return {
         exerciseId: slot.exerciseId,
+        ...(slot.supersetGroup ? { supersetGroup: slot.supersetGroup } : {}),
         sets: slot.targetSets + extra,
         repRange,
         targetRir: rir,
@@ -431,6 +433,7 @@ function buildDeloadWeek(
       const f = ex ? (factorByMuscle[ex.primaryMuscle] ?? d.volumeFractionFallback) : d.volumeFractionFallback;
       return {
         exerciseId: slot.exerciseId,
+        ...(slot.supersetGroup ? { supersetGroup: slot.supersetGroup } : {}),
         sets: Math.max(1, Math.floor(slot.sets * f)),
         repRange: {
           min: Math.max(1, Math.round(slot.repRange.min * d.repsFraction)),

@@ -5,7 +5,7 @@
 import type { Rules } from "./rules";
 import { effectiveLandmarks } from "./rules";
 import { roundToAvailable, type RoundingContext } from "./rounding";
-import { isRirReported } from "./types";
+import { isRirReported, isWorkingSet } from "./types";
 import type {
   Checkin,
   DeloadEvaluation,
@@ -25,6 +25,9 @@ export function summarizeSessionPair(
   checkin?: Checkin | null,
 ): SessionSummary {
   const prevByExercise = new Map<string, SetLog[]>();
+  // Solo series de trabajo: el calentamiento no dice nada de fatiga.
+  prevLogs = prevLogs.filter(isWorkingSet);
+  currLogs = currLogs.filter(isWorkingSet);
   for (const l of prevLogs) {
     const arr = prevByExercise.get(l.exerciseId) ?? [];
     arr.push(l);

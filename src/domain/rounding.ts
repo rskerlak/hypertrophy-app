@@ -156,3 +156,57 @@ export function nextAchievableLoad(currentLoadKg: number, ctx: RoundingContext):
       return currentLoadKg;
   }
 }
+
+export interface PlateBreakdown {
+  /** Peso base (barra o mango). */
+  baseKg: number;
+  /** Discos POR LADO, de mayor a menor. */
+  perSide: number[];
+  /** true si la carga pedida no se arma exacto con el inventario. */
+  unreachable: boolean;
+  /** Mayor carga alcanzable ≤ pedida (la que realmente se arma). */
+  nearestBelow: number;
+}
+
+/**
+ * Discos por lado para armar una carga (A1.2). Barra: barra + pares; mancuerna
+ * armable: mango + pares. Rack fijo, máquina, polea y peso corporal → null (no
+ * hay discos que mostrar). Greedy de mayor a menor sobre la carga alcanzable
+ * (con denominaciones ilimitadas por par, greedy encuentra una combinación
+ * válida porque `roundLoadable` ya garantizó que la suma es alcanzable).
+ */
+export function plateBreakdown(loadKg: number, ctx: RoundingContext): PlateBreakdown | null {
+  const { type, equipment } = ctx;
+  let baseKg: number;
+  let plates: number[];
+  if (type === "barbell") {
+    baseKg = equipment.barWeightKg;
+    plates = equipment.platesKg;
+  } else if (type === "dumbbell") {
+    const loadable = loadableDumbbell(equipment);
+    if (!loadable) return null;
+    baseKg = loadable.base;
+    plates = loadable.plates;
+  } else {
+    return null;
+  }
+  const nearestBelow = roundLoadable(loadKg, baseKg, plates);
+  const platesG = [...plates].map(toGrams).filter((p) => p > 0).sort((a, b) => b - a);
+  let sideG = Math.round((toGrams(nearestBelow) - toGrams(baseKg)) / 2);
+  const dp = achievableSideSums(Math.max(0, sideG), platesG);
+  const perSide: number[] = [];
+  // Greedy guiado por alcanzabilidad: tomar el disco más grande que deje un
+  // resto todavía alcanzable.
+  while (sideG > 0) {
+    const pick = platesG.find((p) => p <= sideG && dp[sideG - p]);
+    if (pick === undefined) break;
+    perSide.push(toKg(pick));
+    sideG -= pick;
+  }
+  return {
+    baseKg,
+    perSide,
+    unreachable: toGrams(nearestBelow) !== toGrams(loadKg),
+    nearestBelow,
+  };
+}

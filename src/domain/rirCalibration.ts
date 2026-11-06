@@ -16,7 +16,7 @@
 // mide, no se asume.
 
 import type { Rules } from "./rules";
-import { isRirReported, type SetLog } from "./types";
+import { isRirReported, isWorkingSet, type SetLog } from "./types";
 
 export interface RirCalibration {
   /** Desvío absoluto medio de la capacidad implícita (reps + RIR) a carga fija. */
@@ -41,7 +41,7 @@ export interface RirCalibration {
 /** % de series con RIR registrado === RIR objetivo (null si no hay series). */
 export function rirEchoPct(allLogs: SetLog[]): number | null {
   // Solo series con RIR reportado: el precargado sin tocar no es eco, es "sin dato".
-  const logs = allLogs.filter(isRirReported);
+  const logs = allLogs.filter((l) => isRirReported(l) && isWorkingSet(l));
   if (logs.length === 0) return null;
   const eq = logs.filter((l) => l.actualRir === l.targetRir).length;
   return round2((eq / logs.length) * 100);
@@ -54,7 +54,7 @@ export function rirEchoPct(allLogs: SetLog[]): number | null {
 export function assessRirCalibration(allLogs: SetLog[], rules: Rules): RirCalibration {
   const cfg = rules.rirCalibration;
   // Calibrar solo con RIR reportado (A1.11): el precargado no mide percepción.
-  const logs = allLogs.filter(isRirReported);
+  const logs = allLogs.filter((l) => isRirReported(l) && isWorkingSet(l));
 
   // Agrupar por ejercicio + carga real.
   const groups = new Map<string, SetLog[]>();

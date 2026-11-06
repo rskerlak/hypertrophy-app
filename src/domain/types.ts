@@ -40,7 +40,17 @@ export interface Exercise {
   defaultRepRange?: RepRange;
   /** true si lo creó el usuario (se preserva en las migraciones de biblioteca). */
   custom?: boolean;
+  /** Nota persistente del usuario ("asiento 4, agarre ancho"). */
+  note?: string;
+  /** Descanso propio en segundos (si falta, default por tipo desde config). */
+  restSec?: number;
 }
+
+/**
+ * Tipo de serie. "warmup" (aproximación) NO cuenta para volumen, progresión,
+ * calibración ni stats; drop/failure/partial sí son estímulo y cuentan.
+ */
+export type SetKind = "warmup" | "working" | "drop" | "failure" | "partial";
 
 export interface Equipment {
   barWeightKg: number;
@@ -63,6 +73,8 @@ export interface BaseWeekSlot {
   targetSets: number;
   repRange: RepRange;
   startingLoadKg: number;
+  /** Slots con el mismo grupo se hacen en superserie (descanso al cerrar el último). */
+  supersetGroup?: string;
 }
 
 export interface BaseWeekDay {
@@ -92,7 +104,19 @@ export interface SetLog {
    * dato anterior a A1.11 (se asume reportado; la detección de eco lo cubre).
    */
   rirReported?: boolean;
+  /** Tipo de serie; ausente = "working". */
+  kind?: SetKind;
+  /** Índice del slot en el día (distingue el mismo ejercicio dos veces en un día). */
+  slotIndex?: number;
+  /** Lado en ejercicios unilaterales. */
+  side?: "L" | "R";
+  note?: string;
   timestamp: string;
+}
+
+/** Serie de trabajo = todo salvo aproximación. Las de calentamiento no son estímulo medido. */
+export function isWorkingSet(l: Pick<SetLog, "kind">): boolean {
+  return l.kind !== "warmup";
 }
 
 /** ¿El RIR de esta serie informa la percepción del usuario? (ver SetLog.rirReported) */
@@ -115,6 +139,8 @@ export interface Checkin {
 
 export interface PlannedSlot {
   exerciseId: string;
+  /** Superserie heredada de la semana base. */
+  supersetGroup?: string;
   sets: number;
   repRange: RepRange;
   targetRir: number;

@@ -12,7 +12,7 @@ import type {
   SetLog,
 } from "./types";
 import { nextAchievableLoad, roundToAvailable } from "./rounding";
-import { isRirReported } from "./types";
+import { isRirReported, isWorkingSet } from "./types";
 
 export interface NextPrescriptionInput {
   /** Logs de sesiones previas de este slot (mismo ejercicio), cualquier orden. */
@@ -37,11 +37,37 @@ export interface NextPrescriptionInput {
   rules: Rules;
 }
 
+/**
+ * Regla aplicada por el motor, para el chip "¿por qué?" (A1.10). Cada rama de
+ * progresión devuelve un `rule` distinto (ver CONTEXT.md §6) y los números que
+ * la decidieron, en unidades legibles.
+ */
+export type PrescriptionRule =
+  | "no-history"
+  | "linear-hit"
+  | "linear-no-jump"
+  | "linear-stalled"
+  | "linear-miss"
+  | "double-below-ceiling"
+  | "double-consolidate"
+  | "double-no-jump"
+  | "double-cushion"
+  | "double-ceiling"
+  | "double-ceiling-large-jump"
+  | "deload-first-half"
+  | "deload-second-half";
+
+export interface PrescriptionExplain {
+  rule: PrescriptionRule;
+  inputs: Record<string, number | string>;
+}
+
 export interface Prescription {
   nextLoadKg: number;
   nextReps: number;
   nextSets?: number;
   rationale: string;
+  explain: PrescriptionExplain;
 }
 
 /** Agrupa el historial por sesión y devuelve las sesiones ordenadas por tiempo. */
@@ -174,12 +200,14 @@ export function nextPrescription(input: NextPrescriptionInput): Prescription {
     targetRir = input.targetRir + phase.rirBias;
   }
 
-  const sessions = groupBySession(input.exerciseHistory);
+  // Las series de aproximación no son estímulo medido: nunca deciden la progresión.
+  const sessions = groupBySession(input.exerciseHistory.filter(isWorkingSet));
   if (sessions.length === 0) {
     return {
       nextLoadKg: input.currentLoadKg,
       nextReps: repRange.min,
       rationale: "Sin historial: usar carga inicial y piso del rango.",
+      explain: { rule: "no-history", inputs: { cargaInicialKg: input.currentLoadKg, pisoReps: repRange.min } },
     };
   }
 
@@ -225,12 +253,17 @@ function linearProgression(
         nextLoadKg: input.currentLoadKg,
         nextReps: achievedReps(last) + 1,
         rationale: "Sin incremento de carga disponible: añadir una rep.",
+        explain: { rule: "linear-no-jump", inputs: { repsLogradas: achievedReps(last), cargaKg: input.currentLoadKg } },
       };
     }
     return {
       nextLoadKg: next,
       nextReps: repRange.min,
       rationale: "Objetivo cumplido: subir carga al incremento disponible.",
+      explain: {
+        rule: "linear-hit",
+        inputs: { cargaAnteriorKg: input.currentLoadKg, cargaNuevaKg: next, incrementoObjetivoPct: cfg.loadIncrementPctPerSession },
+      },
     };
   }
 
@@ -242,12 +275,14 @@ function linearProgression(
       nextLoadKg: input.currentLoadKg,
       nextReps: repRange.min,
       rationale: `Sin progreso en ${cfg.failToProgressThreshold} sesiones: mantener carga.`,
+      explain: { rule: "linear-stalled", inputs: { sesionesSinProgreso: recentFails, umbral: cfg.failToProgressThreshold } },
     };
   }
   return {
     nextLoadKg: input.currentLoadKg,
     nextReps: repRange.min,
     rationale: "Objetivo no cumplido: repetir carga.",
+    explain: { rule: "linear-miss", inputs: { repsLogradas: achievedReps(last), cargaKg: input.currentLoadKg } },
   };
 }
 
@@ -282,6 +317,15 @@ function doubleProgression(
         reps < rawReps
           ? "Llegaste a las reps pero más cerca del fallo que el objetivo: consolidar antes de subir."
           : "Debajo del tope del rango: subir reps a misma carga.",
+      explain: {
+        rule: reps < rawReps ? "double-consolidate" : "double-below-ceiling",
+        inputs: {
+          repsLogradas: rawReps,
+          repsAjustadasPorRir: reps,
+          topeRango: repRange.max,
+          cargaKg: input.currentLoadKg,
+        },
+      },
     };
   }
 
@@ -292,6 +336,7 @@ function doubleProgression(
       nextLoadKg: input.currentLoadKg,
       nextReps: reps + cfg.repStepWhenBelowCeiling,
       rationale: "Sin incremento de carga disponible: seguir añadiendo reps.",
+      explain: { rule: "double-no-jump", inputs: { repsAjustadasPorRir: reps, topeRango: repRange.max, cargaKg: input.currentLoadKg } },
     };
   }
   const minJumpPct =
@@ -310,6 +355,10 @@ function doubleProgression(
       nextLoadKg: input.currentLoadKg,
       nextReps: reps + cfg.repStepWhenBelowCeiling,
       rationale: `El salto mínimo de tu equipamiento (+${minJumpPct.toFixed(1)}%) es grande: sumo una rep sobre el tope (colchón ${surplus + 1}/${cfg.maxRepsOverCeiling}) antes de subir carga.`,
+      explain: {
+        rule: "double-cushion",
+        inputs: { saltoMinimoPct: +minJumpPct.toFixed(1), colchonUsado: surplus + 1, colchonMax: cfg.maxRepsOverCeiling },
+      },
     };
   }
 
@@ -322,5 +371,16 @@ function doubleProgression(
     rationale: jumpIsProportional
       ? "Tope del rango alcanzado: subir carga y volver al piso del rango."
       : `Tope del rango alcanzado: subir carga. El salto mínimo de tu equipamiento es grande (+${minJumpPct.toFixed(1)}%): si no llegás a ${repRange.min} reps, la próxima repite la carga hasta consolidar.`,
+    explain: {
+      rule: jumpIsProportional ? "double-ceiling" : "double-ceiling-large-jump",
+      inputs: {
+        repsAjustadasPorRir: reps,
+        topeRango: repRange.max,
+        cargaAnteriorKg: input.currentLoadKg,
+        cargaNuevaKg: nextLoad,
+        saltoMinimoPct: +minJumpPct.toFixed(1),
+        incrementoObjetivoPct: cfg.loadIncrementPctOnRepCeiling,
+      },
+    },
   };
 }

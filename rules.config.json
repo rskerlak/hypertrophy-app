@@ -87,6 +87,23 @@
     "_bandNote": "Limites de la banda de RIR que el usuario puede elegir por meso. Una banda 1-3 es defendible para hipertrofia: 1-2 RIR igualo al fallo en entrenados (Refalo 2024, J Sports Sci, RCT) y la curva RIR->hipertrofia se aplana cerca del fallo (Robinson 2024), asi que no llegar a 0 cuesta poco y reduce fatiga; mas de 3 RIR ya queda lejos del rango con buen estimulo por serie. Todo RIR planificado (deload incluido) se acota a la banda; el piso de barra sigue mandando por seguridad."
   },
 
+  "warmup": {
+    "_note": "1-2 series de aproximacion, la ultima cerca de la carga de trabajo, sin reps al fallo. Evidencia debil-probable (Wilson/Nunes/Blazevich 2025: el calentamiento no cambia la fuerza maxima; sirve para familiarizar la carga). Solo para cargas >= minWorkingLoadKg. NUNCA cuentan como volumen, progresion, calibracion ni stats.",
+    "enabled": true,
+    "scheme": [
+      { "pct": 0.5, "reps": 8 },
+      { "pct": 0.75, "reps": 4 }
+    ],
+    "minWorkingLoadKg": 40
+  },
+
+  "rest": {
+    "_note": "Singer 2024 (Front Sports Act Living, meta Bayesiano, 9 estudios): beneficio pequeno con >60 s; sin diferencia clara por encima de 90 s. Default y minimo SUGERIDOS: nunca un techo ni un bloqueo. Multiarticular = ejercicio con musculos secundarios.",
+    "defaultCompoundSec": 120,
+    "defaultIsolationSec": 90,
+    "minSec": 60
+  },
+
   "dayIntensity": {
     "_note": "Intensidad FIJA por dia de la semana base (dia fuerte / dia liviano), alternativa simple a DUP: el usuario define los rangos de reps por slot y el dia aplica un offset de RIR sobre el calendario semanal. Evidencia: ondular carga/reps entre dias es equivalente para hipertrofia con volumen igualado (Grgic 2017, d=-0.02); la eleccion es de preferencia/gestion de fatiga, no una optimizacion.",
     "heavy": { "label": "Fuerte", "rirOffset": -1 },

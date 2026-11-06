@@ -2,7 +2,7 @@
 // NUNCA bombeo/dolor como progreso. Incluye siempre el aviso de "n pequeño".
 
 import type { Rules } from "./rules";
-import { isRirReported, type Checkin, type Exercise, type MesoStats, type MesocyclePlan, type SetLog } from "./types";
+import { isRirReported, isWorkingSet, type Checkin, type Exercise, type MesoStats, type MesocyclePlan, type SetLog } from "./types";
 import { estimate1RM } from "./oneRepMax";
 import { groupBySession, progressionTrackKey } from "./progression";
 import { rirEchoPct } from "./rirCalibration";
@@ -31,6 +31,7 @@ export function computeMesoStats(input: ComputeMesoStatsInput): MesoStats {
   // Logs que cuentan como progreso: ni deload (cargas deliberadamente bajas,
   // A0.3) ni sesiones saltadas (el motor tampoco las usa).
   const isProgressLog = (l: SetLog) => {
+    if (!isWorkingSet(l)) return false; // aproximación: no es progreso
     const s = sessionById.get(l.sessionId);
     if (!s || s.status === "skipped") return false;
     return !plan.weeks[s.weekIndex]?.isDeload;
@@ -125,7 +126,7 @@ export function computeMesoStats(input: ComputeMesoStatsInput): MesoStats {
     }
   }
   let completed = 0;
-  for (const l of setLogs) completed += fractionalSets(l.exerciseId, 1);
+  for (const l of setLogs) if (isWorkingSet(l)) completed += fractionalSets(l.exerciseId, 1);
 
   // --- Deriva de RIR por semana (media de actual - objetivo) ---
   const diffsByWeek = new Map<number, number[]>();

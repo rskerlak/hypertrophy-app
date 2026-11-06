@@ -118,6 +118,19 @@ export interface SessionRow {
   plannedDate?: string;
   completedAt?: string;
   status: "pending" | "completed" | "skipped";
+  /** Primera serie registrada (sesión "en curso"); para duración y Home. */
+  startedAt?: string;
+  /** Última serie registrada; el timer de descanso sobrevive recargas. */
+  lastSetAt?: string;
+  /** Cambios SOLO para esta sesión (no tocan el plan). */
+  overrides?: {
+    /** Ejercicio reemplazado hoy en un slot. */
+    exercise?: Array<{ slotIndex: number; exerciseId: string }>;
+    /** Series agregadas (+) o quitadas (−) hoy en un slot. */
+    setsDelta?: Array<{ slotIndex: number; delta: number }>;
+    /** Deload por ejercicio aplicado a esta sesión: factor de series y carga. */
+    exerciseDeload?: Array<{ slotIndex: number; setsFactor: number; loadFactor: number }>;
+  };
 }
 
 export class HypertrophyDB extends Dexie {
