@@ -2,6 +2,7 @@
 // (lee repos), pero delega todo el cálculo a src/domain.
 
 import { groupBySession, nextPrescription, sameProgressionTrack } from "@/domain/progression";
+import { deloadLoadForDay } from "@/domain/deload";
 import {
   assessRirCalibration,
   calibratedRirCap,
@@ -87,25 +88,50 @@ export async function buildSessionView(sessionId: string): Promise<SessionView |
         ? planned.targetLoadKg
         : lastLoggedLoad(history) ?? planned.targetLoadKg;
 
-    const p = nextPrescription({
-      exerciseHistory: history,
-      model: meso.progressionModel,
-      targetRir: planned.targetRir,
-      repRange: planned.repRange,
-      currentLoadKg,
-      // Carga 0 = modo peso corporal: el motor no sube carga, progresa por reps.
-      equipmentType: planned.targetLoadKg === 0 ? "bodyweight" : exercise.equipmentType,
-      equipment: settings.equipment,
-      dayType: planned.dayType,
-      weekIndex: session.weekIndex,
-      numAccumulationWeeks: meso.numAccumulationWeeks,
-      rirCapOverride: calibratedRirCap(
-        rules.progressionModels.double.rirAdjustmentCapReps,
-        rirCalibration,
-        rules,
-      ),
-      rules,
-    });
+    // Deload: sin progresión; carga por política de la semana (1ª mitad =
+    // carga de semana 1, 2ª mitad = fracción) y piso del rango reducido.
+    const deload =
+      week.isDeload && week.deloadLoadPolicy
+        ? deloadLoadForDay({
+            dayIndex: session.dayIndex,
+            daysInWeek: week.days.length,
+            week1LoadKg: planned.targetLoadKg,
+            secondHalfFraction: week.deloadLoadPolicy.secondHalfFraction,
+            ctx: {
+              type: planned.targetLoadKg === 0 ? "bodyweight" : exercise.equipmentType,
+              equipment: settings.equipment,
+            },
+          })
+        : null;
+
+    const p = deload
+      ? {
+          nextLoadKg: deload.loadKg,
+          nextReps: planned.repRange.min,
+          rationale:
+            deload.half === "first"
+              ? "Deload, primera mitad: carga de la semana 1 con menos series y reps. Gestión de fatiga, no progresión."
+              : `Deload, segunda mitad: ${Math.round(week.deloadLoadPolicy!.secondHalfFraction * 100)}% de la carga de la semana 1. Gestión de fatiga, no progresión.`,
+        }
+      : nextPrescription({
+          exerciseHistory: history,
+          model: meso.progressionModel,
+          targetRir: planned.targetRir,
+          repRange: planned.repRange,
+          currentLoadKg,
+          // Carga 0 = modo peso corporal: el motor no sube carga, progresa por reps.
+          equipmentType: planned.targetLoadKg === 0 ? "bodyweight" : exercise.equipmentType,
+          equipment: settings.equipment,
+          dayType: planned.dayType,
+          weekIndex: session.weekIndex,
+          numAccumulationWeeks: meso.numAccumulationWeeks,
+          rirCapOverride: calibratedRirCap(
+            rules.progressionModels.double.rirAdjustmentCapReps,
+            rirCalibration,
+            rules,
+          ),
+          rules,
+        });
 
     // Piso de RIR si el reporte no está calibrado: no prescribir 0 RIR cuando
     // no sabemos dónde está realmente el fallo para este usuario.

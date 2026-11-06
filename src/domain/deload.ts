@@ -4,6 +4,7 @@
 
 import type { Rules } from "./rules";
 import { effectiveLandmarks } from "./rules";
+import { roundToAvailable, type RoundingContext } from "./rounding";
 import type {
   Checkin,
   DeloadEvaluation,
@@ -174,4 +175,25 @@ export function summarizeRecentSessions(
     );
   }
   return out;
+}
+
+/**
+ * Carga de un día de la semana de deload según `deloadStructure`: la primera
+ * mitad de la semana usa la carga de la semana 1 del meso; la segunda mitad,
+ * esa carga × `secondHalfFraction`, redondeada al equipamiento. El deload NO
+ * progresa (ni reps ni carga): es gestión de fatiga (Coleman 2024; Bell 2023
+ * Delphi: mantener intensidad y recortar volumen).
+ * "Segunda mitad" = dayIndex ≥ ceil(días / 2). Peso corporal (carga 0) → 0.
+ */
+export function deloadLoadForDay(args: {
+  dayIndex: number;
+  daysInWeek: number;
+  week1LoadKg: number;
+  secondHalfFraction: number;
+  ctx: RoundingContext;
+}): { loadKg: number; half: "first" | "second" } {
+  const half = args.dayIndex >= Math.ceil(args.daysInWeek / 2) ? "second" : "first";
+  if (args.week1LoadKg <= 0) return { loadKg: 0, half };
+  if (half === "first") return { loadKg: args.week1LoadKg, half };
+  return { loadKg: roundToAvailable(args.week1LoadKg * args.secondHalfFraction, args.ctx), half };
 }

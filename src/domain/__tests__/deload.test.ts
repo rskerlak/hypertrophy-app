@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { evaluateDeloadTrigger, summarizeSessionPair } from "../deload";
+import { deloadLoadForDay, evaluateDeloadTrigger, summarizeSessionPair } from "../deload";
 import type { SessionSummary } from "../types";
-import { rules, sessionLogs } from "./fixtures";
+import { equipment, rules, sessionLogs } from "./fixtures";
 
 const okSession = (id: string): SessionSummary => ({
   sessionId: id,
@@ -100,5 +100,25 @@ describe("summarizeSessionPair", () => {
     const curr = sessionLogs({ sessionId: "c", exerciseId: "bench", sets: 3, loadKg: 82.5, reps: 8, rir: 2, timestamp: "2026-01-08T10:00:00Z" });
     const s = summarizeSessionPair(prev, curr, "c");
     expect(s.exercisesWithRepDropAtFixedLoad).toBe(0);
+  });
+});
+
+describe("deloadLoadForDay — política de carga de la semana de deload (A0.2)", () => {
+  const ctx = { type: "barbell" as const, equipment };
+  it("primera mitad: carga de la semana 1 sin cambios", () => {
+    expect(deloadLoadForDay({ dayIndex: 0, daysInWeek: 5, week1LoadKg: 100, secondHalfFraction: 0.5, ctx })).toEqual({ loadKg: 100, half: "first" });
+    expect(deloadLoadForDay({ dayIndex: 2, daysInWeek: 5, week1LoadKg: 100, secondHalfFraction: 0.5, ctx }).half).toBe("first");
+  });
+  it("segunda mitad (dayIndex ≥ ceil(días/2)): fracción redondeada al equipamiento", () => {
+    const r = deloadLoadForDay({ dayIndex: 3, daysInWeek: 5, week1LoadKg: 107.5, secondHalfFraction: 0.5, ctx });
+    expect(r.half).toBe("second");
+    expect(r.loadKg).toBe(52.5); // 53.75 → mayor alcanzable ≤ objetivo con discos de 1.25
+  });
+  it("peso corporal (carga 0) sigue en 0 en ambas mitades", () => {
+    expect(deloadLoadForDay({ dayIndex: 4, daysInWeek: 5, week1LoadKg: 0, secondHalfFraction: 0.5, ctx }).loadKg).toBe(0);
+  });
+  it("la fracción sale del config, no de un literal", () => {
+    expect(rules.deloadStructure.loadSecondHalf).toBeGreaterThan(0);
+    expect(rules.deloadStructure.loadSecondHalf).toBeLessThan(1);
   });
 });
