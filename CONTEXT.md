@@ -81,7 +81,10 @@ Tipar todo con TypeScript. IDs `string` (uuid). Índices donde se filtra.
 - `proteinTargetGperKg`: number (default desde config, editable)
 - `minSleepHours`: number (default desde config)
 - `prioritizedMuscles`: string[] (subset de `muscles`; vacío = todos por igual)
-- `equipment`: `{ barWeightKg: number, platesKg: number[], dumbbellsKg: number[], machineStepKg: number }`
+- `equipment`: `{ barWeightKg: number, platesKg: number[], dumbbellsKg: number[], machineStepKg: number }` — siempre el inventario del perfil **activo** (lo leen motor y sesión).
+- `equipmentProfiles?`: `Array<{ id, name, equipment }>`, `activeEquipmentProfileId?` (A4.5). Sin perfiles, el inventario actual es el perfil «Principal» (`main`). Editar `equipment` lo guarda también en el perfil activo; cambiar de perfil copia su inventario a `equipment`. Funciones puras en `src/lib/equipmentProfiles.ts`.
+- `units?`: `"kg" | "lb"` (A4.7) — **solo visualización**: dominio y base siempre en kg (`src/lib/units.ts`, 1 lb = 0,45359237 kg). Medidas corporales quedan en cm/kg.
+- `trainingWeekdays?`: `number[]` (0 = domingo) — solo agenda (A3.2).
 
 **`exercises`**
 - `id`, `name`
@@ -118,6 +121,8 @@ Tipar todo con TypeScript. IDs `string` (uuid). Índices donde se filtra.
 - `rirReported?`: `false` = RIR precargado con el objetivo y no tocado (no informa percepción); `true` = elegido o ajustado; ausente = dato anterior (se asume reportado, la detección de eco lo cubre). En sesión la **última serie de cada ejercicio** exige elegir el RIR (selector 0 · 1 · 2 · 3 · 4+); las demás se precargan y cuentan como reportadas solo si se tocan. Calibración, ajuste de reps por RIR, RIR creep, deriva de RIR y e1RM de Stats usan solo RIR reportado (`isRirReported`).
 - `kind?`: `"warmup" | "working" | "drop" | "failure" | "partial"` (ausente = working). **`warmup` no cuenta** para progresión, calibración, eco, deload, stats ni récords (`isWorkingSet`); drop/failure/partial sí son estímulo. `slotIndex?` (posición del slot en el día; distingue el mismo ejercicio dos veces), `side?` (`"L" | "R"`), `note?`.
 - `timestamp`
+
+**A4.4:** `BaseWeekSlot.id?` estable (key de React al reordenar/borrar). Lo asigna `baseWeekRepo.set` y la migración de `ensureSeeded` al arrancar; `baseWeekRepo.get` es de solo lectura (corre dentro de `useLiveQuery`) y usa ids provisorios `tmp-…` en memoria si faltan.
 
 Campos agregados en A1. **`sessions`**: `startedAt?` (primera serie de trabajo; "en curso" en Home y duración), `lastSetAt?` (ancla del timer de descanso, sobrevive recargas), `overrides?` (`exercise` = swap solo hoy por slot, `setsDelta` = series ± solo hoy, `exerciseDeload` = deload por ejercicio aplicado). **`exercises`**: `note?` persistente y `restSec?` propio (si falta, `rest.defaultCompoundSec`/`defaultIsolationSec`). **Slots**: `supersetGroup?` (se hereda al plan y al deload; el descanso corre al cerrar el último ejercicio del grupo).
 
@@ -280,6 +285,14 @@ Como la progresión es por sesión, la recomendación por defecto es **correr** 
 ---
 
 **A3 — historial y análisis** (`src/domain/analytics.ts`, puras y testeadas): `exerciseTimeline` (e1RM y carga tope por sesión y por pista, solo completadas sin deload; vista `/exercise?id=`), `weeklyReport` (sesiones hechas/saltadas, minutos, series fraccionadas por músculo hechas vs planificadas), `loadAdherence` (carga real vs prescrita; ignora registros previos a A0.1, detectados por `rirReported` ausente), `ema` (tendencia de peso con `measurements.weightTrendAlpha`), `sleepDebtBySession` (noches seguidas sin el mínimo) y `repDeltaBySession` (reps a carga fija vs la sesión previa del mismo día) para la correlación intra-sujeto en Stats, que exige n ≥ 6 y se presenta como asociación, no causa.
+
+**A4 — robustez:**
+- **Respaldo** (`src/db/backupSchema.ts`): `backupVersion` 2 (se importan 1 y 2). Cada fila se valida con Zod (tipos, reps 0–100, RIR 0–10, carga 0–2000 kg, fechas ISO, rango de reps mín ≤ máx) **antes** de borrar nada; el error nombra tabla, fila y campo. La UI descarga `myonoesis-pre-import-…json` antes de reemplazar. Los límites son de cordura de datos, no científicos.
+- **Ejercicio en uso**: `exerciseRepo.usage` / `replaceAndRemove` (reemplazo en semana base y planes de mesos no terminados con `replaceExerciseInPlan`); el historial queda y se muestra como «(ejercicio eliminado)».
+- **Músculo sin landmarks**: `weeklyVolumeTarget` lo trata como "sin objetivo" (volumen base, sin rampa ni tope) en vez de lanzar.
+- **Service worker**: `skipWaiting: false`; el aviso envía `SKIP_WAITING` solo al tocarlo y, con sesión en curso, pregunta y permite posponer (`src/lib/updateGate.ts`).
+- **Diálogos**: nunca `confirm`/`alert`/`prompt` nativos; `askConfirm`/`showAlert`/`askText`/`showToast` (`src/store/dialogs.ts`, Zustand) dibujados por `DialogHost`. Hoja modal accesible `Sheet` (foco atrapado, Escape, `aria-modal`).
+- **Accesibilidad**: `npm run test:a11y` (axe-core, 12 pantallas × 2 temas + diálogo) sin violaciones serias/críticas. Texto en color con `--primary-ink`/`--danger-ink` (AA).
 
 ### Reglas fijadas por las correcciones de A0 (no deben volver)
 Cada una tiene test de regresión en `src/domain/__tests__/`.

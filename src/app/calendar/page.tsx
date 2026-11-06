@@ -11,8 +11,12 @@ import { NewMesoButton } from "@/components/NewMesoSheet";
 import { MonthGrid, sessionDate } from "@/components/MonthGrid";
 import type { SessionRow } from "@/db/schema";
 import { WEEKDAY_LETTERS, defaultWeekdays, todayIso } from "@/lib/agenda";
+import { askConfirm } from "@/store/dialogs";
 
 const WEEKDAYS = WEEKDAY_LETTERS;
+
+const askSkip = (label: string) =>
+  askConfirm({ title: "Saltar sesión", message: `¿Saltar «${label}»? Podés reabrirla después desde la Agenda.`, confirmLabel: "Saltar" });
 
 export default function CalendarPage() {
   const router = useRouter();
@@ -79,7 +83,7 @@ export default function CalendarPage() {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => confirm(`¿Saltar «${firstPending.dayLabel}»? Podés reabrirla después.`) && sessionRepo.skip(firstPending.id)}
+                onClick={async () => (await askSkip(firstPending.dayLabel)) && sessionRepo.skip(firstPending.id)}
               >
                 Saltar esta
               </Button>
@@ -91,7 +95,7 @@ export default function CalendarPage() {
       {scheduled && <MonthGrid sessions={sessions} today={today} onOpen={(s) => router.push(`/session?id=${s.id}`)} />}
 
       {scheduled && !editing && (
-        <button type="button" className="mb-3 text-[11px] font-semibold text-[var(--primary)]" onClick={() => setEditing(true)}>
+        <button type="button" className="mb-3 text-[11px] font-semibold text-[var(--primary-ink)]" onClick={() => setEditing(true)}>
           Cambiar días o fecha de inicio ({weekdays.map((d) => WEEKDAYS[d]).join(" ")})
         </button>
       )}
@@ -117,7 +121,7 @@ export default function CalendarPage() {
                       isNext={s.id === firstPending?.id}
                       today={today}
                       onOpen={() => router.push(`/session?id=${s.id}`)}
-                      onSkip={() => confirm(`¿Saltar «${s.dayLabel}»? Podés reabrirla después.`) && sessionRepo.skip(s.id)}
+                      onSkip={async () => (await askSkip(s.dayLabel)) && sessionRepo.skip(s.id)}
                       onReopen={() => sessionRepo.reopen(s.id)}
                     />
                   ))}
@@ -160,7 +164,7 @@ function ScheduleCard({
             onClick={() => setDays(days.includes(d) ? days.filter((x) => x !== d) : [...days, d])}
             className={cn(
               "h-10 flex-1 rounded-xl border text-sm font-semibold",
-              days.includes(d) ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]" : "border-[var(--border)] text-[var(--muted)]",
+              days.includes(d) ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary-ink)]" : "border-[var(--border)] text-[var(--muted)]",
             )}
             aria-pressed={days.includes(d)}
           >

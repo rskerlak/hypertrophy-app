@@ -10,9 +10,13 @@
   --muted: #63636c;
   --primary: #65a30d; /* lima legible sobre fondo claro */
   --primary-fg: #101010;
-  --success: #047857;
-  --warning: #b45309;
+  /* Texto en color (A4.6): el lima/rojo de relleno no llega a 4.5:1 como texto
+     sobre blanco o sobre su propio tinte; la "tinta" sí (AA). */
+  --primary-ink: #3f6212;
+  --success: #065f46;
+  --warning: #92400e;
   --danger: #dc2626;
+  --danger-ink: #991b1b;
   --radius: 18px;
   /* superficies translúcidas (nav flotante, guías sticky) */
   --glass: rgba(255, 255, 255, 0.85);
@@ -33,9 +37,11 @@
   --muted: #8e8e99;
   --primary: #c5f74f; /* lima volt */
   --primary-fg: #0a0a0a;
+  --primary-ink: #c5f74f;
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #f87171;
+  --danger-ink: #f87171;
   --glass: rgba(16, 16, 20, 0.85);
   --pop-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   --primary-glow: rgba(197, 247, 79, 0.18);

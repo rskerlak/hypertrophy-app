@@ -56,7 +56,7 @@ export function exportMesoToExcel(input: ExportInput): void {
   const prog: Array<Array<string | number>> = [
     ["Ejercicio", "1RM estimado inicial (kg)", "1RM estimado final (kg)", "Δ %"],
     ...stats.perExercise.map((e) => [
-      (exById.get(e.exerciseId)?.name ?? e.exerciseId) + (e.track ? ` · ${e.track}` : ""),
+      (exById.get(e.exerciseId)?.name ?? "(ejercicio eliminado)") + (e.track ? ` · ${e.track}` : ""),
       e.firstEst1RmKg,
       e.lastEst1RmKg,
       e.deltaPct,
@@ -101,7 +101,7 @@ export function exportMesoToExcel(input: ExportInput): void {
         l.timestamp.slice(0, 10),
         s ? s.weekIndex + 1 : "",
         s ? s.dayIndex + 1 : "",
-        exById.get(l.exerciseId)?.name ?? l.exerciseId,
+        exById.get(l.exerciseId)?.name ?? "(ejercicio eliminado)",
         l.setIndex + 1,
         l.targetLoadKg,
         l.targetReps,

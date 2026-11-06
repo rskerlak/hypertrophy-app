@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import { backupRepo } from "@/db/repositories";
 import { downloadBackup } from "@/lib/backup";
+import { validateBackup } from "@/db/backupSchema";
 import { Button, Card } from "@/components/ui";
+import { askConfirm, showAlert } from "@/store/dialogs";
 
 /**
  * Respaldo completo en JSON: exportar descarga todos los datos locales;
@@ -20,18 +22,34 @@ export function BackupCard() {
 
   const doImport = async (file: File) => {
     try {
-      const raw: unknown = JSON.parse(await file.text());
+      let raw: unknown;
+      try {
+        raw = JSON.parse(await file.text());
+      } catch {
+        throw new Error("El archivo no es JSON válido.");
+      }
+      // Validar antes de preguntar: un archivo roto no debe llegar a borrar nada.
+      const v = validateBackup(raw);
+      if (!v.ok) throw new Error(v.error);
+      const n = v.backup.data.sessions.filter((s) => s.status === "completed").length;
       if (
-        !confirm(
-          "Esto REEMPLAZA todos los datos actuales de este dispositivo por los del respaldo. ¿Continuar?",
-        )
+        !(await askConfirm({
+          title: "Importar respaldo",
+          message:
+            `El respaldo tiene ${v.backup.data.mesocycles.length} mesos y ${n} sesiones completadas.\n\n` +
+            "Va a REEMPLAZAR todos los datos de este dispositivo. Antes se descarga automáticamente una copia de lo actual.",
+          confirmLabel: "Importar",
+          danger: true,
+        }))
       )
         return;
+      // A4.1: copia automática del estado actual antes de reemplazarlo.
+      await downloadBackup("myonoesis-pre-import");
       await backupRepo.import(raw);
-      alert("Respaldo importado correctamente.");
+      await showAlert({ title: "Listo", message: "Respaldo importado correctamente. La app se recarga." });
       location.reload();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "No se pudo leer el archivo de respaldo.");
+      await showAlert({ title: "No se importó nada", message: e instanceof Error ? e.message : "No se pudo leer el archivo de respaldo." });
     }
   };
 

@@ -6,6 +6,7 @@ import { bugReportRepo } from "@/db/repositories";
 import type { BugReportRow } from "@/db/schema";
 import { Badge, Button, Card, cn } from "./ui";
 import { ZodError } from "zod";
+import { askConfirm } from "@/store/dialogs";
 
 const CATEGORY_LABELS: Record<BugReportRow["category"], string> = {
   engine: "Motor / prescripción",
@@ -103,7 +104,7 @@ function BugReportSheet({ onClose }: { onClose: () => void }) {
               className={cn(
                 "rounded-full border px-3 py-1 text-xs font-medium",
                 category === c
-                  ? "border-[var(--primary)]/40 bg-[var(--primary)]/10 text-[var(--primary)]"
+                  ? "border-[var(--primary)]/40 bg-[var(--primary)]/10 text-[var(--primary-ink)]"
                   : "border-[var(--border)] text-[var(--muted)]",
               )}
             >
@@ -127,7 +128,7 @@ function BugReportSheet({ onClose }: { onClose: () => void }) {
           Se guarda con la pantalla actual, el meso activo y la versión de la app. Viaja en el
           respaldo JSON (Ajustes → Exportar respaldo).
         </p>
-        {error && <p className="text-xs text-[var(--danger)]">{error}</p>}
+        {error && <p className="text-xs text-[var(--danger-ink)]">{error}</p>}
         <Button className="w-full" onClick={save} disabled={saved}>
           {saved ? "✓ Guardado" : "Guardar bug"}
         </Button>
@@ -181,7 +182,8 @@ export function BugListCard() {
             <Button
               size="sm"
               variant="danger"
-              onClick={() => confirm("¿Borrar este bug?") && bugReportRepo.remove(b.id)}
+              aria-label="Borrar bug"
+              onClick={async () => (await askConfirm({ message: "¿Borrar este bug?", confirmLabel: "Borrar", danger: true })) && bugReportRepo.remove(b.id)}
             >
               ✕
             </Button>

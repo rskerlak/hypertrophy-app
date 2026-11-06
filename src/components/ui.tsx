@@ -3,6 +3,7 @@
 
 import { useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { BugReportButton } from "./BugReport";
+import { displayStep, fmtLoad, fromDisplay, unitLabel } from "@/lib/units";
 
 export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -43,7 +44,7 @@ export function Button({ variant = "primary", size = "md", className, ...props }
     secondary:
       "bg-[var(--surface-2)] text-[var(--foreground)] border border-[var(--border)] active:bg-[var(--surface)]",
     ghost: "text-[var(--muted)] active:text-[var(--foreground)]",
-    danger: "bg-[var(--danger)]/15 text-[var(--danger)] border border-[var(--danger)]/25",
+    danger: "bg-[var(--danger)]/15 text-[var(--danger-ink)] border border-[var(--danger)]/25",
   };
   const sizes: Record<string, string> = {
     sm: "h-9 px-4 text-sm",
@@ -115,10 +116,10 @@ export function Badge({
 }) {
   const tones: Record<string, string> = {
     neutral: "bg-[var(--surface-2)] text-[var(--muted)] border-[var(--border)]",
-    primary: "bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/25",
+    primary: "bg-[var(--primary)]/10 text-[var(--primary-ink)] border-[var(--primary)]/25",
     success: "bg-[var(--success)]/10 text-[var(--success)] border-[var(--success)]/25",
     warning: "bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/25",
-    danger: "bg-[var(--danger)]/10 text-[var(--danger)] border-[var(--danger)]/25",
+    danger: "bg-[var(--danger)]/10 text-[var(--danger-ink)] border-[var(--danger)]/25",
   };
   return (
     <span
@@ -139,7 +140,7 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
     <header className="mb-6 flex items-end justify-between gap-3">
       <div>
         {subtitle && (
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--primary)]/80">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--primary-ink)]/80">
             {subtitle}
           </p>
         )}
@@ -167,7 +168,7 @@ export function EmptyState({ title, hint, action }: { title: string; hint?: stri
 export function HonestNote({ children }: { children: ReactNode }) {
   return (
     <p className="flex gap-2.5 rounded-2xl border border-[var(--border)] bg-transparent p-3.5 text-xs leading-relaxed text-[var(--muted)]">
-      <span aria-hidden className="text-[var(--primary)]/70">
+      <span aria-hidden className="text-[var(--primary-ink)]/70">
         ⓘ
       </span>
       <span>{children}</span>
@@ -186,6 +187,8 @@ export function EditableNumber({
   format,
   className,
   disabled,
+  load = false,
+  ariaLabel,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -193,13 +196,17 @@ export function EditableNumber({
   format?: (v: number) => string;
   className?: string;
   disabled?: boolean;
+  /** Nombre accesible (no hay <label> visible asociado). */
+  ariaLabel?: string;
+  /** Es una carga en kg: se muestra y se tipea en la unidad elegida (A4.7). */
+  load?: boolean;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
 
   const commit = () => {
     if (draft !== null) {
       const n = parseFloat(draft.replace(",", "."));
-      if (Number.isFinite(n)) onChange(Math.max(min, n));
+      if (Number.isFinite(n)) onChange(Math.max(min, load ? fromDisplay(n) : n));
     }
     setDraft(null);
   };
@@ -208,10 +215,11 @@ export function EditableNumber({
     <input
       type="text"
       inputMode="decimal"
+      aria-label={ariaLabel}
       disabled={disabled}
-      value={draft ?? (format ? format(value) : String(value))}
+      value={draft ?? (format ? format(value) : load ? fmtLoad(value) : String(value))}
       onFocus={(e) => {
-        setDraft(String(value));
+        setDraft(load ? fmtLoad(value) : String(value));
         // seleccionar todo para reemplazar de un tipeo
         requestAnimationFrame(() => e.target.select());
       }}
@@ -231,10 +239,11 @@ export function EditableNumber({
 export function Stepper({
   value,
   onChange,
-  step = 1,
+  step: stepIn = 1,
   min = 0,
   suffix,
   format,
+  load = false,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -242,19 +251,26 @@ export function Stepper({
   min?: number;
   suffix?: string;
   format?: (v: number) => string;
+  /** Carga en kg: muestra y avanza en la unidad elegida; el sufijo es la unidad. */
+  load?: boolean;
 }) {
+  const step = load ? fromDisplay(displayStep(stepIn)) : stepIn;
+  if (load) {
+    suffix = unitLabel();
+    format = format ?? ((v: number) => fmtLoad(v));
+  }
   const btn =
     "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface-2)] text-xl font-medium transition-transform active:scale-90";
   return (
     <div className="flex items-center gap-2">
-      <button type="button" className={btn} onClick={() => onChange(Math.max(min, +(value - step).toFixed(3)))}>
+      <button type="button" className={btn} aria-label="Bajar" onClick={() => onChange(Math.max(min, +(value - step).toFixed(3)))}>
         −
       </button>
       <div className="min-w-[72px] flex-1 text-center text-xl font-bold tabular-nums tracking-tight">
         {format ? format(value) : value}
         {suffix && <span className="ml-1 text-sm font-medium text-[var(--muted)]">{suffix}</span>}
       </div>
-      <button type="button" className={btn} onClick={() => onChange(+(value + step).toFixed(3))}>
+      <button type="button" className={btn} aria-label="Subir" onClick={() => onChange(+(value + step).toFixed(3))}>
         +
       </button>
     </div>

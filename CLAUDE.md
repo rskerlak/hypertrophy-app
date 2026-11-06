@@ -14,6 +14,7 @@ npm run build      # build estático (output: 'export')
 npm run test       # vitest — tests del motor de dominio
 npm run test:watch # vitest en watch
 npm run lint       # eslint
+npm run test:a11y  # axe-core sobre el build (correr `npm run build` antes)
 npm run typecheck  # tsc --noEmit
 ```
 

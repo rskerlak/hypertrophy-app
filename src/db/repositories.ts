@@ -4,6 +4,7 @@
 import type {
   BaseWeek,
   Checkin,
+  DayIntensity,
   Exercise,
   MesocyclePlan,
   ProgressionModel,
@@ -12,10 +13,12 @@ import type {
 } from "@/domain/types";
 import { getRules } from "@/lib/rulesLoader";
 import { uuid } from "@/lib/id";
-import { deriveBaseWeekFromPlan, generateMesocycle, swapExerciseInPlan } from "@/domain/mesocycle";
+import { countExerciseInPlan, deriveBaseWeekFromPlan, generateMesocycle, replaceExerciseInPlan, swapExerciseInPlan } from "@/domain/mesocycle";
 import { scheduleDates } from "@/domain/analytics";
+import { CURRENT_BACKUP_VERSION, validateBackup } from "@/db/backupSchema";
 import { groupBySession, nextPrescription, sameProgressionTrack } from "@/domain/progression";
 import { suggestLoadFromHistory } from "@/domain/oneRepMax";
+import { addProfile, editActiveEquipment, removeProfile, renameProfile, switchProfile } from "@/lib/equipmentProfiles";
 import { z } from "zod";
 import { getDb, type ActivityRow, type BaseWeekRow, type BugReportRow, type MeasurementRow, type MesocycleRow, type SessionRow, type SettingsRow } from "./schema";
 import { SEED_VERSION, defaultSettings, seedExercises } from "./seed";
@@ -36,6 +39,11 @@ export async function ensureSeeded(): Promise<void> {
   const bw = await db.baseWeek.get("default");
   if (!bw) {
     await db.baseWeek.put({ id: "default", days: [] });
+  } else {
+    // A4.4: semanas guardadas antes de los ids de slot. Se migra acá (arranque)
+    // y no en baseWeekRepo.get(): ese corre dentro de useLiveQuery (solo lectura).
+    const { week, changed } = withSlotIds(bw);
+    if (changed) await db.baseWeek.put({ ...week, id: "default" });
   }
 
   const count = await db.exercises.count();
@@ -65,7 +73,24 @@ export const settingsRepo = {
   },
   async update(patch: Partial<Omit<SettingsRow, "id">>): Promise<void> {
     const db = getDb();
+    // A4.5: editar el inventario activo lo guarda también en su perfil.
+    if (patch.equipment && !patch.equipmentProfiles) {
+      const current = await settingsRepo.get();
+      patch = { ...patch, ...editActiveEquipment(current, patch.equipment) };
+    }
     await db.settings.update("default", patch);
+  },
+  async switchEquipmentProfile(id: string): Promise<void> {
+    await getDb().settings.update("default", switchProfile(await settingsRepo.get(), id));
+  },
+  async addEquipmentProfile(name: string): Promise<void> {
+    await getDb().settings.update("default", addProfile(await settingsRepo.get(), name, uuid()));
+  },
+  async renameEquipmentProfile(id: string, name: string): Promise<void> {
+    await getDb().settings.update("default", renameProfile(await settingsRepo.get(), id, name));
+  },
+  async removeEquipmentProfile(id: string): Promise<void> {
+    await getDb().settings.update("default", removeProfile(await settingsRepo.get(), id));
   },
 };
 
@@ -95,8 +120,54 @@ export const exerciseRepo = {
     await getDb().exercises.update(id, patch);
   },
   /**
+   * Dónde se usa un ejercicio (A4.2): mesos no terminados cuyo plan lo tiene,
+   * slots de la semana base y series registradas (historial).
+   */
+  async usage(id: string): Promise<{ mesos: Array<{ id: string; name: string; status: MesocycleRow["status"] }>; baseWeekSlots: number; loggedSets: number }> {
+    const db = getDb();
+    const [mesos, bw, loggedSets] = await Promise.all([
+      db.mesocycles.toArray(),
+      db.baseWeek.get("default"),
+      db.setLogs.where("exerciseId").equals(id).count(),
+    ]);
+    return {
+      mesos: mesos
+        .filter((m) => m.status !== "completed" && countExerciseInPlan(m.plan, id) > 0)
+        .map((m) => ({ id: m.id, name: m.name, status: m.status })),
+      baseWeekSlots: bw ? bw.days.reduce((n, d) => n + d.slots.filter((s) => s.exerciseId === id).length, 0) : 0,
+      loggedSets,
+    };
+  },
+
+  /**
+   * Reemplaza el ejercicio por otro en la semana base y en los planes de los
+   * mesos no terminados, y después lo elimina. El historial (setLogs) se
+   * conserva con su id: Stats y Excel lo muestran como "(ejercicio eliminado)".
+   */
+  async replaceAndRemove(id: string, replacementId: string): Promise<void> {
+    const db = getDb();
+    if (id === replacementId) throw new Error("El reemplazo debe ser otro ejercicio.");
+    await db.transaction("rw", db.exercises, db.baseWeek, db.mesocycles, async () => {
+      if (!(await db.exercises.get(replacementId))) throw new Error("Ejercicio de reemplazo no encontrado.");
+      const mesos = await db.mesocycles.filter((m) => m.status !== "completed").toArray();
+      for (const m of mesos) {
+        if (countExerciseInPlan(m.plan, id) > 0) await db.mesocycles.update(m.id, { plan: replaceExerciseInPlan(m.plan, id, replacementId) });
+      }
+      const bw = await db.baseWeek.get("default");
+      if (bw) {
+        await db.baseWeek.put({
+          id: "default",
+          days: bw.days.map((d) => ({ ...d, slots: d.slots.map((s) => (s.exerciseId === id ? { ...s, exerciseId: replacementId } : s)) })),
+        });
+      }
+    });
+    await exerciseRepo.remove(id);
+  },
+
+  /**
    * Elimina un ejercicio. Además lo quita de la semana base y de los
    * swapCandidates de otros ejercicios para no dejar referencias colgadas.
+   * Si está en el plan de un meso no terminado, usar `replaceAndRemove`.
    */
   async remove(id: string): Promise<void> {
     const db = getDb();
@@ -129,13 +200,61 @@ export const exerciseRepo = {
 
 // ---- Semana base ----
 
+/** Asigna id a los slots que no lo tienen (o lo tienen provisorio). Devuelve si cambió algo. */
+function withSlotIds(bw: BaseWeek): { week: BaseWeek; changed: boolean } {
+  let changed = false;
+  const days = bw.days.map((d) => ({
+    ...d,
+    slots: d.slots.map((s) => {
+      if (s.id && !s.id.startsWith("tmp-")) return s;
+      changed = true;
+      return { ...s, id: uuid() };
+    }),
+  }));
+  return { week: { ...bw, days }, changed };
+}
+
 export const baseWeekRepo = {
+  /**
+   * Solo lectura (se usa dentro de useLiveQuery: no puede escribir). Si algún
+   * slot no tiene id todavía, se le da uno determinista en memoria; el real lo
+   * asigna `set` o la migración de `ensureSeeded`.
+   */
   async get(): Promise<BaseWeek> {
     const bw = await getDb().baseWeek.get("default");
-    return bw ?? { days: [] };
+    if (!bw) return { days: [] };
+    return {
+      ...bw,
+      days: bw.days.map((d, di) => ({ ...d, slots: d.slots.map((s, si) => (s.id ? s : { ...s, id: `tmp-${di}-${si}` })) })),
+    };
   },
   async set(baseWeek: BaseWeek): Promise<void> {
-    await getDb().baseWeek.put({ id: "default", ...baseWeek });
+    const { id: _ignored, ...rest } = baseWeek as BaseWeek & { id?: string };
+    void _ignored;
+    await getDb().baseWeek.put({ ...withSlotIds(rest).week, id: "default" });
+  },
+
+  /**
+   * Carga inicial sugerida para un ejercicio nuevo en la semana base (A4.4):
+   * desde el 1RM de tu última sesión real (sin deload) para el piso del rango,
+   * al RIR de referencia + offset del día. null sin historial o en peso corporal.
+   */
+  async suggestStartingLoad(exerciseId: string, repMin: number, intensity?: DayIntensity): Promise<number | null> {
+    const db = getDb();
+    const rules = getRules();
+    const [settings, ex] = await Promise.all([settingsRepo.get(), db.exercises.get(exerciseId)]);
+    if (!ex || ex.equipmentType === "bodyweight") return null;
+    const sessions = await db.sessions.where("status").equals("completed").toArray();
+    const ok = new Set(sessions.filter((x) => !x.isDeload).map((x) => x.id));
+    const history = (await db.setLogs.where("exerciseId").equals(exerciseId).toArray()).filter((l) => ok.has(l.sessionId));
+    const offset = intensity ? rules.dayIntensity[intensity].rirOffset : 0;
+    return suggestLoadFromHistory({
+      history,
+      targetReps: repMin,
+      targetRir: Math.max(0, rules.dayIntensity.startingLoadReferenceRir + offset),
+      rules,
+      ctx: { type: ex.equipmentType, equipment: settings.equipment },
+    });
   },
 
   /**
@@ -534,6 +653,11 @@ export const sessionRepo = {
   },
 
   /** Sesión empezada y sin finalizar del meso activo (para "Continuar" en Home). */
+  /** Sesiones pendientes de un meso (aviso al pausarlo, A4.4). */
+  async pendingCount(mesocycleId: string): Promise<number> {
+    return getDb().sessions.where("mesocycleId").equals(mesocycleId).filter((s) => s.status === "pending").count();
+  },
+
   async inProgress(): Promise<SessionRow | undefined> {
     const db = getDb();
     const active = await db.mesocycles.where("status").equals("active").first();
@@ -775,7 +899,8 @@ export const bugReportRepo = {
 
 export interface BackupFile {
   app: "hypertrophy";
-  backupVersion: 1;
+  /** 1 = hasta A3; 2 = desde A4.1 (mismos campos, validado por fila). Se importan ambas. */
+  backupVersion: number;
   exportedAt: string;
   data: {
     settings: SettingsRow[];
@@ -810,26 +935,22 @@ export const backupRepo = {
       ]);
     return {
       app: "hypertrophy",
-      backupVersion: 1,
+      backupVersion: CURRENT_BACKUP_VERSION,
       exportedAt: new Date().toISOString(),
       data: { settings, baseWeek, exercises, mesocycles, sessions, setLogs, checkins, measurements, activities, bugReports },
     };
   },
 
   /**
-   * Reemplaza TODOS los datos locales con el contenido del respaldo.
-   * Valida el shape mínimo y falla ruidoso si no es un respaldo válido.
+   * Reemplaza TODOS los datos locales con el contenido del respaldo (A4.1).
+   * Valida cada fila con Zod ANTES de borrar nada: si algo falla, lanza un
+   * error que nombra tabla, fila y campo, y la base queda intacta.
    */
   async import(raw: unknown): Promise<void> {
-    const b = raw as Partial<BackupFile>;
-    if (!b || b.app !== "hypertrophy" || b.backupVersion !== 1 || !b.data) {
-      throw new Error("El archivo no es un respaldo válido de esta app.");
-    }
-    const d = b.data;
-    const tables = ["settings", "baseWeek", "exercises", "mesocycles", "sessions", "setLogs", "checkins"] as const;
-    for (const t of tables) {
-      if (!Array.isArray(d[t])) throw new Error(`Respaldo corrupto: falta la tabla "${t}".`);
-    }
+    const v = validateBackup(raw);
+    if (!v.ok) throw new Error(v.error);
+    // El schema valida y conserva campos extra (passthrough); el tipo de fila es el de la app.
+    const d = (raw as BackupFile).data;
     const db = getDb();
     await db.transaction(
       "rw",

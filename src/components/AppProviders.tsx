@@ -3,7 +3,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ensureSeeded, settingsRepo } from "@/db/repositories";
 import { UpdateToast } from "@/components/UpdateToast";
+import { DialogHost } from "@/components/Dialog";
 import { applyTheme } from "@/lib/theme";
+import { setLoadUnit } from "@/lib/units";
 
 /**
  * Bootstrap del cliente: siembra la BD, pide persistencia de IndexedDB para
@@ -23,6 +25,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
         // Sincronizar el tema persistido (Dexie) con el aplicado pre-pintado.
         const settings = await settingsRepo.get();
         applyTheme(settings.theme ?? "light");
+        // A4.7: unidad de visualización de cargas (todo se guarda en kg).
+        setLoadUnit(settings.units);
       } catch (e) {
         console.error("Bootstrap error", e);
       } finally {
@@ -45,6 +49,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <>
       {children}
       <UpdateToast />
+      <DialogHost />
     </>
   );
 }

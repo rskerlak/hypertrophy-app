@@ -8,7 +8,8 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["src/domain/**/*.test.ts"],
+    // domain: motor científico. db y lib: solo funciones puras (sin Dexie ni DOM).
+    include: ["src/domain/**/*.test.ts", "src/db/**/*.test.ts", "src/lib/**/*.test.ts"],
     environment: "node",
   },
 });

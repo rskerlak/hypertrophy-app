@@ -112,7 +112,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       className={
         "h-10 rounded-xl border text-sm font-medium transition " +
         (on
-          ? "border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--primary)]"
+          ? "border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--primary-ink)]"
           : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]")
       }
     >

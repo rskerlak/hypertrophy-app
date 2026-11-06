@@ -218,6 +218,8 @@ Cada ítem lleva su cita a `SCIENCE.md` (actualizarla en el mismo commit). Lo qu
 
 ## A4 — Robustez, datos y pulido
 
+> **Estado: hecho.** Desvíos: los perfiles mantienen `settings.equipment` como inventario activo (copias en `equipmentProfiles`) para no tocar a los consumidores; las unidades recargan la app al cambiarse; la migración de ids de slot corre al arrancar (no en `get`, que es de solo lectura dentro de `useLiveQuery`). E2E de A4 (27 verificaciones) con el respaldo real y `test:a11y` en verde.
+
 ### A4.1 Respaldo seguro
 - Antes de importar: exportar automáticamente el estado actual a un archivo `myonoesis-pre-import-<fecha>.json` (descarga) y pedir confirmación propia.
 - Validar cada fila con Zod (`backupFileSchema` en `src/db/backupSchema.ts`): tipos y rangos (reps 0–100, RIR 0–10, carga ≥ 0, fechas ISO). Rechazar con mensaje claro qué tabla/fila falla. Aceptar `backupVersion` 1 y, al agregar campos, subir a 2 manteniendo import de 1.

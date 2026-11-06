@@ -11,6 +11,7 @@ import type { MeasurementRow } from "@/db/schema";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ema } from "@/domain/analytics";
 import { getRules } from "@/lib/rulesLoader";
+import { askConfirm } from "@/store/dialogs";
 
 const TRIGGER_LABELS: Record<MeasurementRow["trigger"], string> = {
   onboarding: "inicio",
@@ -120,8 +121,9 @@ export default function MeasurementsPage() {
                 <span className="flex items-center gap-2">
                   <span className="text-xs text-[var(--muted)]">{TRIGGER_LABELS[m.trigger]}</span>
                   <button
-                    className="text-sm text-[var(--danger)]"
-                    onClick={() => { if (confirm("¿Eliminar este registro?")) measurementRepo.remove(m.id); }}
+                    className="text-sm text-[var(--danger-ink)]"
+                    aria-label="Eliminar registro"
+                    onClick={async () => { if (await askConfirm({ message: "¿Eliminar este registro de medidas?", confirmLabel: "Eliminar", danger: true })) await measurementRepo.remove(m.id); }}
                   >
                     ✕
                   </button>

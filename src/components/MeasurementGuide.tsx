@@ -111,7 +111,7 @@ export function MeasurementGuide({ active }: { active: string | null }) {
       <div className="min-w-0">
         {guide ? (
           <>
-            <p className="text-sm font-semibold text-[var(--primary)]">{guide.label}</p>
+            <p className="text-sm font-semibold text-[var(--primary-ink)]">{guide.label}</p>
             <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">{guide.tip}</p>
           </>
         ) : (

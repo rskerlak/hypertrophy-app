@@ -84,7 +84,7 @@ export function ExerciseForm({
                   className={
                     "rounded-full border px-2.5 py-1 text-xs transition " +
                     (on
-                      ? "border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--primary)]"
+                      ? "border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--primary-ink)]"
                       : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]")
                   }
                 >

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { baseWeekRepo, exerciseRepo, mesocycleRepo, settingsRepo } from "@/db/repositories";
+import { baseWeekRepo, exerciseRepo, mesocycleRepo, sessionRepo, settingsRepo } from "@/db/repositories";
 import { getRules } from "@/lib/rulesLoader";
 import { effectiveLandmarks } from "@/domain/rules";
 import { sessionCapWarnings, weeklyVolumeByMuscle } from "@/domain/volume";
@@ -11,9 +11,11 @@ import { suggestVolumeTrim, trimRoleBySlot } from "@/domain/volumeTrim";
 import type { BaseWeek, DayIntensity, Exercise, ProgressionModel, RirBand } from "@/domain/types";
 import { Badge, Button, Card, cn, EditableNumber, EmptyState, HonestNote, Input, Label, PageHeader, Select, Stepper } from "@/components/ui";
 import { VolumeBar } from "@/components/VolumeBar";
-import { PROGRESSION_LABELS, fmtKg, fmtSets, muscleLabel } from "@/lib/format";
+import { PROGRESSION_LABELS, fmtSets, muscleLabel } from "@/lib/format";
 import { ROUTINE_TEMPLATES } from "@/lib/templates";
 import { WEEKDAY_LETTERS, defaultWeekdays, todayIso } from "@/lib/agenda";
+import { askConfirm, showAlert } from "@/store/dialogs";
+import { displayStep, fmtLoad, fromDisplay } from "@/lib/units";
 
 export default function PlanPage() {
   const router = useRouter();
@@ -39,8 +41,22 @@ export default function PlanPage() {
   const addDay = () =>
     save({ days: [...baseWeek.days, { label: `Día ${String.fromCharCode(65 + baseWeek.days.length)}`, slots: [] }] });
 
-  const removeDay = (i: number) =>
-    save({ days: baseWeek.days.filter((_, idx) => idx !== i) });
+  const removeDay = async (i: number) => {
+    const d = baseWeek.days[i];
+    if (
+      d.slots.length > 0 &&
+      !(await askConfirm({ title: "Eliminar día", message: `¿Eliminar «${d.label}» con sus ${d.slots.length} ejercicios de la semana base? Tus mesos ya generados no cambian.`, confirmLabel: "Eliminar", danger: true }))
+    )
+      return;
+    await save({ days: baseWeek.days.filter((_, idx) => idx !== i) });
+  };
+
+  // A4.4: duplicar un día (slots con ids nuevos; el repository los asigna).
+  const duplicateDay = (i: number) => {
+    const d = baseWeek.days[i];
+    const copy = { ...d, label: `${d.label} (copia)`, slots: d.slots.map((s) => ({ ...s, id: undefined, repRange: { ...s.repRange } })) };
+    save({ days: [...baseWeek.days.slice(0, i + 1), copy, ...baseWeek.days.slice(i + 1)] });
+  };
 
   const moveDay = (i: number, dir: -1 | 1) => {
     const j = i + dir;
@@ -58,8 +74,10 @@ export default function PlanPage() {
     save({ days: baseWeek.days.map((d, i) => (i === dayIdx ? { ...d, slots } : d)) });
   };
 
-  const addSlot = (dayIdx: number, exercise: Exercise) => {
+  const addSlot = async (dayIdx: number, exercise: Exercise) => {
     const range = exercise.defaultRepRange ?? defaultRange(exercise, rules);
+    // A4.4: con historial, la carga inicial sale de tu 1RM real; sin historial, 20 kg.
+    const fromHistory = await baseWeekRepo.suggestStartingLoad(exercise.id, range.min, baseWeek.days[dayIdx]?.intensity);
     const days = baseWeek.days.map((d, i) =>
       i === dayIdx
         ? {
@@ -71,7 +89,7 @@ export default function PlanPage() {
                 targetSets: 3,
                 repRange: range,
                 // Ejercicios de peso corporal arrancan en modo "Corporal" (carga 0).
-                startingLoadKg: exercise.equipmentType === "bodyweight" ? 0 : 20,
+                startingLoadKg: exercise.equipmentType === "bodyweight" ? 0 : (fromHistory ?? 20),
               },
             ],
           }
@@ -89,7 +107,9 @@ export default function PlanPage() {
     save({ days });
   };
 
-  const removeSlot = (dayIdx: number, slotIdx: number) => {
+  const removeSlot = async (dayIdx: number, slotIdx: number) => {
+    const name = exById.get(baseWeek.days[dayIdx].slots[slotIdx].exerciseId)?.name ?? "este ejercicio";
+    if (!(await askConfirm({ message: `¿Quitar «${name}» de este día?`, confirmLabel: "Quitar", danger: true }))) return;
     const days = baseWeek.days.map((d, i) =>
       i === dayIdx ? { ...d, slots: d.slots.filter((_, j) => j !== slotIdx) } : d,
     );
@@ -188,6 +208,7 @@ export default function PlanPage() {
           <Card key={`${dayIdx}:${day.label}`}>
             <div className="mb-3 flex items-center gap-2">
               <Input
+                aria-label="Nombre del día"
                 defaultValue={day.label}
                 onBlur={(e) => {
                   const days = baseWeek.days.map((d, i) => (i === dayIdx ? { ...d, label: e.target.value } : d));
@@ -199,7 +220,10 @@ export default function PlanPage() {
                 <ReorderBtn disabled={dayIdx === 0} onClick={() => moveDay(dayIdx, -1)}>↑</ReorderBtn>
                 <ReorderBtn disabled={dayIdx === baseWeek.days.length - 1} onClick={() => moveDay(dayIdx, 1)}>↓</ReorderBtn>
               </div>
-              <button className="shrink-0 px-1 text-sm text-[var(--danger)]" onClick={() => removeDay(dayIdx)}>
+              <button className="shrink-0 px-1 text-sm text-[var(--muted)]" aria-label={`Duplicar ${day.label}`} title="Duplicar día" onClick={() => duplicateDay(dayIdx)}>
+                ⧉
+              </button>
+              <button className="shrink-0 px-1 text-sm text-[var(--danger-ink)]" aria-label={`Eliminar ${day.label}`} onClick={() => removeDay(dayIdx)}>
                 ✕
               </button>
             </div>
@@ -221,7 +245,7 @@ export default function PlanPage() {
             {sessionCapWarnings(day, exById, rules).length > 0 && (
               <p className="mb-2 rounded-lg bg-[var(--warning)]/10 px-3 py-2 text-[11px] leading-relaxed text-[var(--warning)]">
                 {sessionCapWarnings(day, exById, rules)
-                  .map((w) => `${muscleLabel(w.muscle)} ${fmtKg(w.sets)}`)
+                  .map((w) => `${muscleLabel(w.muscle)} ${fmtSets(w.sets)}`)
                   .join(" · ")}{" "}
                 series fraccionadas en este día. Por encima de ~{rules.volumeCounting.softSessionCapFractionalSets} por músculo y
                 sesión el rendimiento por serie cae (estimación provisional, Remmert 2025); repartir en otro día es
@@ -236,7 +260,7 @@ export default function PlanPage() {
                 const tr = trimBySlot.get(`${dayIdx}:${slotIdx}`);
                 return (
                   <div
-                    key={slotIdx}
+                    key={slot.id ?? slotIdx}
                     title={tr?.reason}
                     className={
                       "rounded-xl border p-3 " +
@@ -259,7 +283,7 @@ export default function PlanPage() {
                       <div className="flex shrink-0 items-center gap-0.5">
                         <ReorderBtn disabled={slotIdx === 0} onClick={() => moveSlot(dayIdx, slotIdx, -1)}>↑</ReorderBtn>
                         <ReorderBtn disabled={slotIdx === day.slots.length - 1} onClick={() => moveSlot(dayIdx, slotIdx, 1)}>↓</ReorderBtn>
-                        <button className="px-1 text-sm text-[var(--danger)]" onClick={() => removeSlot(dayIdx, slotIdx)}>
+                        <button className="px-1 text-sm text-[var(--danger-ink)]" onClick={() => removeSlot(dayIdx, slotIdx)}>
                           ✕
                         </button>
                       </div>
@@ -271,7 +295,7 @@ export default function PlanPage() {
                         onClick={() => updateSlot(dayIdx, slotIdx, { anchorSet: !slot.anchorSet || undefined })}
                         className={
                           "rounded-full border px-2.5 py-1 text-[11px] font-semibold " +
-                          (slot.anchorSet ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]" : "border-[var(--border)] text-[var(--muted)]")
+                          (slot.anchorSet ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary-ink)]" : "border-[var(--border)] text-[var(--muted)]")
                         }
                       >
                         ⚓ serie ancla
@@ -287,7 +311,7 @@ export default function PlanPage() {
                         onClick={() => updateSlot(dayIdx, slotIdx, { progression: slot.progression === "apre" ? undefined : "apre" })}
                         className={
                           "rounded-full border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-40 " +
-                          (slot.progression === "apre" ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]" : "border-[var(--border)] text-[var(--muted)]")
+                          (slot.progression === "apre" ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary-ink)]" : "border-[var(--border)] text-[var(--muted)]")
                         }
                       >
                         APRE (AMRAP)
@@ -296,7 +320,7 @@ export default function PlanPage() {
                     {slotIdx < day.slots.length - 1 && (
                       <button
                         type="button"
-                        className="mb-2 text-[11px] font-semibold text-[var(--primary)]"
+                        className="mb-2 text-[11px] font-semibold text-[var(--primary-ink)]"
                         onClick={() => {
                           const next = day.slots[slotIdx + 1];
                           const linked = !!slot.supersetGroup && slot.supersetGroup === next.supersetGroup;
@@ -338,12 +362,14 @@ export default function PlanPage() {
                         <div className="flex items-center justify-center gap-1 text-[var(--foreground)]">
                           <RangeBox
                             v={slot.repRange.min}
-                            onChange={(v) => updateSlot(dayIdx, slotIdx, { repRange: { ...slot.repRange, min: v } })}
+                            label="Reps mínimas"
+                            onChange={(v) => updateSlot(dayIdx, slotIdx, { repRange: { min: v, max: Math.max(v, slot.repRange.max) } })}
                           />
                           <span>–</span>
                           <RangeBox
                             v={slot.repRange.max}
-                            onChange={(v) => updateSlot(dayIdx, slotIdx, { repRange: { ...slot.repRange, max: v } })}
+                            label="Reps máximas"
+                            onChange={(v) => updateSlot(dayIdx, slotIdx, { repRange: { min: Math.min(slot.repRange.min, v), max: v } })}
                           />
                         </div>
                       </div>
@@ -352,7 +378,8 @@ export default function PlanPage() {
                         value={slot.startingLoadKg}
                         min={0}
                         step={2.5}
-                        format={(v) => (v === 0 ? "Corp." : fmtKg(v))}
+                        format={(v) => (v === 0 ? "Corp." : fmtLoad(v))}
+                        load
                         onChange={(v) => updateSlot(dayIdx, slotIdx, { startingLoadKg: v })}
                       />
                     </div>
@@ -395,6 +422,20 @@ export default function PlanPage() {
               initialWeekdays={settings.trainingWeekdays ?? defaultWeekdays(baseWeek.days.length)}
               onCancel={() => setShowGen(false)}
               onGenerate={async (name, model, weeks, rirBand, startIso, weekdays) => {
+                // A4.4: generar activa el meso nuevo y pausa el actual; avisar antes.
+                const current = await mesocycleRepo.active();
+                if (current) {
+                  const pending = await sessionRepo.pendingCount(current.id);
+                  if (
+                    pending > 0 &&
+                    !(await askConfirm({
+                      title: "Pausar el meso actual",
+                      message: `«${current.name}» tiene ${pending} sesiones pendientes y va a quedar en pausa. Podés reanudarlo desde Mesos sin perder progreso.`,
+                      confirmLabel: "Generar y pausar",
+                    }))
+                  )
+                    return;
+                }
                 const meso = await mesocycleRepo.createFromBaseWeek({ name, progressionModel: model, numAccumulationWeeks: weeks, rirBand });
                 // Agenda (A3.2): solo fechas para mostrar; la progresión sigue siendo por sesión.
                 if (weekdays.length > 0) await mesocycleRepo.schedule(meso.id, startIso, weekdays);
@@ -494,7 +535,7 @@ function GenerateForm({
               onClick={() => setDays(days.includes(d) ? days.filter((x) => x !== d) : [...days, d])}
               className={cn(
                 "h-10 flex-1 rounded-xl border text-sm font-semibold",
-                days.includes(d) ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)]" : "border-[var(--border)] text-[var(--muted)]",
+                days.includes(d) ? "border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary-ink)]" : "border-[var(--border)] text-[var(--muted)]",
               )}
             >
               {WEEKDAY_LETTERS[d]}
@@ -549,15 +590,15 @@ function IntensityPicker({
               "flex flex-1 flex-col items-center rounded-lg py-1.5 text-xs font-semibold transition-colors " +
               (active
                 ? o.v === "heavy"
-                  ? "bg-[var(--danger)]/15 text-[var(--danger)]"
+                  ? "bg-[var(--danger)]/15 text-[var(--danger-ink)]"
                   : o.v === "light"
-                    ? "bg-[var(--primary)]/15 text-[var(--primary)]"
+                    ? "bg-[var(--primary)]/15 text-[var(--primary-ink)]"
                     : "bg-[var(--surface)] text-[var(--foreground)] shadow-sm"
                 : "text-[var(--muted)]")
             }
           >
             {o.label}
-            <span className="text-[10px] font-normal opacity-70">{o.hint}</span>
+            <span className="text-[10px] font-normal">{o.hint}</span>
           </button>
         );
       })}
@@ -620,9 +661,10 @@ function MiniStepper({
   label,
   value,
   onChange,
-  step,
+  step: stepIn,
   min,
   format,
+  load = false,
 }: {
   label: string;
   value: number;
@@ -630,22 +672,27 @@ function MiniStepper({
   step: number;
   min: number;
   format?: (v: number) => string;
+  /** Carga en kg mostrada/tipeada en la unidad elegida (A4.7). */
+  load?: boolean;
 }) {
+  const step = load ? fromDisplay(displayStep(stepIn)) : stepIn;
   return (
     <div>
       <p className="mb-1">{label}</p>
       <div className="flex items-center justify-center gap-1.5 text-[var(--foreground)]">
-        <button className="h-6 w-6 rounded bg-[var(--surface)] text-sm" onClick={() => onChange(Math.max(min, +(value - step).toFixed(2)))}>
+        <button type="button" aria-label={`Bajar ${label}`} className="h-6 w-6 rounded bg-[var(--surface)] text-sm" onClick={() => onChange(Math.max(min, +(value - step).toFixed(2)))}>
           −
         </button>
         <EditableNumber
           value={value}
-          onChange={(v) => onChange(+v.toFixed(2))}
+          onChange={(v) => onChange(+v.toFixed(load ? 4 : 2))}
           min={min}
           format={format}
+          load={load}
+          ariaLabel={label}
           className="h-6 w-full min-w-[36px] text-sm text-[var(--foreground)]"
         />
-        <button className="h-6 w-6 rounded bg-[var(--surface)] text-sm" onClick={() => onChange(+(value + step).toFixed(2))}>
+        <button type="button" aria-label={`Subir ${label}`} className="h-6 w-6 rounded bg-[var(--surface)] text-sm" onClick={() => onChange(+(value + step).toFixed(2))}>
           +
         </button>
       </div>
@@ -673,12 +720,27 @@ function ReorderBtn({
   );
 }
 
-function RangeBox({ v, onChange }: { v: number; onChange: (v: number) => void }) {
+/**
+ * Caja de reps. Se edita libre y se confirma al salir (A4.4): mientras se tipea
+ * "12" no se guarda el "1" intermedio, y el par mín ≤ máx lo fuerza el llamador.
+ */
+function RangeBox({ v, onChange, label }: { v: number; onChange: (v: number) => void; label: string }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const n = parseInt(draft, 10);
+    setDraft(null);
+    if (Number.isFinite(n) && n >= 1 && n !== v) onChange(n);
+  };
   return (
     <input
       type="number"
-      value={v}
-      onChange={(e) => onChange(Math.max(1, parseInt(e.target.value || "1", 10)))}
+      inputMode="numeric"
+      aria-label={label}
+      value={draft ?? v}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       className="w-9 rounded bg-[var(--surface)] py-0.5 text-center tabular-nums outline-none"
     />
   );
@@ -713,12 +775,12 @@ function TemplatesList({ replace }: { replace?: boolean }) {
             size="sm"
             className="mt-3 w-full"
             onClick={async () => {
-              if (replace && !confirm(`¿Reemplazar tu semana base por «${t.name}»? Tus mesos ya generados no cambian.`)) return;
+              if (replace && !(await askConfirm({ title: "Usar rutina", message: `¿Reemplazar tu semana base por «${t.name}»? Tus mesos ya generados no cambian.`, confirmLabel: "Reemplazar" }))) return;
               const r = await baseWeekRepo.applyTemplate(
                 t.days.map((d) => ({ ...d, slots: d.slots.map((sl) => ({ ...sl, repRange: { ...sl.repRange } })) })),
               );
               if (r.estimated > 0) {
-                alert(
+                await showAlert(
                   `Rutina aplicada. ${r.estimated} carga${r.estimated === 1 ? "" : "s"} estimada${r.estimated === 1 ? "" : "s"} desde tu historial real (1RM de tu última sesión, ajustado al rango y al RIR de cada día)${r.kept > 0 ? `; ${r.kept} sin historial quedaron como en la plantilla` : ""}. Revisalas antes de generar.`,
                 );
               }

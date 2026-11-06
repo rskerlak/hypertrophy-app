@@ -5,8 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { analyzePostSession, type PostSessionAnalysis } from "@/lib/postSession";
 import { sessionSummary, type SessionSummary } from "@/lib/sessionExtras";
 import { mesocycleRepo, sessionRepo } from "@/db/repositories";
-import { fmtKg, muscleLabel } from "@/lib/format";
+import { muscleLabel } from "@/lib/format";
 import { Badge, Button, Card, HonestNote, PageHeader } from "@/components/ui";
+import { askConfirm } from "@/store/dialogs";
+import { fmtLoad, unitLabel } from "@/lib/units";
+import { fmtSets } from "@/lib/format";
 
 export default function SessionDonePage() {
   return (
@@ -34,10 +37,10 @@ function SessionDone() {
 
   const prLine = (p: SessionSummary["prs"][number]) =>
     p.kind === "load"
-      ? `carga ${fmtKg(p.value)} kg (antes ${fmtKg(p.previous ?? 0)})`
+      ? `carga ${fmtLoad(p.value)} ${unitLabel()} (antes ${fmtLoad(p.previous ?? 0)})`
       : p.kind === "repsAtLoad"
-        ? `${p.value} reps con ${fmtKg(p.atLoadKg ?? 0)} kg (antes ${p.previous})`
-        : `1RM estimado ${fmtKg(p.value)} kg (antes ${fmtKg(p.previous ?? 0)})`;
+        ? `${p.value} reps con ${fmtLoad(p.atLoadKg ?? 0)} ${unitLabel()} (antes ${p.previous})`
+        : `1RM estimado ${fmtLoad(p.value)} ${unitLabel()} (antes ${fmtLoad(p.previous ?? 0)})`;
 
   return (
     <>
@@ -62,7 +65,7 @@ function SessionDone() {
           {summary.volumeByMuscle.length > 0 && (
             <p className="mt-3 text-xs leading-relaxed text-[var(--muted)]">
               Series fraccionadas hoy:{" "}
-              {summary.volumeByMuscle.map((v) => `${muscleLabel(v.muscle)} ${fmtKg(v.sets)}`).join(" · ")}
+              {summary.volumeByMuscle.map((v) => `${muscleLabel(v.muscle)} ${fmtSets(v.sets)}`).join(" · ")}
             </p>
           )}
           {summary.prs.length > 0 && (
@@ -110,7 +113,7 @@ function SessionDone() {
                 onClick={async () => {
                   const s = await sessionRepo.get(id);
                   if (!s) return;
-                  if (!confirm("¿Descargar ahora? Las sesiones de acumulación que faltan se marcan como saltadas (podés reabrirlas desde la Agenda) y la próxima es el deload.")) return;
+                  if (!(await askConfirm({ title: "Descargar ahora", message: "Las sesiones de acumulación que faltan se marcan como saltadas (podés reabrirlas desde la Agenda) y la próxima es el deload.", confirmLabel: "Descargar ahora" }))) return;
                   const n = await mesocycleRepo.startDeloadNow(s.mesocycleId);
                   setMsg(`Listo: ${n} sesiones saltadas; la próxima es el deload.`);
                   setDismissed(true);
@@ -196,7 +199,7 @@ function SessionDone() {
           variant="secondary"
           className="flex-1"
           onClick={async () => {
-            if (!confirm("¿Reabrir la sesión para corregir algo?")) return;
+            if (!(await askConfirm({ message: "¿Reabrir la sesión para corregir algo?", confirmLabel: "Reabrir" }))) return;
             await sessionRepo.reopen(id);
             router.push(`/session?id=${id}`);
           }}

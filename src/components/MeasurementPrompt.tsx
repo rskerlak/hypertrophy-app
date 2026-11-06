@@ -21,7 +21,7 @@ export function MeasurementPrompt() {
   return (
     <Link href={`/measurements?trigger=${prompt.trigger}`}>
       <Card className="mb-4 border-[var(--primary)]/30 bg-[var(--primary)]/5">
-        <p className="text-sm font-semibold text-[var(--primary)]">📏 Medidas pendientes</p>
+        <p className="text-sm font-semibold text-[var(--primary-ink)]">📏 Medidas pendientes</p>
         <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">{TEXTS[prompt.trigger]}</p>
       </Card>
     </Link>

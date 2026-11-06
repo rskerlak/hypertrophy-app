@@ -138,7 +138,7 @@ export function BottomNav() {
               className={cn(
                 "flex flex-1 flex-col items-center gap-1 rounded-2xl py-2 text-[10px] font-semibold tracking-wide transition-colors duration-150",
                 active
-                  ? "bg-[var(--primary)]/10 text-[var(--primary)]"
+                  ? "bg-[var(--primary)]/10 text-[var(--primary-ink)]"
                   : "text-[var(--muted)] active:text-[var(--foreground)]",
               )}
             >

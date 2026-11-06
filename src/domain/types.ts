@@ -69,6 +69,8 @@ export interface Equipment {
 }
 
 export interface BaseWeekSlot {
+  /** Id estable del slot (A4.4): key de React al reordenar/borrar. Lo asigna el repository. */
+  id?: string;
   exerciseId: string;
   targetSets: number;
   repRange: RepRange;

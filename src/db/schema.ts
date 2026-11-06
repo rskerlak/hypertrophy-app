@@ -22,6 +22,11 @@ export interface SettingsRow {
   prioritizedMuscles: string[];
   equipment: Equipment;
   wakeLockEnabled: boolean;
+  /** Unidad para MOSTRAR cargas (A4.7). Todo se guarda en kg. */
+  units?: "kg" | "lb";
+  /** Perfiles de gimnasio (A4.5). `equipment` es siempre el del perfil activo. */
+  equipmentProfiles?: Array<{ id: string; name: string; equipment: Equipment }>;
+  activeEquipmentProfileId?: string;
   /** Días de entrenamiento para la agenda (0 = domingo … 6 = sábado). Solo agenda. */
   trainingWeekdays?: number[];
   /** El usuario declara seguros/spotter en barra libre: habilita APRE (serie al fallo) en barra. */

@@ -9,9 +9,14 @@ import { Button, Card, HonestNote, Input, Label, PageHeader, Select, Stepper } f
 import { InstallCard } from "@/components/InstallCard";
 import { BackupCard } from "@/components/BackupCard";
 import { BugListCard } from "@/components/BugReport";
+import { EquipmentProfilePicker } from "@/components/EquipmentProfilePicker";
 import { applyTheme, type Theme } from "@/lib/theme";
-import { PROFILE_LABELS, fmtKg, muscleLabel } from "@/lib/format";
+import { PROFILE_LABELS, muscleLabel } from "@/lib/format";
 import type { ExperienceProfileId } from "@/domain/types";
+import { fmtLoad, fromDisplay, unitLabel } from "@/lib/units";
+
+/** Lista de pesos (guardados en kg) para editar en la unidad elegida. */
+const listText = (kgs: number[]) => kgs.map((k) => fmtLoad(k)).join(", ");
 
 export default function SettingsPage() {
   const settings = useLiveQuery(() => settingsRepo.get(), []);
@@ -31,6 +36,7 @@ export default function SettingsPage() {
       .split(",")
       .map((x) => parseFloat(x.trim()))
       .filter((x) => !Number.isNaN(x) && x > 0)
+      .map((x) => fromDisplay(x))
       .sort((a, b) => a - b);
     settingsRepo.update({ equipment: { ...settings.equipment, [key]: nums } });
   };
@@ -48,6 +54,7 @@ export default function SettingsPage() {
         <div>
           <Label>Perfil de experiencia</Label>
           <Select
+            aria-label="Perfil de experiencia"
             value={settings.experienceProfile}
             onChange={(e) =>
               settingsRepo.update({ experienceProfile: e.target.value as ExperienceProfileId })
@@ -71,9 +78,8 @@ export default function SettingsPage() {
             value={settings.bodyweightKg}
             step={0.5}
             min={30}
-            suffix="kg"
+            load
             onChange={(v) => settingsRepo.update({ bodyweightKg: v })}
-            format={fmtKg}
           />
         </div>
 
@@ -138,22 +144,24 @@ export default function SettingsPage() {
       </Link>
 
       <h2 className="mb-2 mt-6 text-sm font-semibold text-[var(--muted)]">Equipamiento (redondeo de carga)</h2>
-      <Card className="mb-4 space-y-4">
+      <EquipmentProfilePicker />
+      {/* key: los campos de discos son no controlados; al cambiar de perfil deben remontarse. */}
+      <Card key={settings.activeEquipmentProfileId ?? "main"} className="mb-4 space-y-4">
         <div>
           <Label>Peso de la barra</Label>
           <Stepper
             value={settings.equipment.barWeightKg}
             step={2.5}
             min={5}
-            suffix="kg"
+            load
             onChange={(v) => settingsRepo.update({ equipment: { ...settings.equipment, barWeightKg: v } })}
-            format={fmtKg}
           />
         </div>
         <div>
-          <Label>Discos disponibles (kg, por par) — separá con comas</Label>
+          <Label>Discos disponibles ({unitLabel()}, por par) — separá con comas</Label>
           <Input
-            defaultValue={settings.equipment.platesKg.join(", ")}
+            aria-label="Discos disponibles"
+            defaultValue={listText(settings.equipment.platesKg)}
             onBlur={(e) => editList("platesKg", e.target.value)}
             inputMode="decimal"
           />
@@ -165,6 +173,7 @@ export default function SettingsPage() {
               Uso mancuernas de barra corta y les cargo discos
             </span>
             <Toggle
+              label="Mancuernas armables"
               on={loadableDumbbells}
               onChange={(v) =>
                 settingsRepo.update({
@@ -182,9 +191,10 @@ export default function SettingsPage() {
           </div>
           {loadableDumbbells ? (
             <>
-              <Label>Discos de mancuerna (kg, por lado) — separá con comas</Label>
+              <Label>Discos de mancuerna ({unitLabel()}, por lado) — separá con comas</Label>
               <Input
-                defaultValue={(settings.equipment.dumbbellPlatesKg ?? []).join(", ")}
+                aria-label="Discos de mancuerna"
+                defaultValue={listText(settings.equipment.dumbbellPlatesKg ?? [])}
                 onBlur={(e) => editList("dumbbellPlatesKg", e.target.value)}
                 inputMode="decimal"
                 className="mb-2"
@@ -194,11 +204,10 @@ export default function SettingsPage() {
                 value={settings.equipment.dumbbellHandleKg ?? rules.loadIncrements.defaultDumbbellHandleKg}
                 step={0.5}
                 min={0}
-                suffix="kg"
+                load
                 onChange={(v) =>
                   settingsRepo.update({ equipment: { ...settings.equipment, dumbbellHandleKg: v } })
                 }
-                format={fmtKg}
               />
               <p className="mt-1.5 text-xs text-[var(--muted)]">
                 El motor calcula cada mancuerna como mango + 2 × (discos combinados), así llega a
@@ -207,9 +216,10 @@ export default function SettingsPage() {
             </>
           ) : (
             <>
-              <Label>Rack de mancuernas (kg) — separá con comas</Label>
+              <Label>Rack de mancuernas ({unitLabel()}) — separá con comas</Label>
               <Input
-                defaultValue={settings.equipment.dumbbellsKg.join(", ")}
+                aria-label="Rack de mancuernas"
+                defaultValue={listText(settings.equipment.dumbbellsKg)}
                 onBlur={(e) => editList("dumbbellsKg", e.target.value)}
                 inputMode="decimal"
               />
@@ -225,10 +235,9 @@ export default function SettingsPage() {
           <Stepper
             value={settings.equipment.machineStepKg}
             step={1}
-            min={1}
-            suffix="kg"
+            min={fromDisplay(1)}
+            load
             onChange={(v) => settingsRepo.update({ equipment: { ...settings.equipment, machineStepKg: v } })}
-            format={fmtKg}
           />
         </div>
       </Card>
@@ -249,7 +258,7 @@ export default function SettingsPage() {
                 className={
                   "rounded-full border px-3 py-1.5 text-sm transition " +
                   (on
-                    ? "border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--primary)]"
+                    ? "border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--primary-ink)]"
                     : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]")
                 }
               >
@@ -266,6 +275,7 @@ export default function SettingsPage() {
           <p className="text-xs text-[var(--muted)]">Wake lock durante la sesión</p>
         </div>
         <Toggle
+          label="Mantener pantalla encendida"
           on={settings.wakeLockEnabled}
           onChange={(v) => settingsRepo.update({ wakeLockEnabled: v })}
         />
@@ -280,12 +290,47 @@ export default function SettingsPage() {
           </p>
         </div>
         <Toggle
+          label="Seguros o spotter en barra libre"
           on={!!settings.barbellFailureAllowed}
           onChange={(v) => settingsRepo.update({ barbellFailureAllowed: v })}
         />
       </Card>
 
       <NotificationCard />
+
+      <Card className="mb-4">
+        <p className="mb-1 font-medium">Unidad de carga</p>
+        <p className="mb-2 text-xs text-[var(--muted)]">
+          Solo cambia cómo se muestran y tipean las cargas; todo se guarda en kg. Las medidas
+          corporales quedan en cm y kg. Cambiarla recarga la app.
+        </p>
+        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Unidad de carga">
+          {(["kg", "lb"] as const).map((u) => {
+            const on = (settings.units ?? "kg") === u;
+            return (
+              <button
+                key={u}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={async () => {
+                  if (on) return;
+                  await settingsRepo.update({ units: u });
+                  location.reload();
+                }}
+                className={
+                  "rounded-2xl border py-2.5 text-sm font-medium transition " +
+                  (on
+                    ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary-ink)]"
+                    : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]")
+                }
+              >
+                {u === "kg" ? "Kilos (kg)" : "Libras (lb)"}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
 
       <Card className="mb-4">
         <p className="mb-2 font-medium">Tema</p>
@@ -302,7 +347,7 @@ export default function SettingsPage() {
                 className={
                   "rounded-2xl border py-2.5 text-sm font-medium transition " +
                   (on
-                    ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
+                    ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary-ink)]"
                     : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]")
                 }
               >
@@ -334,9 +379,13 @@ export default function SettingsPage() {
   );
 }
 
-function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
       onClick={() => onChange(!on)}
       className={
         "relative h-7 w-12 rounded-full transition " + (on ? "bg-[var(--primary)]" : "bg-[var(--surface-2)]")

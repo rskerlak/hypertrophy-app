@@ -4,6 +4,8 @@ export function fmtKg(kg: number): string {
   return Number.isInteger(kg) ? `${kg}` : kg.toFixed(kg * 2 === Math.round(kg * 2) ? 1 : 2);
 }
 
+export { fmtLoad, unitLabel } from "./units";
+
 export function fmtSets(n: number): string {
   return Number.isInteger(n) ? `${n}` : n.toFixed(1);
 }

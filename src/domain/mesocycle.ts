@@ -186,12 +186,19 @@ export function weeklyVolumeTarget(args: {
   rules: Rules;
 }): number {
   const { muscle, baseVolume, weekIndex, numAccumulationWeeks, profile, prioritized, rules } = args;
-  const lm = effectiveLandmarks(rules, profile, muscle);
   const profileCfg = rules.experienceProfiles[profile];
   const ramp = rules.volumeRamp;
   const start = Math.max(baseVolume, 0);
   if (start === 0) return 0; // músculo no entrenado en la semana base: no inventar volumen
   if (!prioritized || ramp.mode === "none") return start;
+  // A4.2: músculo sin landmarks (ej. ejercicio propio con un músculo nuevo):
+  // "sin objetivo" — se mantiene el volumen de la semana base, sin rampa ni tope.
+  let lm;
+  try {
+    lm = effectiveLandmarks(rules, profile, muscle);
+  } catch {
+    return start;
+  }
 
   if (ramp.mode === "finalWeeksBump") {
     const bumpStart = numAccumulationWeeks - ramp.bumpWeeks;
@@ -496,6 +503,30 @@ function buildDeloadWeek(
  * semanas ya entrenadas no se tocan: su historial sigue apuntando al ejercicio
  * que se hizo. Puro: devuelve un plan nuevo.
  */
+/**
+ * Reemplaza un ejercicio por otro en TODO el plan (A4.2, al eliminar un
+ * ejercicio en uso). Las series ya registradas no cambian: viven en setLogs.
+ */
+export function replaceExerciseInPlan(plan: MesocyclePlan, fromId: string, toId: string): MesocyclePlan {
+  return {
+    ...plan,
+    weeks: plan.weeks.map((w) => ({
+      ...w,
+      days: w.days.map((d) => ({
+        ...d,
+        slots: d.slots.map((sl) => (sl.exerciseId === fromId ? { ...sl, exerciseId: toId } : sl)),
+      })),
+    })),
+  };
+}
+
+/** Cuántos slots del plan usan un ejercicio. */
+export function countExerciseInPlan(plan: MesocyclePlan, exerciseId: string): number {
+  let n = 0;
+  for (const w of plan.weeks) for (const d of w.days) for (const sl of d.slots) if (sl.exerciseId === exerciseId) n++;
+  return n;
+}
+
 export function swapExerciseInPlan(
   plan: MesocyclePlan,
   dayIndex: number,

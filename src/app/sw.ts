@@ -13,7 +13,9 @@ declare const self: ServiceWorkerGlobalScope;
 
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
-  skipWaiting: true,
+  // A4.3: el SW nuevo espera; se activa solo cuando el usuario toca "actualizar"
+  // (mensaje SKIP_WAITING, que Serwist ya escucha) y nunca a mitad de sesión.
+  skipWaiting: false,
   clientsClaim: true,
   navigationPreload: true,
   runtimeCaching: defaultCache,

@@ -11,6 +11,7 @@ import { uuid } from "@/lib/id";
 import { fmtKg } from "@/lib/format";
 import { getRules } from "@/lib/rulesLoader";
 import { Badge, Button, Card, EditableNumber, HonestNote, PageHeader, cn } from "@/components/ui";
+import { EquipmentProfilePicker } from "@/components/EquipmentProfilePicker";
 import { RestTimer } from "@/components/RestTimer";
 import { CheckinSheet } from "@/components/CheckinSheet";
 import { nextAchievableLoad, plateBreakdown, roundToAvailable, type RoundingContext } from "@/domain/rounding";
@@ -19,6 +20,8 @@ import { compareToPrevious, previousForIndex, type PreviousSet } from "@/domain/
 import { intraSessionAdjust, type IntraSessionHint } from "@/domain/intraSession";
 import type { PR } from "@/domain/records";
 import { isWorkingSet, type Exercise, type SetKind, type SetLog } from "@/domain/types";
+import { askConfirm } from "@/store/dialogs";
+import { fmtLoad, unitLabel } from "@/lib/units";
 
 export default function SessionPage() {
   return (
@@ -144,7 +147,7 @@ function SessionRunner() {
     .map((s) => ({ s, n: (logsBySlot.get(s.slotIndex) ?? []).filter(isWorkingSet).length }))
     .find(({ s, n }) => n < s.sets);
   const nextLabel = nextUp
-    ? `${shortName(nextUp.s.exercise.name)} · ${nextUp.s.planned.targetLoadKg === 0 ? "corporal" : `${fmtKg(nextUp.s.suggestedLoadKg)} kg`} × ${nextUp.s.suggestedReps}`
+    ? `${shortName(nextUp.s.exercise.name)} · ${nextUp.s.planned.targetLoadKg === 0 ? "corporal" : `${fmtLoad(nextUp.s.suggestedLoadKg)} ${unitLabel()}`} × ${nextUp.s.suggestedReps}`
     : undefined;
 
   const durationMin = session.startedAt ? Math.max(0, Math.round((now - Date.parse(session.startedAt)) / 60000)) : null;
@@ -184,7 +187,7 @@ function SessionRunner() {
       remaining > 0
         ? `Registraste ${loggedSets} de ${totalSets} series (faltan ${remaining}). ¿Finalizar la sesión igual?`
         : "¿Finalizar la sesión? El motor usará estos registros para calcular la próxima.";
-    if (!confirm(msg)) return;
+    if (!(await askConfirm({ title: "Finalizar sesión", message: msg, confirmLabel: "Finalizar" }))) return;
     await sessionRepo.complete(id);
     clearAllDrafts(id);
     router.push(`/session/done?id=${id}`);
@@ -203,6 +206,8 @@ function SessionRunner() {
           </>
         }
       />
+
+      {!done && <EquipmentProfilePicker compact onChanged={refresh} />}
 
       {!done && (
         <RestTimer lastSetAt={session.lastSetAt} targetSec={restTarget} minSec={rules.rest.minSec} nextLabel={nextLabel} />
@@ -250,7 +255,7 @@ function SessionRunner() {
         {groupSlotsInOrder(slots).map((grp) =>
           grp.length > 1 ? (
             <div key={`g${grp[0].slotIndex}`} className="space-y-2 rounded-[calc(var(--radius)+4px)] border border-dashed border-[var(--primary)]/40 p-1.5">
-              <p className="px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--primary)]">
+              <p className="px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--primary-ink)]">
                 Superserie · sin descanso entre ejercicios
               </p>
               {grp.map((slot) => (
@@ -303,7 +308,7 @@ function SessionRunner() {
             variant="secondary"
             className="w-full"
             onClick={async () => {
-              if (!confirm("¿Reabrir la sesión? Tus series quedan; vas a poder editarlas y volver a finalizar.")) return;
+              if (!(await askConfirm({ message: "¿Reabrir la sesión? Tus series quedan; vas a poder editarlas y volver a finalizar.", confirmLabel: "Reabrir" }))) return;
               await sessionRepo.reopen(id);
               refresh();
             }}
@@ -358,9 +363,10 @@ function groupSlotsInOrder(slots: SlotPrescription[]): SlotPrescription[][] {
 const shortName = (name: string) => name.replace(/\s*\(.*\)\s*$/, "");
 
 function prLabel(pr: PR): string {
-  if (pr.kind === "load") return `Récord de carga: ${fmtKg(pr.value)} kg (antes ${fmtKg(pr.previous ?? 0)})`;
-  if (pr.kind === "repsAtLoad") return `Récord: ${pr.value} reps con ${fmtKg(pr.atLoadKg ?? 0)} kg (antes ${pr.previous})`;
-  return `Récord de 1RM estimado: ${fmtKg(pr.value)} kg (antes ${fmtKg(pr.previous ?? 0)})`;
+  const u = unitLabel();
+  if (pr.kind === "load") return `Récord de carga: ${fmtLoad(pr.value)} ${u} (antes ${fmtLoad(pr.previous ?? 0)})`;
+  if (pr.kind === "repsAtLoad") return `Récord: ${pr.value} reps con ${fmtLoad(pr.atLoadKg ?? 0)} ${u} (antes ${pr.previous})`;
+  return `Récord de 1RM estimado: ${fmtLoad(pr.value)} ${u} (antes ${fmtLoad(pr.previous ?? 0)})`;
 }
 
 // ---------------- borradores (A1.7): sobreviven recargas ----------------
@@ -493,7 +499,7 @@ function ExerciseBlock({
             onClick={() => setWhyOpen((v) => !v)}
             className={cn(
               "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-              whyOpen ? "border-[var(--primary)]/50 text-[var(--primary)]" : "border-[var(--border)] text-[var(--muted)]",
+              whyOpen ? "border-[var(--primary)]/50 text-[var(--primary-ink)]" : "border-[var(--border)] text-[var(--muted)]",
             )}
             aria-expanded={whyOpen}
           >
@@ -504,21 +510,21 @@ function ExerciseBlock({
       </div>
 
       <p className="text-xs text-[var(--muted)]">
-        Objetivo: {isBodyweight ? "corporal" : `${fmtKg(suggestedLoadKg)} kg`} × {suggestedReps} reps ({planned.repRange.min}–
+        Objetivo: {isBodyweight ? "corporal" : `${fmtLoad(suggestedLoadKg)} ${unitLabel()}`} × {suggestedReps} reps ({planned.repRange.min}–
         {planned.repRange.max}
         {suggestedReps > planned.repRange.max ? ` +${suggestedReps - planned.repRange.max}` : ""}) · {slot.sets} series
       </p>
       {plates && plates.perSide.length > 0 && (
         <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-          Por lado: <span className="font-medium text-[var(--foreground)]">{plates.perSide.map(fmtKg).join(" · ")}</span>
-          {" "}({ctx.type === "barbell" ? "barra" : "mango"} {fmtKg(plates.baseKg)})
+          Por lado: <span className="font-medium text-[var(--foreground)]">{plates.perSide.map((p) => fmtLoad(p)).join(" · ")}</span>
+          {" "}({ctx.type === "barbell" ? "barra" : "mango"} {fmtLoad(plates.baseKg)})
         </p>
       )}
       {previous && previous.sets.length > 0 && (
         <p className="mt-0.5 text-[11px] text-[var(--muted)]">
           Última vez{daysAgo !== null ? ` (hace ${daysAgo === 0 ? "hoy" : `${daysAgo} d`})` : ""}:{" "}
           {previous.sets
-            .map((s) => `${isBodyweight ? "BW" : fmtKg(s.loadKg)}×${s.reps}${s.rirReported ? ` @${s.rir}` : ""}`)
+            .map((s) => `${isBodyweight ? "BW" : fmtLoad(s.loadKg)}×${s.reps}${s.rirReported ? ` @${s.rir}` : ""}`)
             .join(", ")}
         </p>
       )}
@@ -530,8 +536,8 @@ function ExerciseBlock({
             <tbody>
               {Object.entries(explain.inputs).map(([k, v]) => (
                 <tr key={k}>
-                  <td className="py-0.5 pr-2 text-[var(--muted)]">{RULE_INPUT_LABELS[k] ?? k}</td>
-                  <td className="py-0.5 text-right tabular-nums">{typeof v === "number" ? fmtKg(v) : v}</td>
+                  <td className="py-0.5 pr-2 text-[var(--muted)]">{(RULE_INPUT_LABELS[k] ?? k).replace("(kg)", `(${unitLabel()})`)}</td>
+                  <td className="py-0.5 text-right tabular-nums">{typeof v === "number" ? (k.endsWith("Kg") ? fmtLoad(v) : fmtKg(v)) : v}</td>
                 </tr>
               ))}
             </tbody>
@@ -588,13 +594,13 @@ function ExerciseBlock({
                   <div key={k} className="flex items-center justify-between rounded-lg bg-[var(--surface-2)] px-3 py-1.5 text-xs">
                     <span className="text-[var(--muted)]">W{k + 1}</span>
                     <span className="tabular-nums">
-                      {fmtKg(w.loadKg)} kg × {w.reps}
+                      {fmtLoad(w.loadKg)} {unitLabel()} × {w.reps}
                     </span>
                     <button
                       type="button"
                       className={cn(
                         "rounded-full px-3 py-1 font-semibold",
-                        doneW ? "text-[var(--success)]" : "bg-[var(--primary)]/15 text-[var(--primary)]",
+                        doneW ? "text-[var(--success)]" : "bg-[var(--primary)]/15 text-[var(--primary-ink)]",
                       )}
                       onClick={() =>
                         doneW
@@ -804,15 +810,15 @@ function SetRow({
           title="Tipo, lado y nota"
         >
           {index + 1}
-          {kind !== "working" && <span className="block text-[8px] text-[var(--primary)]">{kind[0].toUpperCase()}</span>}
+          {kind !== "working" && <span className="block text-[8px] text-[var(--primary-ink)]">{kind[0].toUpperCase()}</span>}
         </button>
         {bodyweight ? (
           <div className="min-w-0 flex-1">
-            <p className="mb-0.5 text-center text-[10px] uppercase text-[var(--muted)]">kg</p>
+            <p className="mb-0.5 text-center text-[10px] uppercase text-[var(--muted)]">{unitLabel()}</p>
             <p className={cn("text-center text-sm font-medium", locked && "opacity-50")}>BW</p>
           </div>
         ) : (
-          <Field label="kg" value={load} min={0} onChange={setLoad} down={loadDown} up={loadUp} format={fmtKg} disabled={locked} wide />
+          <Field label={unitLabel()} value={load} min={0} onChange={setLoad} down={loadDown} up={loadUp} disabled={locked} wide isLoad />
         )}
         <Field
           label="reps"
@@ -827,7 +833,7 @@ function SetRow({
         {/* RIR: celda compacta que abre el selector 0·1·2·3·4+ (la fila no
             entra con tres pares de −/+ en 360–390 px y los botones se pisaban). */}
         <div className="w-11 shrink-0">
-          <p className={cn("mb-0.5 text-center text-[10px] uppercase", needsRir ? "text-[var(--primary)]" : "text-[var(--muted)]")}>
+          <p className={cn("mb-0.5 text-center text-[10px] uppercase", needsRir ? "text-[var(--primary-ink)]" : "text-[var(--muted)]")}>
             RIR{needsRir ? " ↓" : ""}
           </p>
           <button
@@ -836,7 +842,7 @@ function SetRow({
             onClick={() => setRirOpen((v) => !v)}
             className={cn(
               "h-8 w-full rounded-lg text-sm font-semibold tabular-nums disabled:opacity-40",
-              needsRir ? "text-[var(--primary)]" : "bg-[var(--surface)]",
+              needsRir ? "text-[var(--primary-ink)]" : "bg-[var(--surface)]",
               rirOpen && "ring-2 ring-[var(--primary)]/30",
             )}
             aria-label="Elegir RIR"
@@ -869,7 +875,7 @@ function SetRow({
       </div>
 
       {tag && !logged && (
-        <p className="mt-0.5 pl-6 text-[10px] font-semibold uppercase tracking-wide text-[var(--primary)]">
+        <p className="mt-0.5 pl-6 text-[10px] font-semibold uppercase tracking-wide text-[var(--primary-ink)]">
           {tag} · RIR objetivo {defaultRir}
         </p>
       )}
@@ -894,7 +900,7 @@ function SetRow({
         <div className="mt-0.5 flex items-center justify-between gap-2 pl-6 text-[10px] text-[var(--muted)]">
           {previous ? (
             <span>
-              ant. {bodyweight ? "BW" : fmtKg(previous.loadKg)}×{previous.reps}
+              ant. {bodyweight ? "BW" : fmtLoad(previous.loadKg)}×{previous.reps}
               {previous.rirReported ? ` @${previous.rir}` : ""}
             </span>
           ) : (
@@ -903,11 +909,11 @@ function SetRow({
           <span className="flex items-center gap-2">
             {breakdown?.unreachable && (
               <button type="button" className="text-[var(--warning)]" onClick={() => setLoad(breakdown.nearestBelow)}>
-                no se arma → usar {fmtKg(breakdown.nearestBelow)}
+                no se arma → usar {fmtLoad(breakdown.nearestBelow)}
               </button>
             )}
             {previous && (
-              <button type="button" className="font-semibold text-[var(--primary)]" onClick={copyPrevious}>
+              <button type="button" className="font-semibold text-[var(--primary-ink)]" onClick={copyPrevious}>
                 copiar anterior
               </button>
             )}
@@ -929,7 +935,7 @@ function SetRow({
                   persist({ kind: k });
                   if (logged) await setLogRepo.patch(existing.id, { kind: k === "working" ? undefined : k });
                 }}
-                className={cn(chipBtn, kind === k && "border-[var(--primary)]/50 text-[var(--primary)]")}
+                className={cn(chipBtn, kind === k && "border-[var(--primary)]/50 text-[var(--primary-ink)]")}
               >
                 {KIND_LABEL[k]}
               </button>
@@ -946,7 +952,7 @@ function SetRow({
                   persist({ side: sd });
                   if (logged) await setLogRepo.patch(existing.id, { side: sd });
                 }}
-                className={cn(chipBtn, side === sd && "border-[var(--primary)]/50 text-[var(--primary)]")}
+                className={cn(chipBtn, side === sd && "border-[var(--primary)]/50 text-[var(--primary-ink)]")}
               >
                 {sd === undefined ? "ambos" : sd === "L" ? "izq." : "der."}
               </button>
@@ -994,7 +1000,7 @@ function RirPicker({ onPick }: { onPick: (rir: number) => void }) {
             key={v}
             type="button"
             onClick={() => onPick(v)}
-            className="h-9 min-w-9 flex-1 rounded-lg border border-[var(--primary)]/35 bg-[var(--primary)]/10 text-sm font-semibold text-[var(--primary)] active:scale-95"
+            className="h-9 min-w-9 flex-1 rounded-lg border border-[var(--primary)]/35 bg-[var(--primary)]/10 text-sm font-semibold text-[var(--primary-ink)] active:scale-95"
           >
             {v === 4 ? "4+" : v}
           </button>
@@ -1015,7 +1021,9 @@ function Field({
   disabled,
   tone,
   wide,
+  isLoad = false,
 }: {
+  isLoad?: boolean;
   label: string;
   value: number;
   onChange: (v: number) => void;
@@ -1043,9 +1051,11 @@ function Field({
         </button>
         <EditableNumber
           value={value}
-          onChange={(v) => onChange(+v.toFixed(2))}
+          onChange={(v) => onChange(+v.toFixed(isLoad ? 4 : 2))}
           min={min}
           format={format}
+          load={isLoad}
+          ariaLabel={isLoad ? "Carga" : label}
           disabled={disabled}
           className={cn(
             "h-8 w-full min-w-[34px] text-sm",
@@ -1138,9 +1148,10 @@ function SwapSheet({
           <Button
             className="flex-1"
             disabled={!picked}
-            onClick={() =>
-              picked && confirm("¿Cambiarlo en el plan desde esta semana? Las semanas ya entrenadas no cambian.") && onPlan(picked)
-            }
+            onClick={async () => {
+              if (!picked) return;
+              if (await askConfirm({ title: "Cambiar en el plan", message: "¿Cambiarlo en el plan desde esta semana? Las semanas ya entrenadas no cambian.", confirmLabel: "Cambiar" })) onPlan(picked);
+            }}
           >
             En el plan
           </Button>

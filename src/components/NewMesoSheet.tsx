@@ -6,6 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { baseWeekRepo } from "@/db/repositories";
 import { ROUTINE_TEMPLATES } from "@/lib/templates";
 import { Button, cn } from "./ui";
+import { askConfirm, showAlert } from "@/store/dialogs";
 
 /**
  * Cómo arrancar un meso nuevo: de cero, desde la semana base actual o desde una
@@ -46,8 +47,9 @@ function NewMesoSheet({ onClose }: { onClose: () => void }) {
     onClose();
     router.push("/plan");
   };
-  const confirmReplace = () =>
-    !hasBase || confirm("Esto reemplaza tu semana base actual (tus mesos ya generados no cambian). ¿Seguir?");
+  const confirmReplace = async () =>
+    !hasBase ||
+    askConfirm({ message: "Esto reemplaza tu semana base actual (tus mesos ya generados no cambian). ¿Seguir?", confirmLabel: "Reemplazar" });
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/30 p-3" role="dialog" aria-modal aria-label="Nuevo mesociclo" onClick={onClose}>
@@ -79,7 +81,7 @@ function NewMesoSheet({ onClose }: { onClose: () => void }) {
           hint="Semana vacía: agregás días y ejercicios a mano."
           disabled={busy}
           onClick={async () => {
-            if (!confirmReplace()) return;
+            if (!(await confirmReplace())) return;
             setBusy(true);
             await baseWeekRepo.set({ days: [] });
             go();
@@ -94,13 +96,13 @@ function NewMesoSheet({ onClose }: { onClose: () => void }) {
             hint={`${t.days.length} días · ${t.days.reduce((n, d) => n + d.slots.length, 0)} ejercicios. ${t.description}`}
             disabled={busy}
             onClick={async () => {
-              if (!confirmReplace()) return;
+              if (!(await confirmReplace())) return;
               setBusy(true);
               const r = await baseWeekRepo.applyTemplate(
                 t.days.map((d) => ({ ...d, slots: d.slots.map((s) => ({ ...s, repRange: { ...s.repRange } })) })),
               );
               if (r.estimated > 0) {
-                alert(
+                await showAlert(
                   `Rutina cargada para editar. ${r.estimated} carga${r.estimated === 1 ? "" : "s"} estimada${r.estimated === 1 ? "" : "s"} desde tu historial real${r.kept > 0 ? `; ${r.kept} sin historial quedaron como en la plantilla` : ""}. Revisalas antes de generar.`,
                 );
               }

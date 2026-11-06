@@ -14,7 +14,7 @@ import {
 } from "@/db/repositories";
 import type { MesoStats } from "@/domain/types";
 import { Badge, Button, Card, EmptyState, HonestNote, PageHeader, Select } from "@/components/ui";
-import { fmtKg, fmtSets, muscleLabel } from "@/lib/format";
+import { fmtSets, muscleLabel } from "@/lib/format";
 import { FatigueChart } from "@/components/FatigueChart";
 import { exportMesoToExcel, type ExportInput } from "@/lib/exportExcel";
 import { buildMesoObservations } from "@/lib/mesoObservations";
@@ -32,6 +32,7 @@ import { correlationMatrix, summarizeByModel, type CorrelationResult, type MesoO
 import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
 import { CORRELATION_LABELS, PROGRESSION_LABELS } from "@/lib/format";
 import Link from "next/link";
+import { fmtLoad, unitLabel } from "@/lib/units";
 
 const CORRELATION_VARS = [
   "d1rmPct", "adherencePct", "sleepOkPct", "proteinOkPct", "energyBalanceAvg",
@@ -224,7 +225,7 @@ export default function StatsPage() {
                     />
                   </div>
                   <span className="w-16 shrink-0 text-right tabular-nums">
-                    {fmtKg(m.done)}/{fmtKg(m.planned)}
+                    {fmtSets(m.done)}/{fmtSets(m.planned)}
                   </span>
                 </div>
               ))}
@@ -288,12 +289,12 @@ export default function StatsPage() {
                 className="flex items-center justify-between text-sm"
               >
                 <span className="truncate">
-                  {exNames.get(e.exerciseId) ?? e.exerciseId}
+                  {exNames.get(e.exerciseId) ?? "(ejercicio eliminado)"}
                   {e.track && <span className="text-[var(--muted)]"> · {e.track}</span>}
                 </span>
                 <span className="flex items-center gap-2">
                   <span className="tabular-nums text-[var(--muted)]">
-                    {fmtKg(e.firstEst1RmKg)}→{fmtKg(e.lastEst1RmKg)} kg
+                    {fmtLoad(e.firstEst1RmKg)}→{fmtLoad(e.lastEst1RmKg)} {unitLabel()}
                   </span>
                   <Badge tone={e.deltaPct > 0 ? "success" : e.deltaPct < 0 ? "danger" : "neutral"}>
                     {e.deltaPct > 0 ? "+" : ""}
@@ -446,7 +447,7 @@ export default function StatsPage() {
             Acá se cruzan tus resultados (Δ1RM, medidas corporales) con sueño, proteína, balance
             energético y el tipo de progresión de cada ciclo. Necesita al menos{" "}
             <span className="text-[var(--foreground)]">2 mesociclos completados</span> y{" "}
-            <Link href="/measurements" className="text-[var(--primary)] underline">
+            <Link href="/measurements" className="text-[var(--primary-ink)] underline">
               medidas registradas
             </Link>{" "}
             al inicio y fin de cada uno.

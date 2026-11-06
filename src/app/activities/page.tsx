@@ -6,6 +6,7 @@ import { activityRepo } from "@/db/repositories";
 import { ACTIVITY_LABELS } from "@/lib/format";
 import { Badge, Button, Card, EmptyState, Input, Label, PageHeader, Select } from "@/components/ui";
 import type { ActivityRow } from "@/db/schema";
+import { askConfirm } from "@/store/dialogs";
 
 const INTENSITY_LABELS: Record<number, string> = { 1: "suave", 2: "moderada", 3: "intensa" };
 
@@ -65,8 +66,9 @@ export default function ActivitiesPage() {
               <div className="flex shrink-0 items-center gap-2">
                 {a.intensity && <Badge tone={a.intensity === 3 ? "warning" : "neutral"}>{INTENSITY_LABELS[a.intensity]}</Badge>}
                 <button
-                  className="px-1 text-sm text-[var(--danger)]"
-                  onClick={() => { if (confirm("¿Eliminar esta actividad?")) activityRepo.remove(a.id); }}
+                  className="px-1 text-sm text-[var(--danger-ink)]"
+                  aria-label="Eliminar actividad"
+                  onClick={async () => { if (await askConfirm({ message: "¿Eliminar esta actividad?", confirmLabel: "Eliminar", danger: true })) await activityRepo.remove(a.id); }}
                 >
                   ✕
                 </button>
@@ -128,7 +130,7 @@ function ActivityForm({ onDone }: { onDone: () => void }) {
               className={
                 "rounded-2xl border py-2 text-sm font-medium transition " +
                 (intensity === i
-                  ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
+                  ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary-ink)]"
                   : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--muted)]")
               }
             >

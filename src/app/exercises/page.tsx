@@ -8,6 +8,7 @@ import { getRules } from "@/lib/rulesLoader";
 import { EQUIPMENT_LABELS, muscleLabel } from "@/lib/format";
 import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
 import { ExerciseForm, type ExerciseDraft } from "@/components/ExerciseForm";
+import { DeleteExerciseSheet } from "@/components/DeleteExerciseSheet";
 import type { Exercise } from "@/domain/types";
 
 export default function ExercisesPage() {
@@ -15,6 +16,7 @@ export default function ExercisesPage() {
   const rules = getRules();
   const exercises = useLiveQuery(() => exerciseRepo.all(), []);
   const [q, setQ] = useState("");
+  const [deleting, setDeleting] = useState<Exercise | null>(null);
   const [mode, setMode] = useState<{ kind: "list" } | { kind: "new" } | { kind: "edit"; ex: Exercise }>({
     kind: "list",
   });
@@ -108,10 +110,9 @@ export default function ExercisesPage() {
                         ✎
                       </button>
                       <button
-                        className="px-1.5 text-sm text-[var(--danger)]"
-                        onClick={() => {
-                          if (confirm(`¿Eliminar "${ex.name}"?`)) exerciseRepo.remove(ex.id);
-                        }}
+                        className="px-1.5 text-sm text-[var(--danger-ink)]"
+                        aria-label={`Eliminar ${ex.name}`}
+                        onClick={() => setDeleting(ex)}
                       >
                         ✕
                       </button>
@@ -122,6 +123,7 @@ export default function ExercisesPage() {
             </div>
           ))}
       </div>
+      {deleting && exercises && <DeleteExerciseSheet exercise={deleting} all={exercises} onClose={() => setDeleting(null)} />}
     </>
   );
 }

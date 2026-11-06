@@ -7,6 +7,7 @@ import { PROGRESSION_LABELS } from "@/lib/format";
 import { Badge, Button, Card, EmptyState, HonestNote, PageHeader } from "@/components/ui";
 import type { MesocycleRow } from "@/db/schema";
 import { NewMesoButton } from "@/components/NewMesoSheet";
+import { askConfirm, showAlert } from "@/store/dialogs";
 
 const STATUS_META: Record<
   MesocycleRow["status"],
@@ -111,12 +112,15 @@ export default function MesosPage() {
                       variant="secondary"
                       onClick={async () => {
                         if (
-                          confirm(
-                            "Recalcula los targets de series/reps/RIR de las semanas que faltan, tomando lo que tengas editado en Plan (rangos de reps, series, cargas). Lo ya registrado no se toca. ¿Continuar?",
-                          )
+                          await askConfirm({
+                            title: "Recalcular plan",
+                            message:
+                              "Recalcula los targets de series/reps/RIR de las semanas que faltan, tomando lo que tengas editado en Plan (rangos de reps, series, cargas). Lo ya registrado no se toca.",
+                            confirmLabel: "Recalcular",
+                          })
                         ) {
                           const r = await mesocycleRepo.regeneratePlan(m.id);
-                          alert(
+                          await showAlert(
                             r.usedBaseWeek
                               ? "Plan recalculado con tu semana base actual (incluye los rangos de reps que hayas editado en Plan)."
                               : "Plan recalculado con el motor actual. Nota: tu semana base tiene otra cantidad de días que este meso, así que se mantuvo la estructura original del plan.",
@@ -130,9 +134,17 @@ export default function MesosPage() {
                   <Button
                     size="sm"
                     variant="danger"
-                    onClick={() => {
-                      if (confirm(`¿Eliminar "${m.name}" con todas sus sesiones y series? No se puede deshacer.`))
-                        mesocycleRepo.remove(m.id);
+                    aria-label={`Eliminar ${m.name}`}
+                    onClick={async () => {
+                      if (
+                        await askConfirm({
+                          title: "Eliminar mesociclo",
+                          message: `¿Eliminar «${m.name}» con todas sus sesiones y series? No se puede deshacer. Si querés conservarlo, exportá un respaldo antes.`,
+                          confirmLabel: "Eliminar",
+                          danger: true,
+                        })
+                      )
+                        await mesocycleRepo.remove(m.id);
                     }}
                   >
                     ✕

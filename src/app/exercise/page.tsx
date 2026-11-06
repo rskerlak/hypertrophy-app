@@ -7,9 +7,10 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { exerciseRepo, mesocycleRepo, sessionRepo, setLogRepo } from "@/db/repositories";
 import { exerciseTimeline, loadAdherence, type ExercisePoint, type LoadAdherence } from "@/domain/analytics";
 import { getRules } from "@/lib/rulesLoader";
-import { fmtKg, muscleLabel } from "@/lib/format";
+import { muscleLabel } from "@/lib/format";
 import { Badge, Button, Card, EmptyState, HonestNote, PageHeader } from "@/components/ui";
 import type { Exercise } from "@/domain/types";
+import { fmtLoad, toDisplay, unitLabel } from "@/lib/units";
 
 export default function ExercisePage() {
   return (
@@ -62,7 +63,8 @@ function ExerciseHistory() {
   const { ex, points, mesoNames, adherence } = data;
   if (!ex) return <EmptyState title="Ejercicio no encontrado" />;
 
-  const rows = points.map((p) => ({ date: p.date.slice(5, 10), [`e:${p.trackKey}`]: p.e1rmKg, [`c:${p.trackKey}`]: p.topLoadKg }));
+  const r1 = (kg: number) => Math.round(toDisplay(kg) * 10) / 10;
+  const rows = points.map((p) => ({ date: p.date.slice(5, 10), [`e:${p.trackKey}`]: r1(p.e1rmKg), [`c:${p.trackKey}`]: r1(p.topLoadKg) }));
   const best = points.length ? Math.max(...points.map((p) => p.e1rmKg)) : 0;
   const maxLoad = points.length ? Math.max(...points.map((p) => p.topLoadKg)) : 0;
 
@@ -81,11 +83,11 @@ function ExerciseHistory() {
               <p className="text-[11px] text-[var(--muted)]">sesiones</p>
             </Card>
             <Card className="p-3">
-              <p className="text-xl font-bold tabular-nums">{fmtKg(maxLoad)}</p>
-              <p className="text-[11px] text-[var(--muted)]">carga máx. (kg)</p>
+              <p className="text-xl font-bold tabular-nums">{fmtLoad(maxLoad)}</p>
+              <p className="text-[11px] text-[var(--muted)]">carga máx. ({unitLabel()})</p>
             </Card>
             <Card className="p-3">
-              <p className="text-xl font-bold tabular-nums">{Math.round(best)}</p>
+              <p className="text-xl font-bold tabular-nums">{Math.round(toDisplay(best))}</p>
               <p className="text-[11px] text-[var(--muted)]">1RM est. máx.</p>
             </Card>
           </div>
@@ -100,7 +102,7 @@ function ExerciseHistory() {
                   <YAxis stroke="var(--muted)" fontSize={10} tickLine={false} domain={["auto", "auto"]} />
                   <Tooltip
                     contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }}
-                    formatter={(v) => [`${v} kg`, "1RM est."]}
+                    formatter={(v) => [`${v} ${unitLabel()}`, "1RM est."]}
                   />
                   {tracks.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
                   {tracks.map(([k, label], i) => (
@@ -127,7 +129,7 @@ function ExerciseHistory() {
                   <YAxis stroke="var(--muted)" fontSize={10} tickLine={false} domain={["auto", "auto"]} />
                   <Tooltip
                     contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }}
-                    formatter={(v) => [`${v} kg`, "Carga"]}
+                    formatter={(v) => [`${v} ${unitLabel()}`, "Carga"]}
                   />
                   {tracks.map(([k, label], i) => (
                     <Line key={k} name={label} type="monotone" dataKey={`c:${k}`} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={{ r: 2 }} connectNulls />
@@ -161,12 +163,12 @@ function ExerciseHistory() {
                   </span>
                   <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
                     {p.trackLabel && <Badge>{p.trackLabel}</Badge>}
-                    <span className="tabular-nums">1RM {Math.round(p.e1rmKg)}</span>
+                    <span className="tabular-nums">1RM {Math.round(toDisplay(p.e1rmKg))}</span>
                   </span>
                 </div>
                 <p className="mt-1 text-sm tabular-nums">
                   {p.sets
-                    .map((s) => `${fmtKg(s.loadKg)}×${s.reps}${s.rirReported ? ` @${s.rir}` : ""}${s.kind && s.kind !== "working" ? ` (${s.kind})` : ""}`)
+                    .map((s) => `${fmtLoad(s.loadKg)}×${s.reps}${s.rirReported ? ` @${s.rir}` : ""}${s.kind && s.kind !== "working" ? ` (${s.kind})` : ""}`)
                     .join(" · ")}
                 </p>
               </div>

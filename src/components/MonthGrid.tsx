@@ -75,7 +75,7 @@ export function MonthGrid({
                 ? "bg-[var(--surface-2)] text-[var(--muted)] line-through"
                 : s.isDeload
                   ? "bg-[var(--warning)]/15 text-[var(--warning)]"
-                  : "bg-[var(--primary)]/12 text-[var(--primary)]";
+                  : "bg-[var(--primary)]/12 text-[var(--primary-ink)]";
           return (
             <button
               key={key}
