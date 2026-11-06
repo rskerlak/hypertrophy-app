@@ -137,6 +137,12 @@ Campos agregados en A1. **`sessions`**: `startedAt?` (primera serie de trabajo; 
 - Se editan en `/activities` y se dan de alta desde la Agenda tocando un día sin sesión (`/activities?date=`), también sin meso activo. Se ven en la grilla mensual con un icono por tipo.
 - **Nunca modifican una prescripción.** Solo `SessionSummary.intenseActivityPrevDay` (`hasIntenseActivityPrevDay`, pura, ventana e intensidad en `externalActivity`) agrega una nota al motivo de deload por caída de rendimiento, sin cambiar la decisión ni el peso (Schumann 2022, Petré 2021).
 
+**Campos agregados en A5** (todos opcionales; sin ellos la app se comporta como antes):
+- `mesocycles.intent?`: `"hypertrophy" | "strength" | "maintenance" | "recovery"` (ausente = hypertrophy). Se elige al generar, se edita en `/mesos` y lo hereda `createFollowUp`. **Solo** lo lee la memoria larga (`longTermTrend`); el motor de prescripción no cambia por la intención.
+- `exercises.holdLoad?` / `holdSince?`: "Mantener" (A5.4). `exercises.loadedZones?`: zonas articulares que el ejercicio carga (A5.5); sin valor se derivan de `pain.zonesByMuscle[primaryMuscle]` (heurístico y editable).
+- `sessions.holdExits?`: ids de ejercicios que salieron de Mantener al completar esta sesión. `sessions.overrides.painAdjust?`: `Array<{ slotIndex, loadFactor, repsUp, rirDelta, zone }>` (opción por dolor aceptada para la próxima sesión del día).
+- `checkins.pain?`: `Array<{ zone: PainZone, score: 0–10 }>` (`[]` = "no me duele nada"). `settings.dismissedPainSuggestions?`: `{ exerciseId, zone, at }` descartados.
+
 **`checkins`**
 - `id`, `sessionId` (índice), `date`
 - `sleptMinimum`: boolean | null
@@ -190,6 +196,26 @@ Sobre ejercicios `isSwappable`, sugerir cambio ante estancamiento (N sesiones si
 ### F10 — Estadísticas de fin de ciclo
 Al completar un meso, mostrar: progresión de carga estimada por ejercicio y por músculo, volumen completado vs. planeado, deriva de precisión de RIR, trayectoria de fatiga (reps a carga fija por semana), adherencia.
 **Aceptación:** usa solo métricas válidas (`statsPolicy.validProgressMetrics`); **no** muestra bombeo/dolor como progreso; incluye aviso visible de "n pequeño: la calibración fiable requiere varios ciclos".
+
+### F11 — Memoria entre mesos (A5.1, A5.2, A5.3)
+Dos memorias separadas. **Corta (prescripción):** la pista de progresión (ejercicio + rango de reps + intensidad del día + zona DUP) continúa entre mesos; si la pista cambió o pasó más de `progression.continuity.maxGapDays` desde la última sesión de la pista, la carga se re-ancla desde el e1RM de la última sesión real (× `gapE1rmFactor` tras una pausa) para el piso del rango nuevo al RIR objetivo, y nunca arrastra reps de otro rango. **Larga (tendencia):** e1RM por meso y por ejercicio, "techo sugerido" probabilístico si en `longTermTrend.minMesos` mesos contables el e1RM no sube y se viene entrenando cerca del fallo. Los mesos de mantenimiento/recuperación y los ejercicios en Mantener no cuentan como estancamiento. Nunca prescribe.
+**Aceptación:** `continuity.test.ts` y `longTermTrend.test.ts`; la UI etiqueta "aproximado" al comparar rangos distintos y "no confiable" con eco de RIR.
+
+### F12 — Mantener (A5.4)
+Chip por ejercicio en la sesión y en `/exercise`: el motor no sube la carga (`hold`, `hold-at-ceiling`). Sale solo si en una sesión todas las series de progresión se registraron al menos un paso del equipo por encima de lo prescrito (`holdExitDetected`), y lo avisa.
+**Aceptación:** `hold.test.ts`.
+
+### F13 — Dolor articular/tendinoso (A5.5)
+Pregunta opcional en el check-in y, si no se respondió, cada `pain.askEverySessions` sesiones. `evaluatePainSignal` marca zonas `watch`/`act` y propone, por ejercicio que carga la zona: menos carga y más reps (dentro de 5–30), RIR +1, variante que no carga la zona, o deload del ejercicio. Aplicar / Descartar; nunca diagnostica ni bloquea; con dolor sostenido `persistWeeks` sugiere consultar a un profesional.
+**Aceptación:** `pain.test.ts`; textos sin lenguaje diagnóstico ni culpabilizador.
+
+### F14 — Actividad externa (A5.6)
+Ver tabla `activities` (§4). Editar, alta desde la Agenda en cualquier día, icono en la grilla mensual. **Nunca modifica una prescripción**; solo agrega una nota de contexto al motivo de deload por caída de rendimiento.
+**Aceptación:** test de `hasIntenseActivityPrevDay` y de que la nota no cambia `shouldSuggest` ni el puntaje.
+
+### F15 — Test AMRAP de precisión del RIR (A5.8)
+Ver `setLogs.amrapTest` (§4). Opcional, ofrecido solo en ejercicios elegibles; con ≥ `amrapTest.minTests` tests la calibración del RIR pasa de proxy a medida.
+**Aceptación:** `amrapTest.test.ts` (elegibilidad, error y sesgo, cambio de fuente, la serie no decide la progresión ni finge fatiga en la sesión siguiente).
 
 ---
 
@@ -312,6 +338,29 @@ Como la progresión es por sesión, la recomendación por defecto es **correr** 
 - **Service worker**: `skipWaiting: false`; el aviso envía `SKIP_WAITING` solo al tocarlo y, con sesión en curso, pregunta y permite posponer (`src/lib/updateGate.ts`).
 - **Diálogos**: nunca `confirm`/`alert`/`prompt` nativos; `askConfirm`/`showAlert`/`askText`/`showToast` (`src/store/dialogs.ts`, Zustand) dibujados por `DialogHost`. Hoja modal accesible `Sheet` (foco atrapado, Escape, `aria-modal`).
 - **Accesibilidad**: `npm run test:a11y` (axe-core, 12 pantallas × 2 temas + diálogo) sin violaciones serias/críticas. Texto en color con `--primary-ink`/`--danger-ink` (AA).
+
+**A5 — memoria, mantener, dolor, actividad y test AMRAP** (puras y testeadas):
+```ts
+trackHistory(input: { logs; sessions; mesos: Map<id, TrackMesoRef>; current: { mesocycleId; weekIndex; dayIndex; slotIndex; slot; intensity?; completedAt? }; today; inclusive?; rules })
+  : { history: SetLog[]; continuity: "same-track" | "track-changed" | "gap" | "none"; last?; anchor?; anchorAgeDays?; gapDays? }
+nextPrescription({ ..., anchor?: { logs; reason: "track-changed" | "gap"; ageDays? }, holdLoad? })   // reglas track-reanchor, gap-reanchor, hold, hold-at-ceiling
+holdExitDetected(sessionLogs, ctx): boolean
+longTermTrend({ points; mesos: Array<{ id; intent? }>; echoMesoIds?; holdLoad?; rules })
+  : { points; slopePctPerMeso; flatMesos; plateauSuggested; approximate; reasons }
+evaluatePainSignal({ reports; exercises; library; rules }): { zones; perExercise; persistent }
+hasIntenseActivityPrevDay({ sessionLocalDate; activities; rules }): boolean
+amrapTestEligibility({ equipmentType; isDeload; slotIsApre; loadKg; e1rmKg; loadedZones; activePainZones; sessionsSinceLastTest; barbellFailureAllowed; rules }): { eligible; reason }
+rirAccuracyFromTests(logs, rules): { n; meanErrorReps; madReps; bias } | null
+assessRirCalibration(logs, rules, testLogs?)   // source: "proxy" | "measured"
+```
+
+### Reglas fijadas por A5 (no deben volver)
+- **La memoria corta no cruza pistas.** Otro rango, otra intensidad del día u otra zona DUP = pista nueva: re-anclar desde e1RM, nunca heredar reps ni "consolidar" contra otro rango.
+- **La memoria larga no prescribe.** `longTermTrend` produce avisos ("techo sugerido", probabilístico). Mesos `maintenance`/`recovery` y ejercicios en Mantener no cuentan como estancamiento; el e1RM con eco o con reps > `highRepUnreliableFrom` es "no confiable".
+- **La intención del meso no toca `nextPrescription`.** Tampoco el dolor, la actividad externa ni el check-in: a la prescripción solo entran `holdLoad`, la continuidad de la pista y, si el usuario la aceptó, una opción de dolor como `overrides.painAdjust` de una sesión concreta.
+- **Dolor ≠ DOMS.** El dolor muscular post-entreno sigue sin usarse; el dolor articular es manejo de carga, nunca diagnóstico.
+- **La serie del test AMRAP no decide la progresión ni entra a comparaciones a carga fija** (`isProgressionSet`, `isComparableSet`).
+- **Las fechas de actividad se comparan como fecha local** (`localDateOf`), no UTC.
 
 ### Reglas fijadas por las correcciones de A0 (no deben volver)
 Cada una tiene test de regresión en `src/domain/__tests__/`.

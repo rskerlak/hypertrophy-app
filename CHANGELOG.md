@@ -5,6 +5,20 @@ Cambios de MyoNoesis desde `4c43385`. Cada entrada nombra la tarea del plan
 en *Keep a Changelog*; la app no publica versiones numeradas (se despliega cada
 push a `main`), así que se agrupa por fase.
 
+## Plan A5 — Memoria
+
+### Agregado
+- **La pista continúa entre mesos (A5.1).** La próxima sesión parte de lo último que hiciste en esa pista (ejercicio + rango + intensidad del día), también si fue en el meso anterior. Si cambiaste de rango o pasaron más de 3 semanas, la carga se re-estima desde tu e1RM real (con un descuento tras una pausa) en vez de usar la de la semana base. Botón "Estimar cargas desde mi historial" en el editor de semana base.
+- **Tendencia entre mesos (A5.2).** e1RM por meso en `/exercise` y en Stats; "techo sugerido" cuando varios mesos no suben y venís cerca del fallo, con opciones y nunca automático. Marcado "aproximado" al comparar rangos y "no confiable" con eco de RIR.
+- **Intención del meso (A5.3).** Hipertrofia, fuerza, mantenimiento o recuperación. Solo la usa la tendencia: un meso de mantenimiento no cuenta como estancamiento.
+- **Mantener (A5.4).** Un toque en la sesión o en `/exercise` y el motor deja de subir la carga; sale solo si cargás más en todas las series.
+- **Dolor articular (A5.5).** Pregunta opcional por zona y 1–10; con dolor que se repite o sube, opciones por ejercicio para seguir entrenando con menos carga. No diagnostica ni bloquea.
+- **Actividades (A5.6).** Se editan, se registran desde la Agenda tocando cualquier día (también sin meso activo) y se ven con icono en el calendario. Una actividad intensa el día anterior se anota en el motivo de deload, sin cambiar la decisión.
+- **Test de precisión del RIR (A5.8).** Opcional en la última serie de ejercicios elegibles: anotás dónde pararías y seguís al fallo. Con 3 tests la calibración pasa a "medida" en Stats.
+
+### Cambiado de alcance
+- A5.7 (importar Garmin), A5.9 (respaldo a Drive) y A5.10 (macro plan) quedan fuera de A5.
+
 ## Correcciones de la auditoría de Plan A
 
 ### Motor (prescripción)

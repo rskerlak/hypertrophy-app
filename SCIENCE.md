@@ -106,6 +106,28 @@ No es la prioridad del motor, pero condiciona la adherencia y por eso está refl
 - **Válidas:** carga estimada, reps a carga fija (fatiga), volumen completado vs planeado, deriva de RIR, adherencia.
 - **Vanidad (excluir):** bombeo y dolor muscular son marcadores **pobres** de estímulo/hipertrofia; el DOMS baja con la adaptación y no indica mejor sesión.
 
+## 12. Continuidad entre mesos y techo de largo plazo (A5.1, A5.2)
+- **Por qué la pista continúa entre mesos:** un meso nuevo no borra la adaptación; reiniciar desde la semana base desperdicia sesiones o, peor, pide cargas viejas. Pero cambiar de rango (12 → 6 reps) o de intensidad es parte legítima de un macro plan: arrastrar reps de otro rango haría que el motor "consolide" contra un objetivo que ya no aplica. Por eso la continuidad es **por pista** y el resto se re-ancla.
+- **La moneda común es el e1RM** (Epley ajustado por RIR, §6 `estimate1RM`): es lo único comparable entre rangos. Se degrada a reps altas (> 12) y con RIR que no mide percepción (eco, A0.8): ahí el punto se marca "no confiable".
+- **Pausas:** la fuerza se conserva bien 2–3 semanas sin entrenar; tras `maxGapDays` (21) se re-ancla con un descuento prudente (`gapE1rmFactor` 0,95). Ambos números son **heurísticos** de diseño, no un hallazgo puntual.
+- **Techo:** no existe un modelo validado que prediga el techo individual. Latella 2020 (*J Strength Cond Res*, 15 años de datos de powerlifting) describe que la mejora se desacelera con los años y aparece un efecto techo en los más fuertes; es **observacional**. Por eso "techo sugerido" es probabilístico, exige varios mesos contables y entrenamiento cerca del fallo, y ofrece opciones (mantener, rotar, seguir), nunca una acción automática.
+
+## 13. Dolor articular y tendinoso (A5.5)
+- **Seguir cargando con dolor tolerable suele ser mejor que el reposo** en tendinopatía: en Silbernagel 2007 (*Am J Sports Med*, tendinopatía aquílea, n = 38) seguir con actividad bajo un **modelo de monitoreo del dolor** no tuvo efectos negativos frente a reposo activo. Los umbrales que usa la app (≤ 5/10 aceptable durante la actividad, que calme en ~24 h, que no empeore semana a semana) vienen de ese modelo y de guías clínicas, **no de RCTs propios**: son heurísticos.
+- **Distinto del DOMS:** el dolor muscular de los días siguientes sigue sin usarse como señal (§11). Lo que se registra es dolor articular/tendinoso por zona, como **manejo de carga**.
+- **Opciones que respetan la hipertrofia:** bajar carga y subir reps dentro de 5–30 mantiene el estímulo con esfuerzo equiparado (§3); RIR +1 cuesta poco estímulo (§3, curva aplanada cerca del fallo); una variante que no carga la zona y el deload del ejercicio son las otras salidas. El mapeo ejercicio → zonas es **heurístico y editable**.
+- La app **nunca diagnostica** ni nombra una lesión; con dolor sostenido sugiere consultar a un profesional.
+
+## 14. Actividad externa: natación, running, bici (A5.6)
+- **Interferencia cardio-fuerza:** con sesiones en días distintos es prácticamente nula sobre hipertrofia y fuerza máxima (Schumann 2022, *Sports Med*, meta-análisis: SMD −0,01 hipertrofia, −0,06 fuerza máxima). El riesgo aparece en la **misma sesión** o con poco descanso entre ambas (Petré 2021, *Sports Med*). Por eso la actividad externa **no descuenta** carga ni series: solo se anota como contexto cuando el disparador de deload por caída de rendimiento se activa ("hubo actividad intensa el día anterior"), para que el usuario lo pondere.
+- Las kcal del reloj no se usan para nada prescriptivo (error MAPE 22–32 %).
+
+## 15. Test AMRAP de precisión del RIR (A5.8; amplía §4)
+- **El proxy tiene un límite:** la dispersión a carga fija (§4) es una cota superior del ruido, porque mezcla error de percepción con fluctuación real. El protocolo validado (Martikainen 2025, *J Sci Sport Exerc*, DOI 10.1007/s42978-025-00338-8) canta un RIR y **sigue hasta el fallo** para medir el error real.
+- **Adaptación de la app:** una serie por ejercicio, opcional, como máximo cada `everySessionsPerExercise` (6) sesiones del ejercicio, con carga ≥ 70 % del e1RM (la precisión cae con cargas livianas: Russo 2025, revisión de 26 estudios). No en barra libre sin seguros, ni en deload, ni con dolor activo en la zona. Frecuencia, n mínimo (3) y banda de sesgo neutral (±0,5) son **heurísticos**.
+- **Qué se espera ver:** en entrenados, sesgo a **subestimar** la reserva por ~1–1,5 reps (Martikainen 2025), con precisión que no depende de la experiencia. Con ≥ 3 tests la calibración pasa a "medida" y decide cuánto confía el motor en el RIR, también por encima del eco.
+- **Costo:** una serie al fallo más por ejercicio testeado (más fatiga local, Refalo 2023). Por eso la serie del test es estímulo pero **no decide la progresión** y no se compara a carga fija con la sesión siguiente.
+
 ## Caveats generales
 - Casi toda la evidencia es en hombres jóvenes/adultos entrenados (consistente con el usuario objetivo), lo que limita generalización.
 - Los RCTs clave en entrenados son pequeños (n≈29–31, alta deserción, p>0.05 en hipertrofia): sus conclusiones son sugestivas, no definitivas.

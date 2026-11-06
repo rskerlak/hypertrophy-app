@@ -203,7 +203,8 @@ Texto original, solo referencia:
 
 ---
 
-## A5.11 — Documentación
+## A5.11 — Documentación ✅ (2026-11-06)
+Hecha: `CONTEXT.md` §4 (campos A5), §5 (F11–F15), §6 (firmas y "Reglas fijadas por A5"); `SCIENCE.md` §12–§15; `CHANGELOG.md`. Las notas `_` de cada clave nueva de la config ya estaban.
 
 - `CONTEXT.md`: §4 (campos `intent`, `holdLoad`, `loadedZones`, `pain`, `external`, `source/externalId`), §5 (F11 memoria entre mesos, F12 mantener, F13 dolor, F14 actividad externa, F15 test AMRAP), §6 (firmas de `trackHistory`, `longTermTrend`, `evaluatePainSignal`, `rirAccuracyFromTests`), y una sección "Reglas fijadas por A5" con la separación memoria corta/larga.
 - `SCIENCE.md`: §12 Continuidad entre mesos y techo (Latella 2020; por qué el e1RM es la moneda común y dónde se degrada), §13 Dolor articular/tendinoso (Silbernagel 2007; umbrales como heurística clínica; distinción con DOMS), §14 Actividad externa (Schumann 2022, Petré 2021: interferencia solo misma sesión/< 3 h), §15 Test AMRAP (ampliación de §4). Cada número de config citado.
