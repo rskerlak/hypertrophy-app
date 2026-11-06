@@ -80,6 +80,8 @@ function SessionRunner() {
     loadKg: number;
     reps: number;
     rir: number;
+    /** Carga PRESCRITA por el motor (0 = peso corporal). La real va en loadKg. */
+    targetLoadKg: number;
     targetReps: number;
     targetRir: number;
     existingId?: string;
@@ -89,7 +91,7 @@ function SessionRunner() {
       sessionId: id,
       exerciseId: args.exerciseId,
       setIndex: args.setIndex,
-      targetLoadKg: args.loadKg,
+      targetLoadKg: args.targetLoadKg,
       targetReps: args.targetReps,
       targetRir: args.targetRir,
       actualLoadKg: args.loadKg,
@@ -195,6 +197,7 @@ function ExerciseBlock({
     loadKg: number;
     reps: number;
     rir: number;
+    targetLoadKg: number;
     targetReps: number;
     targetRir: number;
     existingId?: string;
@@ -237,6 +240,10 @@ function ExerciseBlock({
                 loadKg,
                 reps,
                 rir,
+                // Lo que pidió el motor, no lo que se levantó: permite medir
+                // adherencia y si el motor prescribe bien (la progresión usa
+                // siempre actualLoadKg).
+                targetLoadKg: isBodyweight ? 0 : suggestedLoadKg,
                 targetReps: suggestedReps,
                 targetRir,
                 existingId,
