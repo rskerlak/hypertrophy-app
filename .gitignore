@@ -58,3 +58,6 @@ reports/
 # Exportaciones personales (Garmin, etc.): nunca al repo público
 *.zip
 garmin-export/
+
+# Tabla de alimentos: incluye filas de ARGENFOODS (sin licencia explicita de redistribucion)
+docs/research/alimentos-ar.json
