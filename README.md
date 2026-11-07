@@ -5,7 +5,7 @@
 **Evidence-based hypertrophy mesocycles. A deterministic, transparent training engine.**
 *Mesociclos de hipertrofia basados en evidencia. Un motor de entrenamiento determinista y transparente.*
 
-[**▶ Live app · myo.noesisargentina.com**](https://myo.noesisargentina.com)
+[**▶ Demo pública · rskerlak.github.io/hypertrophy-app**](https://rskerlak.github.io/hypertrophy-app/) (funciona entera en tu teléfono, sin cuenta)
 
 [![Deploy](https://github.com/rskerlak/hypertrophy-app/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/rskerlak/hypertrophy-app/actions/workflows/deploy-pages.yml)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
@@ -122,7 +122,7 @@ En Windows: doble clic en **`Abrir MyoNoesis.bat`**.
 
 <div align="center">
 
-**Idea y desarrollo de [Rodrigo Skerlak](https://github.com/rskerlak)** · [myo.noesisargentina.com](https://myo.noesisargentina.com)
+**Idea y desarrollo de [Rodrigo Skerlak](https://github.com/rskerlak)** · [demo](https://rskerlak.github.io/hypertrophy-app/)
 
 Parte de la familia **Noesis** (psicometría · entrenamiento).
 
